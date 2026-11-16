@@ -29,6 +29,14 @@
   #speedctl{position:fixed;bottom:12px;right:12px;z-index:10;background:rgba(10,20,28,.78);border:1px solid #2a4a5c;border-radius:10px;padding:10px 14px;font-size:11px;width:170px;backdrop-filter:blur(6px);}
   #speedctl label{display:block;margin-bottom:6px;color:#9fe0ff;}
   #speedctl input{width:100%;}
+  #camctl{position:fixed;top:12px;right:212px;z-index:10;background:rgba(10,20,28,.78);border:1px solid #2a4a5c;border-radius:10px;padding:10px 14px;font-size:11px;width:170px;backdrop-filter:blur(6px);}
+  #camctl label{display:flex;align-items:center;gap:6px;cursor:pointer;color:#9fe0ff;margin-bottom:8px;}
+  #camctl button{width:100%;padding:6px 0;background:#15313f;border:1px solid #3a6a80;color:#eef3f6;border-radius:6px;cursor:pointer;font-size:11px;}
+  #camctl button:hover{background:#1e4559;}
+  #panel .actions{display:flex;gap:8px;margin-top:10px;}
+  #panel .actions button{background:#15313f;border:1px solid #3a6a80;color:#ffd166;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;}
+  #panel .actions button:hover{background:#1e4559;}
+  #panel .actions button.active{background:#ffd166;color:#0b1a24;}
   #loading{position:fixed;inset:0;background:#0b1a24;z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#9fe0ff;font-size:14px;}
   #loading .spin{width:36px;height:36px;border:3px solid #234;border-top-color:#9fe0ff;border-radius:50%;animation:sp 1s linear infinite;margin-bottom:12px;}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -57,12 +65,18 @@
   <input type="range" id="speedSlider" min="0" max="5" step="0.1" value="1">
 </div>
 
+<div id="camctl">
+  <label><input type="checkbox" id="autoOrbitChk" checked> Auto-orbit when idle</label>
+  <button id="overviewBtn">Reset view</button>
+</div>
+
 <div id="panel">
   <span class="closebtn" onclick="closePanel()">✕</span>
   <div class="ptype" id="pType">Station</div>
   <h3 id="pTitle">—</h3>
   <p id="pDesc">—</p>
   <div class="meta" id="pMeta"></div>
+  <div class="actions" id="pActions"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -287,16 +301,28 @@ TRAINS.forEach(tr=>{
 
 // ---------- interaction ----------
 const panel = document.getElementById('panel');
+const pActions = document.getElementById('pActions');
 function openPanel(kind,title,desc,meta){
   document.getElementById('pType').textContent = kind;
   document.getElementById('pTitle').textContent = title;
   document.getElementById('pDesc').textContent = desc;
   document.getElementById('pMeta').textContent = meta || '';
+  pActions.innerHTML = '';
   panel.classList.add('show');
 }
 function closePanel(){ panel.classList.remove('show'); }
 
+function addPanelButton(label, onClick, isActive){
+  const b = document.createElement('button');
+  b.textContent = label;
+  if(isActive) b.classList.add('active');
+  b.onclick = onClick;
+  pActions.appendChild(b);
+  return b;
+}
+
 renderer.domElement.addEventListener('click', (e)=>{
+  if(dragMoved) return; // don't trigger click after a drag
   mouse.x = (e.clientX/innerWidth)*2-1;
   mouse.y = -(e.clientY/innerHeight)*2+1;
   raycaster.setFromCamera(mouse, camera);
@@ -306,7 +332,11 @@ renderer.domElement.addEventListener('click', (e)=>{
   if(obj.userData.type==='station'){
     const id = obj.userData.id;
     const st = STATIONS[id];
-    openPanel('Station', id.charAt(0).toUpperCase()+id.slice(1).replace(/Stn|S$/,''), st.desc, st.meta);
+    const title = id.charAt(0).toUpperCase()+id.slice(1).replace(/Stn|S$/,'');
+    openPanel('Station', title, st.desc, st.meta);
+    followTrain = null;
+    flyTo(st.x, st.z, 42, undefined, 0.75);
+    addPanelButton('Fly closer ↗', ()=>flyTo(st.x, st.z, 22, undefined, 0.85));
   } else {
     // climb to parent group holding train data
     let p = obj;
@@ -314,32 +344,67 @@ renderer.domElement.addEventListener('click', (e)=>{
     if(p){
       const tr = p.userData.train;
       openPanel('Engine', tr.name, tr.desc, `Line: ${LINES[tr.line].name}`);
+      flyTo(tr.mesh.position.x, tr.mesh.position.z, 24, undefined, 0.8);
+      addPanelButton('Follow engine ↗', (ev)=>{
+        followTrain = tr;
+        document.querySelectorAll('#pActions button').forEach(b=>b.classList.remove('active'));
+        ev.target.classList.add('active');
+      });
     }
   }
 });
 
-// ---------- camera orbit controls (manual, no extra script) ----------
-let isDragging=false, prevX=0, prevY=0;
+// ---------- camera: spherical orbit around a movable focus point, with
+// smooth fly-to transitions, idle auto-orbit, and train-follow mode ----------
+let isDragging=false, dragMoved=false, prevX=0, prevY=0;
 let camTheta = 0.8, camPhi = 0.95, camDist = 200;
+const camCenter = new THREE.Vector3(0,0,0);
+let flight = null;        // active fly-to tween
+let followTrain = null;   // engine the camera is tracking
+let lastInteraction = 0;  // timestamp of last manual camera input
+let autoOrbitEnabled = true;
+
 function updateCam(){
-  camera.position.x = camDist*Math.sin(camPhi)*Math.sin(camTheta);
-  camera.position.z = camDist*Math.sin(camPhi)*Math.cos(camTheta);
-  camera.position.y = camDist*Math.cos(camPhi);
-  camera.lookAt(0,0,0);
+  camera.position.x = camCenter.x + camDist*Math.sin(camPhi)*Math.sin(camTheta);
+  camera.position.z = camCenter.z + camDist*Math.sin(camPhi)*Math.cos(camTheta);
+  camera.position.y = camCenter.y + camDist*Math.cos(camPhi);
+  camera.lookAt(camCenter);
 }
+function flyTo(x, z, dist, theta, phi){
+  flight = {
+    sC: camCenter.clone(), eC: new THREE.Vector3(x,0,z),
+    sD: camDist, eD: dist!==undefined ? dist : camDist,
+    sT: camTheta, eT: theta!==undefined ? theta : camTheta,
+    sP: camPhi,  eP: phi!==undefined ? phi : camPhi,
+    start: performance.now(), dur: 1100
+  };
+  lastInteraction = performance.now();
+}
+document.getElementById('overviewBtn').addEventListener('click', ()=>{
+  followTrain = null;
+  flyTo(0, 0, 200, 0.8, 0.95);
+});
+document.getElementById('autoOrbitChk').addEventListener('change', (e)=>{
+  autoOrbitEnabled = e.target.checked;
+});
 updateCam();
-renderer.domElement.addEventListener('mousedown', e=>{isDragging=true;prevX=e.clientX;prevY=e.clientY;});
+renderer.domElement.addEventListener('mousedown', e=>{isDragging=true;dragMoved=false;prevX=e.clientX;prevY=e.clientY;});
 window.addEventListener('mouseup', ()=>isDragging=false);
 window.addEventListener('mousemove', e=>{
   if(!isDragging) return;
   const dx=e.clientX-prevX, dy=e.clientY-prevY;
+  if(Math.abs(dx)+Math.abs(dy) > 3) dragMoved = true;
+  flight = null; followTrain = null;
   camTheta -= dx*0.004;
   camPhi = Math.max(0.25, Math.min(1.5, camPhi - dy*0.004));
   prevX=e.clientX; prevY=e.clientY;
+  lastInteraction = performance.now();
   updateCam();
 });
 renderer.domElement.addEventListener('wheel', e=>{
-  camDist = Math.max(60, Math.min(420, camDist + e.deltaY*0.1));
+  flight = null;
+  camDist = Math.max(20, Math.min(420, camDist + e.deltaY*0.1));
+  lastInteraction = performance.now();
   updateCam();
 });
 
@@ -382,7 +447,23 @@ function animate(){
     tr.mesh.rotation.y = angle + (tt>1 ? Math.PI : 0);
   });
 
-  // subtle label billboard already via sprite
+  // ---- camera movement: fly-to tween > follow-train > idle auto-orbit ----
+  if(flight){
+    const k = Math.min(1, (performance.now()-flight.start)/flight.dur);
+    const ek = k<0.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2; // ease-in-out quad
+    camCenter.lerpVectors(flight.sC, flight.eC, ek);
+    camDist  = flight.sD + (flight.eD-flight.sD)*ek;
+    camTheta = flight.sT + (flight.eT-flight.sT)*ek;
+    camPhi   = flight.sP + (flight.eP-flight.sP)*ek;
+    if(k>=1) flight = null;
+  } else if(followTrain){
+    camCenter.lerp(followTrain.mesh.position, Math.min(1, dt*2.2));
+    camDist = THREE.MathUtils.lerp(camDist, 26, dt*1.5);
+  } else if(autoOrbitEnabled && performance.now()-lastInteraction > 4000){
+    camTheta += dt*0.04;
+  }
+  updateCam();
+
   renderer.render(scene, camera);
 }
 
