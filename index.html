@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Island of Sodor — Live Operations</title>
+<style>
+  html,body{margin:0;padding:0;overflow:hidden;background:#0b1a24;font-family:'Segoe UI',Arial,sans-serif;color:#eef3f6;}
+  #canvas-wrap{position:fixed;inset:0;}
+  #hud{position:fixed;top:12px;left:12px;z-index:10;background:rgba(10,20,28,.78);border:1px solid #2a4a5c;border-radius:10px;padding:14px 16px;max-width:300px;backdrop-filter:blur(6px);}
+  #hud h1{font-size:16px;margin:0 0 4px;color:#9fe0ff;letter-spacing:.5px;}
+  #hud .sub{font-size:11px;color:#89a2ad;margin-bottom:10px;}
+  .stat-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-top:1px solid rgba(255,255,255,.06);}
+  .stat-row b{color:#ffd166;}
+  #legend{position:fixed;top:12px;right:12px;z-index:10;background:rgba(10,20,28,.78);border:1px solid #2a4a5c;border-radius:10px;padding:10px 14px;font-size:11px;max-height:92vh;overflow:auto;width:190px;backdrop-filter:blur(6px);}
+  #legend h2{font-size:12px;margin:0 0 8px;color:#9fe0ff;}
+  .leg-item{display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer;}
+  .leg-item:hover{color:#ffd166;}
+  .leg-swatch{width:14px;height:4px;border-radius:2px;flex-shrink:0;}
+  .leg-item.dim{opacity:.35;}
+  #panel{position:fixed;bottom:12px;left:12px;right:12px;max-width:520px;margin:0 auto;z-index:10;background:rgba(10,20,28,.92);border:1px solid #3a6a80;border-radius:12px;padding:16px 18px;display:none;backdrop-filter:blur(8px);box-shadow:0 8px 30px rgba(0,0,0,.5);}
+  #panel.show{display:block;}
+  #panel h3{margin:0 0 4px;font-size:17px;color:#ffd166;}
+  #panel .ptype{font-size:11px;color:#7fc8e0;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+  #panel p{font-size:13px;line-height:1.5;color:#dce8ec;margin:0 0 8px;}
+  #panel .closebtn{position:absolute;top:10px;right:14px;cursor:pointer;color:#89a2ad;font-size:18px;}
+  #panel .meta{font-size:11px;color:#7fa;display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;}
+  #panel .meta span{color:#9fe0ff;}
+  #speedctl{position:fixed;bottom:12px;right:12px;z-index:10;background:rgba(10,20,28,.78);border:1px solid #2a4a5c;border-radius:10px;padding:10px 14px;font-size:11px;width:170px;backdrop-filter:blur(6px);}
+  #speedctl label{display:block;margin-bottom:6px;color:#9fe0ff;}
+  #speedctl input{width:100%;}
+  #loading{position:fixed;inset:0;background:#0b1a24;z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#9fe0ff;font-size:14px;}
+  #loading .spin{width:36px;height:36px;border:3px solid #234;border-top-color:#9fe0ff;border-radius:50%;animation:sp 1s linear infinite;margin-bottom:12px;}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spin"></div>Loading the Island of Sodor...</div>
+<div id="canvas-wrap"></div>
+
+<div id="hud">
+  <h1>ISLAND OF SODOR</h1>
+  <div class="sub">North Western Railway — Live Operations</div>
+  <div class="stat-row"><span>Trains running</span><b id="statTrains">-</b></div>
+  <div class="stat-row"><span>Stations</span><b id="statStations">-</b></div>
+  <div class="stat-row"><span>Active lines</span><b id="statLines">-</b></div>
+  <div class="stat-row"><span>Time of day</span><b id="statTime">06:00</b></div>
+</div>
+
+<div id="legend">
+  <h2>RAILWAY LINES</h2>
+  <div id="legendList"></div>
+</div>
+
+<div id="speedctl">
+  <label>Simulation speed: <span id="speedVal">1x</span></label>
+  <input type="range" id="speedSlider" min="0" max="5" step="0.1" value="1">
+</div>
+
+<div id="panel">
+  <span class="closebtn" onclick="closePanel()">✕</span>
+  <div class="ptype" id="pType">Station</div>
+  <h3 id="pTitle">—</h3>
+  <p id="pDesc">—</p>
+  <div class="meta" id="pMeta"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ---------- DATA: Sodor lines & stations (approximate, lore-based layout) ----------
+const LINES = {
+  main:      { name: "Main Line",            color: 0xd9433d, width: 2.4 },
+  ffarquhar: { name: "Ffarquhar Branch",     color: 0x5aa8e0, width: 1.8 },
+  brendam:   { name: "Brendam Branch",       color: 0x3355c9, width: 1.8 },
+  littlewest:{ name: "The Little Western",   color: 0x3a7d35, width: 1.8 },
+  peelgodred:{ name: "Peel Godred Branch",   color: 0xaa3dd1, width: 1.8 },
+  kirkronan: { name: "Kirk Ronan Branch",    color: 0x4fdc5c, width: 1.8 },
+  harwick:   { name: "Harwick Branch",       color: 0x7a1414, width: 1.8 },
+  norramby:  { name: "Norramby Branch",      color: 0x8a5a2a, width: 1.8 },
+  skarloey:  { name: "Skarloey Railway",     color: 0xe08a2a, width: 1.4 },
+  arlesdale: { name: "Arlesdale Light Rly",  color: 0xa07a5a, width: 1.4 },
+  culdeefell:{ name: "Culdee Fell Railway",  color: 0x2a2a6a, width: 1.4 },
+};
+
+// station coordinates normalized roughly to source map (x east, z south), scaled to scene units
+const STATIONS = {
+  tidmouth:    {x:-42, z:4,  lines:["main"], desc:"Tidmouth is the headquarters of the North Western Railway, home to Tidmouth Sheds where the famous engines Thomas, Edward, Henry, Gordon, James, Percy, Toby, Duck, Donald & Douglas, Oliver and Emily rest between duties.", meta:"Sheds: Tidmouth · HQ of Sir Topham Hatt"},
+  knapford:    {x:-46, z:10, lines:["main"], desc:"Knapford is a major junction station near Tidmouth, often the starting point for branch line connections and goods traffic to Knapford Harbour.", meta:"Junction station"},
+  wellsworth:  {x:-18, z:10, lines:["main","brendam"], desc:"Wellsworth is a market town station on the Main Line, junction for the Brendam Branch which heads south to the docks.", meta:"Junction: Brendam Branch"},
+  killdane:    {x:18, z:8,   lines:["main","peelgodred"], desc:"Killdane links the Main Line to the Peel Godred Branch, which climbs toward the quarries beneath Culdee Fell.", meta:"Junction: Peel Godred Branch"},
+  crovansgate: {x:54, z:6,   lines:["main","skarloey","culdeefell"], desc:"Crovan's Gate is where the narrow-gauge Skarloey Railway and the Culdee Fell Mountain Railway connect with the standard-gauge Main Line — engines are transferred at the works here.", meta:"Triple junction · Skarloey Works"},
+  vicarstown:  {x:70, z:2,   lines:["main"], desc:"Vicarstown sits at the eastern edge of Sodor, connecting the NWR Main Line onward to the mainland via Barrow-in-Furness.", meta:"Mainland connection"},
+  elsbridge:   {x:-34, z:2,  lines:["main"], desc:"Elsbridge is a quiet stop on the Main Line near Tidmouth, often passed by engines heading to or from the sheds.", meta:"Main Line halt"},
+  maithwaite:  {x:-20, z:-6, lines:["ffarquhar"], desc:"Maithwaite lies along the Ffarquhar Branch, the line famously worked by Thomas the Tank Engine.", meta:"Ffarquhar Branch"},
+  ffarquhar:   {x:-6,  z:-12,lines:["ffarquhar"], desc:"Ffarquhar is the terminus of Thomas's branch line, with a quarry nearby supplying stone traffic.", meta:"Branch terminus · Thomas's line"},
+  suddery:     {x:-6, z:20,  lines:["brendam"], desc:"Suddery is the capital of Sodor, a stop on the Brendam Branch.", meta:"Capital of Sodor"},
+  brendam:     {x:6,  z:30,  lines:["brendam"], desc:"Brendam Docks is a busy harbour terminus where goods are transferred between trains and ships — frequently worked by Duck and Oliver.", meta:"Docks terminus"},
+  callan:      {x:-54,z:-14, lines:["littlewest"], desc:"Callan is a station on the Little Western, the line Duck is proud to call his own.", meta:"Little Western"},
+  arlesburgh:  {x:-60,z:-8,  lines:["littlewest"], desc:"Arlesburgh is a harbour town on the Little Western line, terminus for goods and passenger services on Sodor's west coast.", meta:"Little Western terminus"},
+  peelgodred:  {x:30, z:-28, lines:["peelgodred"], desc:"Peel Godred lies at the foot of Culdee Fell, terminus of its branch line and gateway to the Culdee Fell Mountain Railway.", meta:"Branch terminus"},
+  kirkronan:   {x:14, z:52,  lines:["kirkronan"], desc:"Kirk Ronan is the southernmost terminus on Sodor, reached via a scenic branch line.", meta:"Southern terminus"},
+  harwick:     {x:-66,z:-30, lines:["harwick"], desc:"Harwick is a remote northern terminus, home to Skarloey Railway heritage connections and quiet coastal scenery.", meta:"Northern terminus"},
+  norramby:    {x:86, z:16,  lines:["norramby"], desc:"Norramby lies east of Vicarstown, served by a short branch line.", meta:"Branch terminus"},
+  skarloeyStn: {x:62, z:-6,  lines:["skarloey"], desc:"Skarloey station serves the narrow-gauge Skarloey Railway, worked by the tiny engines Skarloey, Rheneas, Sir Handel, Peter Sam, Rusty and Duncan.", meta:"Narrow gauge · 2ft 3in"},
+  rheneas:     {x:68, z:-14, lines:["skarloey"], desc:"Rheneas station sits deep in the hills, on the Skarloey Railway's climb toward the slate quarries.", meta:"Narrow gauge"},
+  culdeefellS: {x:40, z:-40, lines:["culdeefell"], desc:"The Culdee Fell Railway is a rack railway climbing the tallest mountain on Sodor, worked by Lord Harry, Wilfred, and other named mountain engines.", meta:"Rack railway · summit line"},
+  arlesdaleEnd:{x:-30,z:-20, lines:["arlesdale"], desc:"Arlesdale End is the terminus of the Arlesdale Light Railway, a miniature line run by small engines including Rex, Bert, Mike and Frank.", meta:"15in gauge miniature railway"},
+};
+
+// Each line's station sequence defines the path for trains
+LINES.main.seq = ["tidmouth","knapford","elsbridge","wellsworth","killdane","crovansgate","vicarstown"];
+LINES.ffarquhar.seq = ["elsbridge","maithwaite","ffarquhar"];
+LINES.brendam.seq = ["wellsworth","suddery","brendam"];
+LINES.littlewest.seq = ["knapford","arlesburgh","callan"];
+LINES.peelgodred.seq = ["killdane","peelgodred"];
+LINES.kirkronan.seq = ["killdane","kirkronan"];
+LINES.harwick.seq = ["callan","harwick"];
+LINES.norramby.seq = ["vicarstown","norramby"];
+LINES.skarloey.seq = ["crovansgate","skarloeyStn","rheneas"];
+LINES.arlesdale.seq = ["maithwaite","arlesdaleEnd"];
+LINES.culdeefell.seq = ["peelgodred","culdeefellS"];
+
+// Named trains (engine, line, color, offset along path, speed)
+const TRAINS = [
+  {name:"Thomas",   line:"ffarquhar", color:0x3355cc, speed:0.055, t:0.1, desc:"No.1 — a cheeky blue tank engine who runs the branch line to Ffarquhar."},
+  {name:"Edward",   line:"main",      color:0x2a6a2a, speed:0.03,  t:0.3, desc:"No.2 — the kindest engine on Sodor, always ready to help on the Main Line."},
+  {name:"Henry",    line:"main",      color:0x1a5a3a, speed:0.032, t:0.55,desc:"No.3 — a big green express engine, fast and strong."},
+  {name:"Gordon",   line:"main",      color:0x0f3a6a, speed:0.045, t:0.75,desc:"No.4 — the big blue express engine, proud of pulling the fastest trains."},
+  {name:"James",    line:"main",      color:0xb01010, speed:0.04,  t:0.0, desc:"No.5 — a red mixed-traffic engine who loves splendid paintwork."},
+  {name:"Percy",    line:"littlewest",color:0x1a6a1a, speed:0.05,  t:0.2, desc:"No.6 — a small green engine who works goods and shunting duties."},
+  {name:"Toby",     line:"brendam",   color:0x5a3a1a, speed:0.035, t:0.4, desc:"No.7 — an old tram engine fitted with cowcatchers and side plates."},
+  {name:"Duck",     line:"littlewest",color:0x0a4a8a, speed:0.038, t:0.7, desc:"No.8 — the Great Western pannier tank, proud of his branch line."},
+  {name:"Skarloey", line:"skarloey",  color:0xd08a2a, speed:0.03,  t:0.15,desc:"One of the oldest narrow-gauge engines on the island."},
+  {name:"Rheneas",  line:"skarloey",  color:0xaa5a1a, speed:0.028, t:0.6, desc:"Skarloey's great friend, running the narrow-gauge line."},
+];
+
+// ---------- THREE.JS SETUP ----------
+const wrap = document.getElementById('canvas-wrap');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1a24);
+scene.fog = new THREE.Fog(0x0b1a24, 180, 420);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 2000);
+camera.position.set(0, 140, 160);
+camera.lookAt(0,0,0);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+wrap.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const sun = new THREE.DirectionalLight(0xfff3de, 1.0);
+sun.position.set(100,160,60);
+scene.add(sun);
+
+// Island base (green terrain, irregular blob)
+function makeIslandShape(){
+  const pts = [];
+  const n=40;
+  for(let i=0;i<n;i++){
+    const a = (i/n)*Math.PI*2;
+    const r = 95 + Math.sin(a*3)*14 + Math.cos(a*5)*8 + Math.sin(a*1.3+1)*18;
+    pts.push(new THREE.Vector2(Math.cos(a)*r*1.05, Math.sin(a)*r*0.78));
+  }
+  return new THREE.Shape(pts);
+}
+const islandGeo = new THREE.ExtrudeGeometry(makeIslandShape(), {depth:2, bevelEnabled:true, bevelThickness:0.5, bevelSize:0.5, bevelSegments:2});
+islandGeo.rotateX(-Math.PI/2);
+const islandMat = new THREE.MeshStandardMaterial({color:0x3a7d3f, flatShading:true, roughness:0.95});
+const island = new THREE.Mesh(islandGeo, islandMat);
+island.position.y=-2.3;
+scene.add(island);
+
+// water
+const waterGeo = new THREE.PlaneGeometry(900,700);
+waterGeo.rotateX(-Math.PI/2);
+const water = new THREE.Mesh(waterGeo, new THREE.MeshStandardMaterial({color:0x1b4a63, roughness:0.6, metalness:0.1}));
+water.position.y=-6;
+scene.add(water);
+
+// mountains (central highlands) — simple cones
+[[20,-10,16],[8,-30,10],[-10,-18,12],[40,-35,14]].forEach(([x,z,h])=>{
+  const m = new THREE.Mesh(new THREE.ConeGeometry(14+Math.random()*6, h, 6), new THREE.MeshStandardMaterial({color:0x4a5a44, flatShading:true}));
+  m.position.set(x,h/2-2,z);
+  scene.add(m);
+});
+
+// ---------- helper: station world pos ----------
+function stPos(id){ const s=STATIONS[id]; return new THREE.Vector3(s.x, 0.4, s.z); }
+
+// ---------- draw lines ----------
+const legendList = document.getElementById('legendList');
+let lineVisible = {};
+Object.keys(LINES).forEach(key=>{
+  const line = LINES[key];
+  lineVisible[key]=true;
+  const pts = line.seq.map(stPos);
+  const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.05);
+  const geo = new THREE.TubeGeometry(curve, Math.max(8,pts.length*10), 0.35*line.width, 6, false);
+  const mat = new THREE.MeshBasicMaterial({color: line.color});
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.userData.lineKey = key;
+  scene.add(mesh);
+  line.mesh = mesh;
+  line.curve = curve;
+
+  const item = document.createElement('div');
+  item.className='leg-item';
+  item.innerHTML = `<span class="leg-swatch" style="background:#${line.color.toString(16).padStart(6,'0')}"></span>${line.name}`;
+  item.onclick = ()=>{
+    lineVisible[key] = !lineVisible[key];
+    mesh.visible = lineVisible[key];
+    item.classList.toggle('dim', !lineVisible[key]);
+  };
+  legendList.appendChild(item);
+});
+
+// ---------- draw stations ----------
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const clickable = [];
+const labelSprites = [];
+
+function makeLabelSprite(text){
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width=256; canvas.height=64;
+  ctx.font='28px Segoe UI, Arial';
+  ctx.fillStyle='rgba(255,255,255,0.95)';
+  ctx.textAlign='center';
+  ctx.shadowColor='#000'; ctx.shadowBlur=4;
+  ctx.fillText(text,128,40);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false});
+  const spr = new THREE.Sprite(mat);
+  spr.scale.set(14,3.5,1);
+  return spr;
+}
+
+Object.entries(STATIONS).forEach(([id, st])=>{
+  const geo = new THREE.SphereGeometry(0.9,16,16);
+  const mat = new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffcc66, emissiveIntensity:0.4});
+  const sph = new THREE.Mesh(geo, mat);
+  sph.position.set(st.x,0.5,st.z);
+  sph.userData = {type:'station', id, name: id};
+  scene.add(sph);
+  clickable.push(sph);
+
+  const label = makeLabelSprite(id.charAt(0).toUpperCase()+id.slice(1).replace(/Stn|S$/,''));
+  label.position.set(st.x, 4.2, st.z);
+  scene.add(label);
+  labelSprites.push(label);
+});
+
+// ---------- trains ----------
+const trainGroup = new THREE.Group();
+scene.add(trainGroup);
+TRAINS.forEach(tr=>{
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.4,1.2,1.3), new THREE.MeshStandardMaterial({color: tr.color}));
+  body.position.y=0.9;
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(1.0,1.0,1.3), new THREE.MeshStandardMaterial({color: tr.color}));
+  cab.position.set(-0.7,1.5,0);
+  const g = new THREE.Group();
+  g.add(body); g.add(cab);
+  g.userData = {type:'train', train: tr};
+  trainGroup.add(g);
+  tr.mesh = g;
+  clickable.push(body); body.parent._clickTarget = g;
+});
+
+// ---------- interaction ----------
+const panel = document.getElementById('panel');
+function openPanel(kind,title,desc,meta){
+  document.getElementById('pType').textContent = kind;
+  document.getElementById('pTitle').textContent = title;
+  document.getElementById('pDesc').textContent = desc;
+  document.getElementById('pMeta').textContent = meta || '';
+  panel.classList.add('show');
+}
+function closePanel(){ panel.classList.remove('show'); }
+
+renderer.domElement.addEventListener('click', (e)=>{
+  mouse.x = (e.clientX/innerWidth)*2-1;
+  mouse.y = -(e.clientY/innerHeight)*2+1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(clickable, false);
+  if(hits.length===0) return;
+  const obj = hits[0].object;
+  if(obj.userData.type==='station'){
+    const id = obj.userData.id;
+    const st = STATIONS[id];
+    openPanel('Station', id.charAt(0).toUpperCase()+id.slice(1).replace(/Stn|S$/,''), st.desc, st.meta);
+  } else {
+    // climb to parent group holding train data
+    let p = obj;
+    while(p && !(p.userData && p.userData.type==='train')) p=p.parent;
+    if(p){
+      const tr = p.userData.train;
+      openPanel('Engine', tr.name, tr.desc, `Line: ${LINES[tr.line].name}`);
+    }
+  }
+});
+
+// ---------- camera orbit controls (manual, no extra script) ----------
+let isDragging=false, prevX=0, prevY=0;
+let camTheta = 0.8, camPhi = 0.95, camDist = 200;
+function updateCam(){
+  camera.position.x = camDist*Math.sin(camPhi)*Math.sin(camTheta);
+  camera.position.z = camDist*Math.sin(camPhi)*Math.cos(camTheta);
+  camera.position.y = camDist*Math.cos(camPhi);
+  camera.lookAt(0,0,0);
+}
+updateCam();
+renderer.domElement.addEventListener('mousedown', e=>{isDragging=true;prevX=e.clientX;prevY=e.clientY;});
+window.addEventListener('mouseup', ()=>isDragging=false);
+window.addEventListener('mousemove', e=>{
+  if(!isDragging) return;
+  const dx=e.clientX-prevX, dy=e.clientY-prevY;
+  camTheta -= dx*0.004;
+  camPhi = Math.max(0.25, Math.min(1.5, camPhi - dy*0.004));
+  prevX=e.clientX; prevY=e.clientY;
+  updateCam();
+});
+renderer.domElement.addEventListener('wheel', e=>{
+  camDist = Math.max(60, Math.min(420, camDist + e.deltaY*0.1));
+  updateCam();
+});
+
+// ---------- HUD stats ----------
+document.getElementById('statTrains').textContent = TRAINS.length;
+document.getElementById('statStations').textContent = Object.keys(STATIONS).length;
+document.getElementById('statLines').textContent = Object.keys(LINES).length;
+
+let simSpeed = 1;
+const speedSlider = document.getElementById('speedSlider');
+speedSlider.addEventListener('input', ()=>{
+  simSpeed = parseFloat(speedSlider.value);
+  document.getElementById('speedVal').textContent = simSpeed.toFixed(1)+'x';
+});
+
+let simTime = 6*60; // minutes, start 6:00
+function fmtTime(mins){
+  mins = ((mins%1440)+1440)%1440;
+  const h = Math.floor(mins/60), m = Math.floor(mins%60);
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+// ---------- animation loop ----------
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  simTime += dt*4*simSpeed;
+  document.getElementById('statTime').textContent = fmtTime(simTime);
+
+  TRAINS.forEach(tr=>{
+    tr.t += dt*tr.speed*simSpeed;
+    let tt = tr.t % 2;
+    let u = tt<1 ? tt : 2-tt; // ping-pong back and forth on branch
+    const curve = LINES[tr.line].curve;
+    const pos = curve.getPointAt(Math.max(0,Math.min(1,u)));
+    const tangent = curve.getTangentAt(Math.max(0,Math.min(1,u)));
+    tr.mesh.position.set(pos.x, 0.9, pos.z);
+    const angle = Math.atan2(tangent.x, tangent.z);
+    tr.mesh.rotation.y = angle + (tt>1 ? Math.PI : 0);
+  });
+
+  // subtle label billboard already via sprite
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+document.getElementById('loading').style.display='none';
+animate();
+</script>
+</body>
+</html>
