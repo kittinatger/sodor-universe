@@ -154,15 +154,30 @@ const sun = new THREE.DirectionalLight(0xfff3de, 1.0);
 sun.position.set(100,160,60);
 scene.add(sun);
 
-// Island base (green terrain, irregular blob)
+// Island base — coastline traced from the official Island of Sodor map.
+// Raw points are (imageX, imageY) pixels from the reference map (~1400x1080);
+// converted below to scene units (x = east/west, z = north/south).
 function makeIslandShape(){
-  const pts = [];
-  const n=40;
-  for(let i=0;i<n;i++){
-    const a = (i/n)*Math.PI*2;
-    const r = 95 + Math.sin(a*3)*14 + Math.cos(a*5)*8 + Math.sin(a*1.3+1)*18;
-    pts.push(new THREE.Vector2(Math.cos(a)*r*1.05, Math.sin(a)*r*0.78));
-  }
+  const raw = [
+    [395,130],[440,95],[480,70],[560,55],[640,55],[720,70],[800,110],
+    [880,145],[950,180],[1000,205],[1050,230],[1100,265],[1150,300],
+    [1195,340],[1230,380],[1265,400],[1290,420],[1315,450],[1330,480],
+    [1345,515],[1350,560],[1348,600],[1340,640],[1320,670],[1300,700],
+    [1288,730],[1280,760],[1290,800],[1300,840],[1288,870],[1270,900],
+    [1240,930],[1200,950],[1165,970],[1130,990],[1065,1005],[1000,1010],
+    [950,1008],[900,1000],[865,990],[830,980],[800,960],[770,940],
+    [735,920],[700,900],[675,885],[650,870],[625,845],[600,820],
+    [578,835],[560,850],[540,885],[520,920],[500,935],[480,940],
+    [458,920],[440,900],[428,865],[420,830],[408,800],[400,770],
+    [388,735],[380,700],[362,670],[350,640],[300,655],[250,680],
+    [200,690],[150,700],[118,675],[90,650],[65,625],[50,600],
+    [42,570],[40,540],[50,510],[70,480],[92,450],[120,420],
+    [140,400],[160,380],[178,360],[200,340],[215,315],[230,290],
+    [242,260],[260,230],[280,210],[300,190],[318,175],[340,160],
+    [355,150],[370,140],[382,135]
+  ];
+  const cx=700, cy=550, scale=1/7.5;
+  const pts = raw.map(([ix,iy]) => new THREE.Vector2((ix-cx)*scale, (iy-cy)*scale));
   return new THREE.Shape(pts);
 }
 const islandGeo = new THREE.ExtrudeGeometry(makeIslandShape(), {depth:2, bevelEnabled:true, bevelThickness:0.5, bevelSize:0.5, bevelSegments:2});
