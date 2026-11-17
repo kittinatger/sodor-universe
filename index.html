@@ -108,7 +108,7 @@
 </div>
 
 <div id="speedctl" class="box">
-  <label>Simulation speed: <span id="speedVal">1.0x</span></label>
+  <label>Speed multiplier: <span id="speedVal">1.0x</span></label>
   <input type="range" id="speedSlider" min="0" max="5" step="0.1" value="1">
 </div>
 
@@ -125,8 +125,8 @@
 <div id="credit">Coastline: CC BY-SA 2.5 Island of Sodor outline map</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="terrain.js?v=5"></script>
-<script src="railways.js?v=5"></script>
+<script src="terrain.js?v=6"></script>
+<script src="railways.js?v=6"></script>
 <script>
 // ===================== DATA =====================
 // Network (stations + track paths, in outline-map pixels) comes from railways.js,
@@ -194,11 +194,14 @@ const TRAINS = [
 const T = window.SODOR_TERRAIN;
 const MAP_SCALE = 1/6;                        // world units per map pixel
 const MAP_W = T.imgW*MAP_SCALE, MAP_D = T.imgH*MAP_SCALE;
+// The outline map's scale bar puts 10 miles at 183px, so one world unit is about 528 m.
+const METRE = 1 / (10*1609.344 / 183 / MAP_SCALE);
+const VEXAG = 0.55;                           // gentler hills, so life-size trains climb believable grades
 const HEIGHTS = (()=>{
   const bin = atob(T.heights), bytes = new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
   const i16 = new Int16Array(bytes.buffer), out = new Float32Array(i16.length);
-  for(let i=0;i<i16.length;i++) out[i]=i16[i]/T.hScale;
+  for(let i=0;i<i16.length;i++) out[i]=i16[i]/T.hScale*VEXAG;
   return out;
 })();
 const REGION = (()=>{
@@ -207,12 +210,14 @@ const REGION = (()=>{
   return out;
 })();
 function mapToWorld(px,py){ return {x:(px-T.imgW/2)*MAP_SCALE, z:(py-T.imgH/2)*MAP_SCALE}; }
+// Height of the rendered surface itself (same triangle split as the mesh), so life-size
+// vehicles and track sit exactly on the ground rather than on a bilinear approximation.
 function heightAt(x,z){
   const c = Math.max(0, Math.min(T.cols-1.001, (x/MAP_SCALE + T.imgW/2)/T.step));
   const r = Math.max(0, Math.min(T.rows-1.001, (z/MAP_SCALE + T.imgH/2)/T.step));
   const c0=Math.floor(c), r0=Math.floor(r), fc=c-c0, fr=r-r0, i=r0*T.cols+c0;
-  const h00=HEIGHTS[i], h10=HEIGHTS[i+1], h01=HEIGHTS[i+T.cols], h11=HEIGHTS[i+T.cols+1];
-  return (h00*(1-fc)+h10*fc)*(1-fr) + (h01*(1-fc)+h11*fc)*fr;
+  const a=HEIGHTS[i], b=HEIGHTS[i+1], d=HEIGHTS[i+T.cols], e=HEIGHTS[i+T.cols+1];
+  return fc+fr<=1 ? a+(b-a)*fc+(d-a)*fr : e+(d-e)*(1-fc)+(b-e)*(1-fr);
 }
 
 // ===================== SCENE =====================
@@ -221,8 +226,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e1d28);
 scene.fog = new THREE.Fog(0x0e1d28, 650, 1400);
 
-const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.5, 3000);
-const renderer = new THREE.WebGLRenderer({antialias:true});
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.0003, 3000);
+const renderer = new THREE.WebGLRenderer({antialias:true, logarithmicDepthBuffer:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
@@ -238,6 +243,8 @@ Object.assign(sun.shadow.camera, {left:-120, right:120, top:100, bottom:-100, ne
 sun.shadow.bias = -0.0015;
 sun.shadow.normalBias = 0.9;
 scene.add(sun);
+scene.add(sun.target);
+const SUN_DIR = sun.position.clone().normalize();
 
 function buildTerrain(){
   const {cols, rows, step} = T;
@@ -264,7 +271,7 @@ function buildTerrain(){
   const SAND=C(0xdccb92), GRASS_LO=C(0x72b04e), GRASS=C(0x58963c), MOOR=C(0x7d8a52),
         ROCK=C(0x8c867a), PEAK=C(0xd9d6cf), SHALLOW=C(0xc9b98a), DEEP=C(0x1d3f52), tmp=new THREE.Color();
   for(let i=0;i<n;i++){
-    const h=HEIGHTS[i], slope=1-nrm[i*3+1];
+    const h=HEIGHTS[i]/VEXAG, slope=Math.min(1,(1-nrm[i*3+1])/VEXAG);
     const gc=i%cols, gr=(i/cols)|0;
     const hs=Math.sin(gc*127.1+gr*311.7)*43758.5453;
     const jitter = (hs-Math.floor(hs)-0.5)*0.05;
@@ -289,7 +296,19 @@ function buildTerrain(){
     col[i*3]=Math.min(1,tmp.r+jitter); col[i*3+1]=Math.min(1,tmp.g+jitter); col[i*3+2]=Math.min(1,tmp.b+jitter*0.5);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col,3));
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95, metalness:0}));
+  // Fine ground texture tiled every ~25 m: averages out from afar, gives grass and soil up close.
+  const uv = new Float32Array(n*2), TILE = 25*METRE;
+  for(let i=0;i<n;i++){ uv[i*2]=pos[i*3]/TILE; uv[i*2+1]=pos[i*3+2]/TILE; }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv,2));
+  const gc = document.createElement('canvas'); gc.width = gc.height = 256;
+  const gx = gc.getContext('2d'); gx.fillStyle = '#f2f2f2'; gx.fillRect(0,0,256,256);
+  let seed = 7; const rnd = ()=>(seed = (seed*16807) % 2147483647)/2147483647;
+  for(let k=0;k<5200;k++){ const v = 200 + rnd()*55|0; gx.fillStyle = `rgb(${v-8},${v},${v-14})`; gx.fillRect(rnd()*256, rnd()*256, 1+rnd()*3, 1+rnd()*5); }
+  for(let k=0;k<26;k++){ gx.fillStyle = `rgba(150,140,110,${0.10+rnd()*0.12})`; gx.beginPath(); gx.arc(rnd()*256, rnd()*256, 6+rnd()*22, 0, 7); gx.fill(); }
+  const groundTex = new THREE.CanvasTexture(gc);
+  groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
+  groundTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, map:groundTex, roughness:0.95, metalness:0}));
   mesh.castShadow = true; mesh.receiveShadow = true;
   scene.add(mesh);
 
@@ -340,34 +359,63 @@ const STATIONS = RAIL.stations.map((s,i)=>{
 });
 RAIL.lines.forEach(l=>l.stops.forEach(k=>{ if(!STATIONS[k].lines.includes(l.id)) STATIONS[k].lines.push(l.id); }));
 
-// Track profile: sample the route, follow the ground at railway-like grades, bore straight
-// through between the tunnel portals the map marks, and stand on piers across valleys.
+// Two tracks per line. The coloured route line (raised and smoothed) is the map overlay seen
+// from afar. The life-size track — ballast, sleepers and rails on the ground — appears as you
+// zoom in, and is what trains actually run on.
 const TUNNELS = RAIL.tunnels.map(t=>Object.assign(t, {wa:mapToWorld(t.a[0],t.a[1]), wb:mapToWorld(t.b[0],t.b[1])}));
 const portalGroup = new THREE.Group(); scene.add(portalGroup);
-const piers = [];
 const stoneMat = new THREE.MeshStandardMaterial({color:0x8a8174, roughness:0.9});
 const boreMat = new THREE.MeshBasicMaterial({color:0x050505});
 const portalFaceGeo = new THREE.BoxGeometry(3.0, 2.3, 0.7), portalBoreGeo = new THREE.BoxGeometry(1.6, 1.55, 0.74);
+const TRACK_STEP = 6*METRE;
+const GAUGE_M = {standard:1.435, narrow:0.686, rack:0.8, miniature:0.381, industrial:0.61, closed:0.686};
+const BED_M   = {standard:3.6, narrow:2.3, rack:2.4, miniature:1.3, industrial:1.9, closed:2.3};
+const realTrackGroup = new THREE.Group(); scene.add(realTrackGroup);
 
 function nearestSample(pts, w){
   let bi=0, bd=Infinity;
   for(let i=0;i<pts.length;i++){ const d=(pts[i].x-w.x)**2+(pts[i].z-w.z)**2; if(d<bd){ bd=d; bi=i; } }
   return bi;
 }
-function makePortal(pos, into, scale, info){
+const trackTexCache = {};
+function trackTexture(kind){
+  if(trackTexCache[kind]) return trackTexCache[kind];
+  const c = document.createElement('canvas'); c.width = 128; c.height = 32;
+  const g = c.getContext('2d');
+  let seed = 11; const rnd = ()=>(seed = (seed*16807) % 2147483647)/2147483647;
+  const closed = kind==='closed';
+  g.fillStyle = closed ? '#6f7a4c' : '#7d776d'; g.fillRect(0,0,128,32);
+  for(let k=0;k<900;k++){ const v = (closed?95:105) + rnd()*60|0; g.fillStyle = closed?`rgb(${v-20},${v},${v-40})`:`rgb(${v},${v-4},${v-10})`; g.fillRect(rnd()*128, rnd()*32, 1.5, 1.5); }
+  if(!closed){
+    const half = GAUGE_M[kind]/2/BED_M[kind];
+    g.fillStyle = '#4a3424'; g.fillRect(128*(0.5-half-0.13), 9, 128*(2*half+0.26), 13);
+    for(const s of [-1,1]){ const x = 128*(0.5+s*half); g.fillStyle = '#3b3b3e'; g.fillRect(x-2.5,0,5,32); g.fillStyle = '#c9ccd1'; g.fillRect(x-1,0,2,32); }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return trackTexCache[kind] = t;
+}
+function makePortal(pos, into, widthM, info){
   const g = new THREE.Group();
   const face = new THREE.Mesh(portalFaceGeo, stoneMat); face.position.y = 1.15; face.castShadow = true;
   const bore = new THREE.Mesh(portalBoreGeo, boreMat); bore.position.y = 0.78;
   g.add(face, bore);
-  g.scale.setScalar(scale);
-  g.position.copy(pos).setY(pos.y-0.3);
+  g.scale.setScalar(widthM*METRE/3.0);
+  g.position.copy(pos);
   g.rotation.y = Math.atan2(into.x, into.z);
   [face, bore].forEach(m=>{ m.userData = info; clickable.push(m); });
   portalGroup.add(g);
 }
+
 function buildTrack(line){
   const guide = new THREE.CatmullRomCurve3(line.path.map(p=>{ const w=mapToWorld(p[0],p[1]); return new THREE.Vector3(w.x,0,w.z); }), false, 'centripetal');
-  const n = Math.max(8, Math.round(guide.getLength()*1.6));
+  const guideLen = guide.getLength();
+  guide.arcLengthDivisions = Math.max(1000, Math.ceil(guideLen/TRACK_STEP));
+  guide.updateArcLengths();
+
+  // --- route line for the overview
+  const n = Math.max(8, Math.round(guideLen*1.6));
   const pts = guide.getSpacedPoints(n);
   const ground = pts.map(p=>Math.max(heightAt(p.x,p.z),0));
   const tunnels = TUNNELS.filter(t=>t.line===line.id).map(t=>{
@@ -376,17 +424,14 @@ function buildTrack(line){
     if(i1-i0<2) i1 = Math.min(pts.length-1, i0+2);
     return {t, i0, i1};
   });
-  const inTunnel = new Uint8Array(pts.length);
-  tunnels.forEach(({i0,i1})=>{ for(let i=i0+1;i<i1;i++) inTunnel[i]=1; });
-
+  const inT = new Uint8Array(pts.length);
+  tunnels.forEach(({i0,i1})=>{ for(let i=i0+1;i<i1;i++) inT[i]=1; });
   const W = line.kind==='rack' ? 2 : line.kind==='standard' ? 10 : 6;
   const raw = ground.map(h=>h+0.3);
   tunnels.forEach(({i0,i1})=>{ for(let i=i0+1;i<i1;i++) raw[i] = raw[i0]+(raw[i1]-raw[i0])*(i-i0)/(i1-i0); });
   const y = raw.map((_,i)=>{ let s=0,c=0; for(let k=-W;k<=W;k++){ const j=i+k; if(j>=0 && j<raw.length){ s+=raw[j]; c++; } } return s/c; })
                .map((v,i)=>Math.max(v, ground[i]+0.25));
-  tunnels.forEach(({i0,i1})=>{ for(let i=i0;i<=i1;i++){ const f=(i-i0)/(i1-i0); y[i] = y[i0]+(y[i1]-y[i0])*f; } });
   const p3 = pts.map((p,i)=>new THREE.Vector3(p.x, y[i], p.z));
-
   const closed = line.kind==='closed';
   const mat = new THREE.MeshStandardMaterial({color: line.colorHex, roughness:0.5, emissive: line.colorHex,
     emissiveIntensity: closed?0.05:0.25, transparent: closed, opacity: closed?0.55:1});
@@ -396,53 +441,93 @@ function buildTrack(line){
     if(run.length>=2){
       const c = new THREE.CatmullRomCurve3(run, false, 'centripetal');
       const m = new THREE.Mesh(new THREE.TubeGeometry(c, Math.max(4, run.length*2), 0.16*line.width, 6, false), mat);
-      m.castShadow = !closed; group.add(m);
+      group.add(m);
     }
     run = [];
   };
-  p3.forEach((p,i)=>{ if(inTunnel[i]) { flush(); } else run.push(p); });
+  p3.forEach((p,i)=>{ if(inT[i]) flush(); else run.push(p); });
   flush();
   scene.add(group);
 
-  for(let i=0;i<p3.length;i+=3){
-    const lift = y[i]-ground[i]-0.3;
-    if(!inTunnel[i] && lift>0.6 && !closed) piers.push([p3[i].x, ground[i], p3[i].z, lift+0.2, line.width]);
-  }
+  // --- life-size track on the ground
+  const N = Math.max(4, Math.ceil(guideLen/TRACK_STEP));
+  const rp = guide.getSpacedPoints(N), M = rp.length;
+  const rx = new Float32Array(M), ry = new Float32Array(M), rz = new Float32Array(M), hg = new Float32Array(M);
+  for(let j=0;j<M;j++){ rx[j]=rp[j].x; rz[j]=rp[j].z; const h = heightAt(rx[j], rz[j]); hg[j] = h<0 ? 2.5*METRE : h; }
+  const tun = tunnels.map(({i0,i1})=>[Math.round(i0/n*N), Math.round(i1/n*N)]);
+  const rIn = new Uint8Array(M);
+  tun.forEach(([j0,j1])=>{ for(let j=j0+1;j<j1;j++) rIn[j]=1; });
+  for(let j=0;j<M;j++){ let s=0,c=0; for(let k=-2;k<=2;k++){ const q=j+k; if(q>=0&&q<M){ s+=hg[q]; c++; } } ry[j] = Math.max(s/c, hg[j]) + 0.55*METRE; }
+  tun.forEach(([j0,j1])=>{ for(let j=j0;j<=j1;j++) ry[j] = ry[j0]+(ry[j1]-ry[j0])*(j-j0)/Math.max(1,j1-j0); });
+  line.real = {x:rx, y:ry, z:rz, n:M, len:guideLen, tun: tun.map(([a,b])=>[a/(M-1), b/(M-1)])};
 
-  const cum = [0];
-  for(let i=1;i<p3.length;i++) cum.push(cum[i-1]+p3[i].distanceTo(p3[i-1]));
-  const total = cum[cum.length-1] || 1;
+  const bed = BED_M[line.kind]*METRE/2, rep = (line.kind==='standard'?0.75:0.9)*METRE;
+  const vp=[], vu=[], vn=[], ix=[];
+  let prev = -1, along = 0;
+  for(let j=0;j<M;j++){
+    if(j>0) along += Math.hypot(rx[j]-rx[j-1], rz[j]-rz[j-1]);
+    if(rIn[j]){ prev = -1; continue; }
+    const a = Math.max(0,j-1), b = Math.min(M-1,j+1);
+    let dx = rx[b]-rx[a], dz = rz[b]-rz[a]; const dl = Math.hypot(dx,dz)||1; dx/=dl; dz/=dl;
+    const base = vp.length/3;
+    vp.push(rx[j]+dz*bed, ry[j], rz[j]-dx*bed,  rx[j]-dz*bed, ry[j], rz[j]+dx*bed);
+    vu.push(0, along/rep, 1, along/rep); vn.push(0,1,0, 0,1,0);
+    if(prev>=0) ix.push(prev, prev+1, base, prev+1, base+1, base);
+    prev = base;
+  }
+  const rg = new THREE.BufferGeometry();
+  rg.setAttribute('position', new THREE.Float32BufferAttribute(vp,3));
+  rg.setAttribute('uv', new THREE.Float32BufferAttribute(vu,2));
+  rg.setAttribute('normal', new THREE.Float32BufferAttribute(vn,3));
+  rg.setIndex(ix);
+  const real = new THREE.Mesh(rg, new THREE.MeshStandardMaterial({map: trackTexture(line.kind), roughness:0.9, side:THREE.DoubleSide}));
+  real.receiveShadow = true;
+  realTrackGroup.add(real);
+  line.realMesh = real;
+
   const stopIdx = line.stops.map(k=>({k, i:nearestSample(pts, STATIONS[k])}));
-  line.tunnelU = tunnels.map(({t,i0,i1})=>{
+  const _a = new THREE.Vector3(), _b = new THREE.Vector3();
+  line.tunnelU = tunnels.map(({t,i0,i1},q)=>{
     const before = stopIdx.filter(s=>s.i<=i0).pop(), after = stopIdx.find(s=>s.i>=i1);
+    const [j0,j1] = tun[q];
+    const at = j=>new THREE.Vector3(rx[j], ry[j]-0.55*METRE, rz[j]);
     const info = {type:'tunnel', name:t.name, line:line.id,
-      between:[before&&STATIONS[before.k].name, after&&STATIONS[after.k].name], pos:p3[Math.round((i0+i1)/2)]};
-    const scale = line.kind==='standard' ? 0.75 : 0.5;
-    makePortal(p3[i0], new THREE.Vector3().subVectors(p3[Math.min(i0+1,p3.length-1)], p3[i0]), scale, info);
-    makePortal(p3[i1], new THREE.Vector3().subVectors(p3[Math.max(i1-1,0)], p3[i1]), scale, info);
-    return [cum[i0]/total, cum[i1]/total];
+      between:[before&&STATIONS[before.k].name, after&&STATIONS[after.k].name], pos:at(Math.round((j0+j1)/2))};
+    const wM = line.kind==='standard' ? 5.5 : 3.8;
+    makePortal(at(j0), _a.subVectors(at(Math.min(j0+1,M-1)), at(j0)), wM, info);
+    makePortal(at(j1), _b.subVectors(at(Math.max(j1-1,0)), at(j1)), wM, info);
+    return [i0/n, i1/n];
   });
   line.mesh = group;
+  line.userVisible = true;
   line.curve = new THREE.CatmullRomCurve3(p3, false, 'centripetal');
-  line.curve.arcLengthDivisions = Math.max(200, p3.length * 4);   // even speed along long lines
-  line.length = line.curve.getLength();
+  line.length = guideLen;
   line.samples = p3;
 }
 const clickable = [];
 RAIL.lines.forEach(buildTrack);
-STATIONS.forEach(st=>{
-  let best = Infinity;
-  st.lines.forEach(id=>{ const p = LINES[id].samples[nearestSample(LINES[id].samples, st)];
-    const d = (p.x-st.x)**2+(p.z-st.z)**2; if(d<best){ best=d; st.y = Math.max(st.y, p.y-0.3); } });
-});
-if(piers.length){
-  const pierMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), stoneMat, piers.length);
-  const m4 = new THREE.Matrix4();
-  piers.forEach(([x,g,z,h,w],i)=>{ m4.makeScale(0.35*w, h, 0.35*w).setPosition(x, g+h/2-0.1, z); pierMesh.setMatrixAt(i, m4); });
-  pierMesh.castShadow = true;
-  scene.add(pierMesh);
+
+// Position on / direction along a line's life-size track at fraction u of its length.
+function realAt(line, u, out){
+  const R = line.real, f = Math.max(0, Math.min(1, u))*(R.n-1), i = Math.min(R.n-2, Math.floor(f)), t = f-i;
+  return out.set(R.x[i]+(R.x[i+1]-R.x[i])*t, R.y[i]+(R.y[i+1]-R.y[i])*t, R.z[i]+(R.z[i+1]-R.z[i])*t);
 }
-function inTunnel(line, u){ return line.tunnelU.some(([a,b])=>u>a && u<b); }
+function realDir(line, u, out){
+  const R = line.real, f = Math.max(0, Math.min(1, u))*(R.n-1), a = Math.max(0, Math.floor(f)-2), b = Math.min(R.n-1, Math.floor(f)+3);
+  return out.set(R.x[b]-R.x[a], R.y[b]-R.y[a], R.z[b]-R.z[a]).normalize();
+}
+function realU(line, w){
+  const R = line.real; let bi=0, bd=Infinity;
+  for(let j=0;j<R.n;j++){ const d=(R.x[j]-w.x)**2+(R.z[j]-w.z)**2; if(d<bd){ bd=d; bi=j; } }
+  return bi/(R.n-1);
+}
+function inTunnel(line, u){ return line.real.tun.some(([a,b])=>u>a && u<b); }
+STATIONS.forEach(st=>{
+  const line = LINES[st.lines[0]];
+  if(!line) return;
+  const p = realAt(line, realU(line, st), new THREE.Vector3());
+  st.y = p.y - 0.55*METRE; st.trackU = realU(line, st);
+});
 
 // Legend: one entry per line name (the Mid Sodor has two pieces), grouped by gauge.
 const legendList = document.getElementById('legendList');
@@ -457,10 +542,9 @@ let lastGroup = null;
   const sw = `<span class="leg-swatch${group[0].kind==='closed'||group[0].kind==='narrow'?' dashed':''}" style="background-color:#${group[0].color}"></span>`;
   item.innerHTML = sw + group[0].name;
   item.onclick = ()=>{
-    const vis = !group[0].mesh.visible;
-    group.forEach(l=>{ l.mesh.visible = vis; });
+    const vis = !group[0].userVisible;
+    group.forEach(l=>{ l.userVisible = vis; });
     item.classList.toggle('dim', !vis);
-    TRAINS.forEach(tr=>{ if(group.some(l=>l.id===tr.line)) tr.mesh.visible = vis; });
   };
   legendList.appendChild(item);
 });
@@ -516,30 +600,32 @@ const MARKERS = {
 };
 const pickGeo = new THREE.SphereGeometry(1.3, 8, 6);                // generous invisible tap target
 const pickMat = new THREE.MeshBasicMaterial({visible:false});
+const stationMarkers = new THREE.Group(); scene.add(stationMarkers);   // map discs, hidden up close
 STATIONS.forEach(st=>{
   const style = MARKERS[st.kind==='closed' ? 'closed' : 'station'];
   const m = new THREE.Mesh(style.geo, style.mat);
   m.position.set(st.x, st.y+0.4, st.z);
-  m.castShadow = true;
-  scene.add(m);
+  stationMarkers.add(m);
   const hit = new THREE.Mesh(pickGeo, pickMat);
   hit.position.copy(m.position);
   hit.userData = {type:'station', id:st.id};
-  scene.add(hit); clickable.push(hit);
+  stationMarkers.add(hit); clickable.push(hit);
   if(st.name){
     const label = makeLabelSprite(st.name);
     label.position.set(st.x, st.y+2.8, st.z);
-    label.userData = {type:'station', id:st.id, aspect: label.scale.x/label.scale.y, major: MAJOR.has(st.name)};
+    label.userData = {type:'station', id:st.id, aspect: label.scale.x/label.scale.y, major: MAJOR.has(st.name), baseY: st.y};
     scene.add(label);
     labels.push(label); clickable.push(label);
   }
 });
+// Labels keep a steady on-screen size and float closer to the ground as you zoom in.
 function scaleLabels(){
   for(const l of labels){
     const d = camera.position.distanceTo(l.position);
     l.visible = l.userData.major || d < 95;
-    const h = Math.min(4.2, Math.max(0.08, d*0.021));
+    const h = Math.min(4.2, Math.max(0.0008, d*0.021));
     l.scale.set(h*l.userData.aspect, h, 1);
+    l.position.y = l.userData.baseY + Math.min(2.8, Math.max(12*METRE, d*0.012));
   }
 }
 
@@ -615,19 +701,19 @@ function pick(clientX, clientY){
     const served = [...new Set(st.lines.map(id=>LINES[id].name))].join(' · ');
     openPanel(stationKind(st), st.name, describe(st), served);
     followTrain = null;
-    flyTo(st.x, st.y, st.z, 40, undefined, 0.85);
-    addPanelButton('Fly closer', ()=>flyTo(st.x, st.y, st.z, 18, undefined, 1.0));
+    flyTo(st.x, st.y, st.z, 1.1, undefined, 0.95);
+    addPanelButton('Fly closer', ()=>flyTo(st.x, st.y, st.z, 0.16, undefined, 1.12));
   } else if(o.userData.type==='tunnel'){
     const t = o.userData, L = LINES[t.line];
     const [a, b] = t.between;
     openPanel('Tunnel', t.name, `${t.name} carries the ${L.name}${a&&b?` between ${a} and ${b}`:''}.`, L.name);
     followTrain = null;
-    flyTo(t.pos.x, t.pos.y, t.pos.z, 26, undefined, 0.95);
+    flyTo(t.pos.x, t.pos.y, t.pos.z, 0.18, undefined, 1.05);
   } else if(o.userData.train){
     const tr = o.userData.train;
     openPanel('Engine', tr.name, tr.desc, `Line: ${LINES[tr.line].name}`);
-    flyTo(tr.mesh.position.x, tr.mesh.position.y, tr.mesh.position.z, 22, undefined, 0.95);
-    const b = addPanelButton('Follow engine', ()=>{ followTrain = tr; b.classList.add('active'); });
+    flyTo(tr.mesh.position.x, tr.mesh.position.y, tr.mesh.position.z, 0.14, undefined, 1.1);
+    const b = addPanelButton('Follow engine', ()=>{ followTrain = {mesh: tr.mesh, dist: 0.14}; b.classList.add('active'); });
   }
 }
 
@@ -642,7 +728,7 @@ const camCenter = new THREE.Vector3(0,0,8);
 let flight = null, followTrain = null, lastInteraction = 0, autoOrbit = true;
 function clampCam(){
   camPhi = Math.max(0.05, Math.min(1.42, camPhi));
-  camDist = Math.max(3.5, Math.min(640, camDist));
+  camDist = Math.max(0.012, Math.min(640, camDist));
   camCenter.x = Math.max(-MAP_W/2, Math.min(MAP_W/2, camCenter.x));
   camCenter.z = Math.max(-MAP_D/2, Math.min(MAP_D/2, camCenter.z));
 }
@@ -740,11 +826,37 @@ setTimeout(()=>{ document.getElementById('hint').style.opacity = 0; }, 7000);
 // ===================== LOOP =====================
 const frameHooks = [];                 // per-frame updates registered by characters.js
 const clock = new THREE.Clock();
+// Time runs near real speed when you're down at the lineside and faster as you zoom out,
+// so close-ups look real and the whole island still looks busy from above.
+let timeScale = 1;
+// Detail by zoom: map overlays from afar, life-size track, platforms and scenery up close.
+function applyLOD(){
+  const d = camDist;
+  RAIL.lines.forEach(l=>{ l.mesh.visible = l.userVisible && d > 1.6; l.realMesh.visible = l.userVisible && d < 9; });
+  stationMarkers.visible = d > 1.6;
+  portalGroup.visible = d < 9;
+}
+function updateShadows(){
+  const sc = sun.shadow.camera;
+  if(camDist < 40){
+    const ext = Math.max(0.05, camDist*1.3);
+    sun.target.position.copy(camCenter);
+    sun.position.copy(camCenter).addScaledVector(SUN_DIR, ext*6 + 1);
+    Object.assign(sc, {left:-ext, right:ext, top:ext, bottom:-ext, near:0.0005, far:ext*14 + 3});
+    sun.shadow.bias = -0.0004; sun.shadow.normalBias = ext*0.003;
+  } else {
+    sun.target.position.set(0,0,0); sun.position.set(-90,140,70);
+    Object.assign(sc, {left:-120, right:120, top:100, bottom:-100, near:10, far:420});
+    sun.shadow.bias = -0.0015; sun.shadow.normalBias = 0.9;
+  }
+  sc.updateProjectionMatrix();
+}
 function animate(){
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.1);
-  simTime += dt*4*simSpeed;
-  document.getElementById('statTime').textContent = fmtTime(simTime);
+  timeScale = simSpeed * Math.min(150, Math.max(1, camDist*25));
+  simTime += dt*timeScale/60;
+  document.getElementById('statTime').textContent = `${fmtTime(simTime)} · ×${timeScale<10 ? timeScale.toFixed(1) : Math.round(timeScale)}`;
 
   frameHooks.forEach(f=>f(dt));        // all trains are driven by the runner in characters.js
 
@@ -758,11 +870,13 @@ function animate(){
     if(k>=1) flight = null;
   } else if(followTrain){
     camCenter.lerp(followTrain.mesh.position, Math.min(1, dt*2.5));
-    camDist += ((followTrain.dist||22)-camDist)*Math.min(1, dt*1.2);
+    camDist += ((followTrain.dist||0.14)-camDist)*Math.min(1, dt*1.2);
   } else if(autoOrbit && performance.now()-lastInteraction > 5000){
     camTheta += dt*0.035;
   }
   updateCam();
+  applyLOD();
+  updateShadows();
   scaleLabels();
   water.material.opacity = 0.70 + Math.sin(performance.now()*0.0008)*0.02;
   renderer.render(scene, camera);
@@ -777,6 +891,6 @@ updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
-<script src="characters.js?v=5"></script>
+<script src="characters.js?v=7"></script>
 </body>
 </html>

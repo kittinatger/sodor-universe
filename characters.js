@@ -3,7 +3,8 @@
 (function(){
 'use strict';
 
-const NG = 0.62;            // narrow-gauge model scale: world units per model unit
+const NG = 2.6 * METRE;     // narrow-gauge models: 1 model unit = 2.6 m, so Skarloey is ~5.6 m long
+const STD = 4.8 * METRE;    // the NWR's standard-gauge models: ~12 m engines and coaches
 const GAUGE = 0.56;         // model units between the wheel planes
 const BRASS = 0xc9a23a, BRONZE = 0xa8703c, BLACK = 0x18191b, IRON = 0x2b2c2e, BEAM_RED = 0xb3201c;
 
@@ -784,17 +785,11 @@ for(let i = 0; i < 60; i++){
 let puffIdx = 0;
 function puff(pos){
   const p = puffs[puffIdx++ % puffs.length];
-  p.s.position.copy(pos); p.life = 1; p.s.visible = true; p.s.scale.setScalar(0.3);
+  p.s.position.copy(pos); p.life = 1; p.s.visible = true; p.s.scale.setScalar(1.2 * METRE);
 }
 
 function lineU(line, name){
-  const st = STATIONS.find(s => s.name === name);
-  if(!line.cum){
-    line.cum = [0];
-    for(let i = 1; i < line.samples.length; i++) line.cum.push(line.cum[i - 1] + line.samples[i].distanceTo(line.samples[i - 1]));
-  }
-  const i = nearestSample(line.samples, st);
-  return line.cum[i] / line.cum[line.cum.length - 1];
+  return realU(line, STATIONS.find(s => s.name === name));
 }
 
 const allVehicles = [];
@@ -808,22 +803,22 @@ function engineDesc(E){
 function showEngine(E){
   openPanel('Skarloey Railway engine', E.name, engineDesc(E), `${E.wheels}${E.no ? ' · No. ' + E.no : ''} · ${LINES[E.line].name}`);
   const pos = E.train.engine.group.position;
-  flyTo(pos.x, pos.y, pos.z, 9, undefined, 1.05);
-  const b = addPanelButton('Follow engine', () => { followTrain = {mesh: E.train.engine.group, dist: 9}; b.classList.add('active'); });
+  flyTo(pos.x, pos.y, pos.z, 0.05, undefined, 1.12);
+  const b = addPanelButton('Follow engine', () => { followTrain = {mesh: E.train.engine.group, dist: 0.05}; b.classList.add('active'); });
 }
 
 // ------------------------------------------------------------------ train runner
-// Every train on Sodor runs on this. Vehicles keep their order and facing (tank engines run
-// bunker-first on the way back), trains accelerate and brake into stops, passenger trains call
-// at the stations on their stretch, and at each terminus the engine runs round its train
-// through a passing loop.
-const ACC = 0.55, RR_SPEED = 0.75, MARGIN = 0.25;
+// Every train on Sodor runs on this, on the life-size track and in real units (metres, seconds).
+// Vehicles keep their order and facing (tank engines run bunker-first on the way back), trains
+// accelerate and brake into stops, passenger trains call at the stations on their stretch, and at
+// each terminus the engine runs round its train through a passing loop.
+const ACC = 0.35 * METRE, RR_SPEED = 2.2 * METRE, MARGIN = 12 * METRE;
 const _p = new THREE.Vector3(), _t = new THREE.Vector3();
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 function makeRunner(o){
-  const line = o.line, L = line.length;
-  const sgn = o.uB >= o.uA ? 1 : -1, span = Math.max(0.5, Math.abs(o.uB - o.uA) * L);
+  const line = o.line, L = line.real.len;
+  const sgn = o.uB >= o.uA ? 1 : -1, span = Math.max(20 * METRE, Math.abs(o.uB - o.uA) * L);
   const gap = o.gap;
   const unit = o.unit.map(v => ({v, len: v.len * o.scale}));
   const cars = o.cars.map(v => ({v, len: v.len * o.scale}));
@@ -836,7 +831,7 @@ function makeRunner(o){
 
   R.aB = span - MARGIN - (len0 + gap + U);
   R.aA = MARGIN + off[last] + lenN + gap + U;
-  R.runRound = R.aA < R.aB - 0.6;
+  R.runRound = R.aA < R.aB - 30 * METRE;
   if(!R.runRound){
     R.aA = MARGIN + off[last] + lenN;
     if(R.aA > R.aB) R.aA = R.aB = (R.aA + R.aB) / 2;
@@ -846,7 +841,7 @@ function makeRunner(o){
     line.stops.forEach(k => {
       const st = STATIONS[k], u = lineU(line, st.name), x = (u - o.uA) * sgn * L;
       const a = x - len0 + Lc / 2;
-      if(a > R.aA + 0.3 && a < R.aB - 0.3) R.stops.push(a);
+      if(a > R.aA + 20 * METRE && a < R.aB - 20 * METRE) R.stops.push(a);
     });
   }
   R.a = R.aA + Math.random() * (R.aB - R.aA);
@@ -864,7 +859,7 @@ function makeRunner(o){
   if(R.runRound) R.loops = [R.aB, R.aA].map(a => {
     const xB = R.unitX(a, 'B')[0], xA = R.unitX(a, 'A')[0];
     const lo = Math.min(xA, xB), hi = Math.max(xA, xB);
-    return {lo, hi, k: Math.min(0.7, (hi - lo) / 4)};
+    return {lo, hi, k: Math.min(15 * METRE, (hi - lo) / 4)};
   });
   return R;
 }
@@ -872,16 +867,20 @@ function loopLat(R, loop, x){
   if(!loop || x <= loop.lo || x >= loop.hi) return 0;
   return R.o.loopW * smooth(loop.lo, loop.lo + loop.k, x) * (1 - smooth(loop.hi - loop.k, loop.hi, x));
 }
-function placeVeh(R, veh, x, lat){
+function trackFrame(R, x){
   const u = Math.max(0, Math.min(1, R.o.uA + R.sgn * x / R.L));
-  R.line.curve.getPointAt(u, _p); R.line.curve.getTangentAt(u, _t);
+  realAt(R.line, u, _p); realDir(R.line, u, _t);
   if(R.sgn < 0) _t.negate();
+  return u;
+}
+function placeVeh(R, veh, x, lat){
+  const u = trackFrame(R, x);
   const g = veh.group;
   g.rotation.order = 'YXZ';
-  g.rotation.set(-Math.asin(Math.max(-0.5, Math.min(0.5, _t.y))), Math.atan2(_t.x, _t.z), 0);
+  g.rotation.set(-Math.asin(Math.max(-0.35, Math.min(0.35, _t.y))), Math.atan2(_t.x, _t.z), 0);
   const nx = _t.z, nz = -_t.x, nl = Math.hypot(nx, nz) || 1;
-  g.position.set(_p.x + nx / nl * lat, _p.y - 0.1, _p.z + nz / nl * lat);
-  g.visible = R.line.mesh.visible && (lat > 0.3 || !inTunnel(R.line, u));
+  g.position.set(_p.x + nx / nl * lat, _p.y, _p.z + nz / nl * lat);
+  g.visible = R.line.userVisible && (lat > R.o.loopW * 0.5 || !inTunnel(R.line, u));
 }
 function spin(veh, dx, scale){
   if(!veh.axles || !veh.axles.length || dx === 0) return;
@@ -891,22 +890,32 @@ function spin(veh, dx, scale){
     veh.rods.forEach(r => { r.mesh.position.y = r.r + r.rc * Math.cos(ang + r.phase); r.mesh.position.z = r.mid + r.rc * Math.sin(ang + r.phase); });
   }
 }
+// The passing loops are drawn as sleepers-and-rails strips like the main track.
+const loopGroup = new THREE.Group(); scene.add(loopGroup);
 function drawLoops(R){
   if(!R.runRound) return;
-  const mat = new THREE.LineBasicMaterial({color: 0x3a3028});
+  const half = (R.o.bedM || 2.3) * METRE / 2;
   R.loops.forEach(loop => {
-    for(const s of [-1, 1]){
-      const pts = [];
-      for(let x = loop.lo - 0.3; x <= loop.hi + 0.3 + 1e-6; x += 0.15){
-        const lat = loopLat(R, loop, x) + s * GAUGE / 2 * R.o.scale;
-        const u = Math.max(0, Math.min(1, R.o.uA + R.sgn * x / R.L));
-        R.line.curve.getPointAt(u, _p); R.line.curve.getTangentAt(u, _t);
-        if(R.sgn < 0) _t.negate();
-        const nl = Math.hypot(_t.z, _t.x) || 1;
-        pts.push(new THREE.Vector3(_p.x + _t.z / nl * lat, _p.y - 0.05, _p.z - _t.x / nl * lat));
-      }
-      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+    const vp = [], vu = [], vn = [], ix = [];
+    let along = 0, prev = null;
+    for(let x = loop.lo; x <= loop.hi + 1e-9; x += 3 * METRE){
+      trackFrame(R, x);
+      const lat = loopLat(R, loop, x), nl = Math.hypot(_t.z, _t.x) || 1, nx = _t.z / nl, nz = -_t.x / nl;
+      const cx = _p.x + nx * lat, cz = _p.z + nz * lat, y = Math.max(_p.y, heightAt(cx, cz) + 0.5 * METRE);
+      if(prev) along += Math.hypot(cx - prev[0], cz - prev[1]);
+      const b = vp.length / 3;
+      vp.push(cx + nx * half, y, cz + nz * half, cx - nx * half, y, cz - nz * half);
+      vu.push(0, along / (0.9 * METRE), 1, along / (0.9 * METRE)); vn.push(0, 1, 0, 0, 1, 0);
+      if(prev) ix.push(b - 2, b - 1, b, b - 1, b + 1, b);
+      prev = [cx, cz];
     }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(vp, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(vu, 2));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(vn, 3));
+    g.setIndex(ix);
+    const m = new THREE.Mesh(g, R.line.realMesh.material); m.receiveShadow = true;
+    loopGroup.add(m);
   });
 }
 
@@ -915,17 +924,15 @@ function stepRunner(R, dt){
   if(R.phase === 'run'){
     const term = R.dir > 0 ? R.aB : R.aA;
     let target = term;
-    R.stops.forEach(s => { if((s - R.a) * R.dir > 0.02 && s !== R.lastStop && Math.abs(s - R.a) < Math.abs(target - R.a)) target = s; });
+    R.stops.forEach(s => { if((s - R.a) * R.dir > METRE && s !== R.lastStop && Math.abs(s - R.a) < Math.abs(target - R.a)) target = s; });
     const d = Math.abs(target - R.a);
     const vdes = Math.min(R.o.vmax, Math.sqrt(2 * ACC * d));
     R.v = R.v < vdes ? Math.min(vdes, R.v + ACC * dt) : Math.max(vdes, R.v - 2 * ACC * dt);
     let step = R.v * dt;
-    if(step >= d || d < 0.005){
+    if(step >= d || d < 0.05 * METRE){
       step = d; R.a = target; R.v = 0;
-      if(target === term){
-        R.lastStop = null;
-        R.phase = 'dwell'; R.timer = 2.5; R.next = R.runRound ? 'rr' : 'turn';
-      } else { R.lastStop = target; R.phase = 'dwell'; R.timer = 3; R.next = 'run'; }
+      if(target === term){ R.lastStop = null; R.phase = 'dwell'; R.timer = 90; R.next = R.runRound ? 'rr' : 'turn'; }
+      else { R.lastStop = target; R.phase = 'dwell'; R.timer = 35; R.next = 'run'; }
     } else R.a += R.dir * step;
     carDx = unitDx = R.dir * step; moving = step > 0;
   } else if(R.phase === 'dwell'){
@@ -934,7 +941,7 @@ function stepRunner(R, dt){
       if(R.next === 'rr'){
         const to = R.side === 'B' ? 'A' : 'B';
         const x0 = R.unitX(R.a, R.side)[0], x1 = R.unitX(R.a, to)[0];
-        R.rr = {x0, x1, to, p: 0, dur: Math.abs(x1 - x0) / RR_SPEED + 1, loop: R.loops[R.side === 'B' ? 0 : 1], last: x0};
+        R.rr = {x0, x1, to, p: 0, dur: Math.abs(x1 - x0) / RR_SPEED + 8, loop: R.loops[R.side === 'B' ? 0 : 1], last: x0};
         R.phase = 'rr';
       } else if(R.next === 'turn'){ R.dir = -R.dir; R.phase = 'run'; }
       else R.phase = 'run';
@@ -943,8 +950,8 @@ function stepRunner(R, dt){
     const rr = R.rr;
     rr.p = Math.min(1, rr.p + dt / rr.dur);
     const x = rr.x0 + (rr.x1 - rr.x0) * smooth(0, 1, rr.p);
-    unitDx = x - rr.last; rr.last = x; moving = Math.abs(unitDx) > 1e-5;
-    if(rr.p >= 1){ R.side = rr.to; R.dir = -R.dir; R.rr = null; R.phase = 'dwell'; R.timer = 1.5; R.next = 'run'; }
+    unitDx = x - rr.last; rr.last = x; moving = Math.abs(unitDx) > 1e-9;
+    if(rr.p >= 1){ R.side = rr.to; R.dir = -R.dir; R.rr = null; R.phase = 'dwell'; R.timer = 25; R.next = 'run'; }
   }
 
   R.cars.forEach((c, k) => { placeVeh(R, c.v, R.a - R.off[k], 0); spin(c.v, carDx, R.o.scale); });
@@ -957,15 +964,36 @@ function stepRunner(R, dt){
     R.unit.forEach((m, i) => { placeVeh(R, m.v, xs[i], 0); spin(m.v, unitDx, R.o.scale); });
   }
 
-  if(moving && !R.o.diesel && R.engine.chimneyAt && R.engine.group.visible){
-    R.puffT -= dt * (0.6 + Math.max(R.v, 0.4));
+  if(moving && !R.o.diesel && R.engine.chimneyAt && R.engine.group.visible && camDist < 3){
+    R.puffT -= dt * (0.6 + R.v / (4 * METRE));
     if(R.puffT <= 0){
-      R.puffT = 0.45;
+      R.puffT = 1.2;
       [R.engine.chimneyAt, R.engine.chimneyAt2].forEach(c => { if(c){ _p.copy(c); R.engine.group.localToWorld(_p); puff(_p); } });
     }
   }
 }
 
+// Markers: a fixed-size dot over each train so it can be found (and tapped) from far away,
+// where a life-size engine is far smaller than a pixel.
+function markerMat(color){
+  const tex = canvasTex(64, 64, (g) => {
+    g.fillStyle = 'rgba(10,20,28,0.85)'; g.beginPath(); g.arc(32, 32, 30, 0, 7); g.fill();
+    g.fillStyle = '#' + color.toString(16).padStart(6, '0'); g.beginPath(); g.arc(32, 32, 22, 0, 7); g.fill();
+    g.strokeStyle = '#ffffff'; g.lineWidth = 5; g.beginPath(); g.arc(32, 32, 23, 0, 7); g.stroke();
+  });
+  return new THREE.SpriteMaterial({map: tex, depthTest: false, sizeAttenuation: false, transparent: true});
+}
+function addMarker(R, color, onPick, trainRef){
+  const s = new THREE.Sprite(markerMat(color));
+  s.scale.setScalar(0.028); s.renderOrder = 12;
+  if(onPick) s.userData.onPick = onPick;
+  if(trainRef) s.userData.train = trainRef;
+  scene.add(s); clickable.push(s);
+  R.marker = s;
+}
+
+const ENGINE_COLORS = {skarloey: 0x9b1730, rheneas: 0xd23a26, sirhandel: 0x1f4fbf, petersam: 0x2e8b6e, rusty: 0xff6a13, duncan: 0xe2a91f,
+  freddie: 0xc4c8cc, duke: 0x9a5426, bertram: 0x4f2f1c, mightymac: 0x2b2f86, luke: 0x6aa84f};
 const RUNNERS = [], SR_TRAINS = [];
 ENGINES.forEach(E => {
   const line = LINES[E.line];
@@ -976,10 +1004,12 @@ ENGINES.forEach(E => {
   const cars = E.consist.map(k => buildStock(k));
   [...unit, ...cars].forEach(v => { v.group.scale.setScalar(NG); scene.add(v.group); allVehicles.push(v); });
   const uA = E.from ? lineU(line, E.from) : (E.fromU || 0), uB = E.to ? lineU(line, E.to) : (E.toU === undefined ? 1 : E.toU);
-  const R = makeRunner({line, uA, uB, unit, cars, scale: NG, gap: 0.05, vmax: 1.25 * E.speed, passenger: !!E.passenger, loopW: 0.72, diesel: !!E.diesel});
+  const R = makeRunner({line, uA, uB, unit, cars, scale: NG, gap: 0.5 * METRE, vmax: 6.5 * METRE * E.speed,
+    passenger: !!E.passenger, loopW: 3.4 * METRE, bedM: 2.3, diesel: !!E.diesel});
   R.E = E; R.engine = eng;
   E.train = R;
   drawLoops(R);
+  addMarker(R, ENGINE_COLORS[E.id], () => showEngine(E));
   RUNNERS.push(R); SR_TRAINS.push(R);
   tagPick(eng.group, () => showEngine(E));
   if(E.tender) tagPick(unit[1].group, () => showEngine(E));
@@ -991,7 +1021,7 @@ ENGINES.forEach(E => {
 // The NWR's own engines (built in the main script) run on the same model.
 const NWR_RUNS = {
   Thomas: {passenger: true}, Percy: {line: 'kirkronan'}, Toby: {passenger: true}, Edward: {passenger: true},
-  James: {from: 'Tidmouth', to: 'Wellsworth', passenger: true}, Gordon: {from: 'Wellsworth', to: 'Kellsthorpe Road'},
+  James: {from: 'Tidmouth', to: 'Wellsworth', passenger: true}, Gordon: {from: 'Wellsworth', to: 'Kellsthorpe Road', vmax: 30},
   Henry: {from: 'Kellsthorpe Road', to: 'Barrow-in-Furness', passenger: true}, Duck: {passenger: true},
   Oliver: {line: 'callandale', passenger: true}, Culdee: {passenger: true}, Rex: {passenger: true},
   Bill: {fromU: 0, toU: 0.5, cars: 1}, Ben: {fromU: 0.5, toU: 1, cars: 1},
@@ -1002,22 +1032,33 @@ TRAINS.forEach(tr => {
   const line = LINES[tr.line];
   if(run.cars !== undefined){ tr.cars.slice(run.cars).forEach(c => c.parent && c.parent.remove(c)); tr.cars = tr.cars.slice(0, run.cars); }
   const uA = run.from ? lineU(line, run.from) : (run.fromU || 0), uB = run.to ? lineU(line, run.to) : (run.toU === undefined ? 1 : run.toU);
-  const std = line.kind === 'standard';
+  const kind = line.kind;
+  const speedMS = run.vmax || (tr.line === 'main' ? 24 : kind === 'standard' ? 13 : kind === 'rack' ? 4 : 6);
+  const scale = kind === 'standard' ? STD : NG;
+  [tr.mesh, ...tr.cars].forEach(g => g.scale.setScalar(scale));
   const R = makeRunner({line, uA, uB, unit: [{group: tr.mesh, len: 2.5}], cars: tr.cars.map(c => ({group: c, len: 2.4})),
-    scale: 1, gap: 0.12, vmax: std ? 2.4 : 1.4, passenger: !!run.passenger, loopW: 1.4, diesel: true});
+    scale, gap: 0.8 * METRE, vmax: speedMS * METRE, passenger: !!run.passenger,
+    loopW: (kind === 'standard' ? 4.6 : 3.4) * METRE, bedM: kind === 'standard' ? 3.6 : 2.3, diesel: true});
   R.nwr = tr;
   drawLoops(R);
+  addMarker(R, tr.color, null, tr);
   RUNNERS.push(R);
 });
 
 frameHooks.push(dt => {
-  const d = dt * simSpeed;
-  RUNNERS.forEach(R => stepRunner(R, d));
+  const d = dt * timeScale;
+  RUNNERS.forEach(R => {
+    stepRunner(R, d);
+    const m = R.marker, eg = R.engine.group;
+    m.position.copy(eg.position);
+    m.visible = R.line.userVisible && camera.position.distanceTo(eg.position) > 0.35;
+  });
+  loopGroup.visible = camDist < 9;
   puffs.forEach(p => {
     if(p.life <= 0) return;
-    p.life -= dt * 0.55;
-    p.s.position.y += dt * 0.9;
-    p.s.scale.setScalar(0.3 + (1 - p.life) * 1.3);
+    p.life -= dt * 0.35;
+    p.s.position.y += dt * 1.4 * METRE;
+    p.s.scale.setScalar((1.2 + (1 - p.life) * 4.5) * METRE);
     p.s.material.opacity = Math.max(0, p.life) * 0.55;
     if(p.life <= 0) p.s.visible = false;
   });
@@ -1026,60 +1067,80 @@ frameHooks.push(dt => {
 // ------------------------------------------------------------------ parked stock in yards
 function stationFrame(lineId, name, lat){
   const line = LINES[lineId], st = STATIONS.find(s => s.name === name);
-  const i = nearestSample(line.samples, st), a = line.samples[Math.max(0, i - 2)], b = line.samples[Math.min(line.samples.length - 1, i + 2)];
-  const t = new THREE.Vector3().subVectors(b, a).setY(0).normalize(), n = new THREE.Vector3(t.z, 0, -t.x);
-  return {o: new THREE.Vector3(st.x, 0, st.z).addScaledVector(n, lat), t, n};
+  const u = realU(line, st), p = realAt(line, u, new THREE.Vector3());
+  const t = realDir(line, u, new THREE.Vector3()).setY(0).normalize(), n = new THREE.Vector3(t.z, 0, -t.x);
+  return {o: p.setY(0).addScaledVector(n, lat), t, n};
 }
-function yard(lineId, name, lat, keys, labelWhere){
-  const f = stationFrame(lineId, name, lat);
-  let along = -1.2;
+const ground = (x, z) => Math.max(heightAt(x, z), 0);
+// A straight strip of sleepers and rails between two points, laid on the ground.
+const sidingGroup = new THREE.Group(); scene.add(sidingGroup);
+function siding(a, b, n){
+  const half = 1.15 * METRE, len = a.distanceTo(b), steps = Math.max(2, Math.ceil(len / (3 * METRE)));
+  const vp = [], vu = [], vn = [], ix = [];
+  for(let i = 0; i <= steps; i++){
+    const p = a.clone().lerp(b, i / steps), y = ground(p.x, p.z) + 0.5 * METRE, v = i * len / steps / (0.9 * METRE);
+    vp.push(p.x + n.x * half, y, p.z + n.z * half, p.x - n.x * half, y, p.z - n.z * half);
+    vu.push(0, v, 1, v); vn.push(0, 1, 0, 0, 1, 0);
+    if(i) ix.push(i * 2 - 2, i * 2 - 1, i * 2, i * 2 - 1, i * 2 + 1, i * 2);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(vp, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(vu, 2));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(vn, 3));
+  g.setIndex(ix);
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({map: trackTexture('narrow'), roughness: 0.9, side: THREE.DoubleSide}));
+  m.receiveShadow = true; sidingGroup.add(m);
+}
+function yard(lineId, name, latM, keys, labelWhere){
+  const f = stationFrame(lineId, name, latM * METRE);
+  let along = -25 * METRE;
   const row = [];
   keys.forEach(k => {
     const v = buildStock(k);
     along += v.len * NG / 2;
     const pos = f.o.clone().addScaledVector(f.t, along);
-    v.group.position.set(pos.x, Math.max(heightAt(pos.x, pos.z), 0) + 0.05, pos.z);
-    v.group.rotation.y = Math.atan2(f.t.x, f.t.z);
+    const hf = ground(pos.x + f.t.x * 2 * METRE, pos.z + f.t.z * 2 * METRE), hb = ground(pos.x - f.t.x * 2 * METRE, pos.z - f.t.z * 2 * METRE);
+    v.group.position.set(pos.x, ground(pos.x, pos.z) + 0.5 * METRE, pos.z);
+    v.group.rotation.order = 'YXZ';
+    v.group.rotation.set(-Math.atan2(hf - hb, 4 * METRE), Math.atan2(f.t.x, f.t.z), 0);
     v.group.scale.setScalar(NG);
     scene.add(v.group); row.push(v);
     tagPick(v.group, () => openPanel('Rolling stock', v.label, `${v.label}, stabled at ${labelWhere}.`, 'Skarloey Railway'));
-    along += v.len * NG / 2 + 0.06;
+    along += v.len * NG / 2 + 0.5 * METRE;
   });
-  const a = f.o.clone().addScaledVector(f.t, -1.4), b = f.o.clone().addScaledVector(f.t, along + 0.2);
-  const ya = Math.max(heightAt(a.x, a.z), 0) + 0.06, yb = Math.max(heightAt(b.x, b.z), 0) + 0.06;
-  for(const s of [-1, 1]){
-    const g = new THREE.BufferGeometry().setFromPoints([a.clone().addScaledVector(f.n, s * GAUGE / 2 * NG).setY(ya), b.clone().addScaledVector(f.n, s * GAUGE / 2 * NG).setY(yb)]);
-    scene.add(new THREE.Line(g, new THREE.LineBasicMaterial({color: 0x3a3028})));
-  }
+  siding(f.o.clone().addScaledVector(f.t, -30 * METRE), f.o.clone().addScaledVector(f.t, along + 6 * METRE), f.n);
   return {f, row};
 }
-const bmqYard = yard('skarloey', 'Blue Mountain Quarry', 2.2, ['fusit', 'fusit', 'slab', 'slab', 'waste', 'waste', 'openEnd', 'openEnd'], 'Blue Mountain Quarry');
-yard('wharf', 'The Wharf', -1.8, ['flatShort', 'flatShort', 'coral', 'coral', 'well', 'bogieFlat', 'carCyrn', 'gwrMatch', 'gwrMatch'], 'the Wharf');
-yard('skarloey', "Crovan's Gate", -2.0, ['bdCrane', 'bdVan', 'gvtCoach', 'gvtCoach', 'art', 'art'], "Crovan's Gate works");
+const bmqYard = yard('skarloey', 'Blue Mountain Quarry', 7, ['fusit', 'fusit', 'slab', 'slab', 'waste', 'waste', 'openEnd', 'openEnd'], 'Blue Mountain Quarry');
+yard('wharf', 'The Wharf', -6, ['flatShort', 'flatShort', 'coral', 'coral', 'well', 'bogieFlat', 'carCyrn', 'gwrMatch', 'gwrMatch'], 'the Wharf');
+yard('skarloey', "Crovan's Gate", -6.5, ['bdCrane', 'bdVan', 'gvtCoach', 'gvtCoach', 'art', 'art'], "Crovan's Gate works");
 
 // ------------------------------------------------------------------ Owen, Merrick, Colin and Madge
 const statics = [];
 function groundY(x, z){ return Math.max(heightAt(x, z), 0); }
 function showStatic(c){
   openPanel(c.kind, c.name, c.desc, 'Skarloey Railway');
-  flyTo(c.group.position.x, c.group.position.y, c.group.position.z, c.dist || 10, undefined, 1.0);
+  flyTo(c.group.position.x, c.group.position.y, c.group.position.z, c.dist || 0.08, undefined, 1.08);
 }
 
 // Owen: the incline at Blue Mountain Quarry, a drum house with a vertical boiler.
 (function(){
   const st = STATIONS.find(s => s.name === 'Blue Mountain Quarry');
   let best = null;
-  for(let k = 0; k < 16; k++){ const a = k / 16 * Math.PI * 2, x = st.x + Math.cos(a) * 5, z = st.z + Math.sin(a) * 5, h = heightAt(x, z); if(!best || h > best.h) best = {a, h}; }
+  const R0 = 60 * METRE;
+  for(let k = 0; k < 16; k++){ const a = k / 16 * Math.PI * 2, x = st.x + Math.cos(a) * R0, z = st.z + Math.sin(a) * R0, h = heightAt(x, z); if(!best || h > best.h) best = {a, h}; }
   const dir = new THREE.Vector3(Math.cos(best.a), 0, Math.sin(best.a));
-  const base = new THREE.Vector3(st.x, 0, st.z).addScaledVector(dir, 1.2), topP = new THREE.Vector3(st.x, 0, st.z).addScaledVector(dir, 6.2);
-  base.y = groundY(base.x, base.z) + 0.05; topP.y = groundY(topP.x, topP.z) + 0.05;
+  const base = new THREE.Vector3(st.x, 0, st.z).addScaledVector(dir, 18 * METRE), topP = new THREE.Vector3(st.x, 0, st.z).addScaledVector(dir, 140 * METRE);
+  base.y = groundY(base.x, base.z) + 0.3 * METRE; topP.y = groundY(topP.x, topP.z) + 0.3 * METRE;
   const g = new THREE.Group(); scene.add(g);
-  const len = base.distanceTo(topP), mid = base.clone().lerp(topP, 0.5);
-  const incl = new THREE.Group(); incl.position.copy(mid); incl.lookAt(topP); g.add(incl);
-  for(const s of [-1, 1]) box(incl, 0.04, 0.04, len, mat(0x3a3028), s * 0.22, 0.02, 0);
-  for(let i = 0; i < len / 0.4; i++) box(incl, 0.6, 0.03, 0.1, mat(0x5a4632, 0.9), 0, 0, -len / 2 + i * 0.4);
+  const mid = base.clone().lerp(topP, 0.5), len = base.distanceTo(topP) / NG;   // model units
+  const incl = new THREE.Group(); incl.position.copy(mid); incl.lookAt(topP); incl.scale.setScalar(NG); g.add(incl);
+  const rails = new THREE.Group(); incl.add(rails);
+  for(const s of [-1, 1]) box(rails, 0.04, 0.04, len, mat(0x3a3028), s * 0.22, 0.04, 0);
+  for(let i = 0; i < len / 0.35; i++) box(rails, 0.62, 0.035, 0.1, mat(0x5a4632, 0.9), 0, 0, -len / 2 + i * 0.35);
+  bake(rails, false);
   const ORANGE = mat(0xe8731e, 0.5), GREY = mat(0x7b7f84, 0.6), YEL = mat(0xf2c419, 0.45);
-  const house = new THREE.Group(); house.position.copy(topP); house.rotation.y = Math.atan2(dir.x, dir.z); house.scale.setScalar(0.75); g.add(house);
+  const house = new THREE.Group(); house.position.copy(topP); house.rotation.y = Math.atan2(dir.x, dir.z); house.scale.setScalar(NG * 1.8); g.add(house);
   box(house, 2.0, 1.4, 1.4, GREY, 0, 0.7, 0.5);
   box(house, 2.1, 0.12, 1.5, ORANGE, 0, 1.45, 0.5);
   for(const s of [-1, 1]) box(house, 0.02, 0.08, 1.3, YEL, s * 1.0, 1.1, 0.5);
@@ -1092,23 +1153,23 @@ function showStatic(c){
   faceDisc(house, 0.32, {smile: 0.9, brow: -0.2}, 0, 0.75, -0.205, true);
   sidePlates(house, plateMat('OWEN', '#c9a23a', '#1a1a1a', '#8a6a1a'), 0.5, 0.14, 1.003, 1.2, 0.5);
   const platforms = [0, 1].map(k => { const p = new THREE.Group(); incl.add(p); box(p, 0.5, 0.06, 0.6, GREY, 0, 0.08, 0); box(p, 0.44, 0.2, 0.5, mat(0x3c4552, 0.6), 0, 0.2, 0); return p; });
-  const c = {name: 'Owen', kind: 'Incline engine', group: house, dist: 12,
+  const c = {name: 'Owen', kind: 'Incline engine', group: house, dist: 0.3,
     desc: 'Owen runs the incline at Blue Mountain Quarry, winding slate trucks up and down the slope on two platforms — empties go up as loaded trucks come down. He is based on the Dinorwic Slate Quarry incline with a vertical boiler beside the drum house, painted orange and grey with yellow stripes.'};
   statics.push(c);
   tagPick(g, () => showStatic(c));
   let ph = 0;
   frameHooks.push(dt => {
-    ph += dt * simSpeed * 0.12;
+    ph += dt * timeScale * 0.03;
     const s = (Math.sin(ph) + 1) / 2;
-    platforms[0].position.z = -len / 2 + 0.4 + s * (len - 0.8);
-    platforms[1].position.z = -len / 2 + 0.4 + (1 - s) * (len - 0.8);
+    platforms[0].position.z = -len / 2 + 1 + s * (len - 2);
+    platforms[1].position.z = -len / 2 + 1 + (1 - s) * (len - 2);
     drum.rotation.x = s * 12;
   });
 })();
 
 // Merrick: the crimson travelling gantry crane over the quarry sidings.
 (function(){
-  const f = bmqYard.f, centre = f.o.clone().addScaledVector(f.t, 1.4);
+  const f = bmqYard.f, centre = f.o.clone().addScaledVector(f.t, 10 * METRE);
   const g = new THREE.Group(); g.position.set(centre.x, groundY(centre.x, centre.z), centre.z); g.rotation.y = Math.atan2(f.t.x, f.t.z); g.scale.setScalar(NG); scene.add(g);
   const CR = mat(0xa0142c, 0.45), OR = mat(0xb4652d, 0.5), YEL = mat(0xf2c419, 0.45);
   for(const s of [-1, 1]){
@@ -1124,20 +1185,20 @@ function showStatic(c){
   cylY(hook, 0.012, 0.012, 1.0, mat(0x222222), 0, -0.7, 0, 4);
   box(hook, 0.14, 0.12, 0.1, YEL, 0, -1.24, 0);
   sidePlates(g, plateMat('MERRICK', '#c9a23a', '#1a1a1a', '#8a6a1a'), 0.5, 0.12, 1.46, 0.3, 0);
-  const c = {name: 'Merrick', kind: 'Gantry crane', group: g, dist: 11,
+  const c = {name: 'Merrick', kind: 'Gantry crane', group: g, dist: 0.07,
     desc: 'Merrick is the travelling gantry crane at Blue Mountain Quarry, lifting heavy loads of slate on and off the trucks. He is painted crimson with orange-brown and yellow details.'};
   statics.push(c); tagPick(g, () => showStatic(c));
   let ph = 0;
-  frameHooks.push(dt => { ph += dt * simSpeed * 0.35; trolley.position.x = Math.sin(ph) * 0.9; hook.position.y = (Math.cos(ph * 1.7) - 1) * 0.15; });
+  frameHooks.push(dt => { ph += dt * timeScale * 0.08; trolley.position.x = Math.sin(ph) * 0.9; hook.position.y = (Math.cos(ph * 1.7) - 1) * 0.15; });
 })();
 
 // Colin: the green steam crane on the quayside at the Wharf.
 (function(){
   const st = STATIONS.find(s => s.name === 'The Wharf');
   let low = null;
-  for(let k = 0; k < 16; k++){ const a = k / 16 * Math.PI * 2, x = st.x + Math.cos(a) * 2.6, z = st.z + Math.sin(a) * 2.6, h = heightAt(x, z); if(!low || h < low.h) low = {a, h, x, z}; }
-  const px = st.x + Math.cos(low.a) * 1.4, pz = st.z + Math.sin(low.a) * 1.4;
-  const g = new THREE.Group(); g.position.set(px, groundY(px, pz), pz); g.scale.setScalar(0.8); scene.add(g);
+  for(let k = 0; k < 16; k++){ const a = k / 16 * Math.PI * 2, x = st.x + Math.cos(a) * 30 * METRE, z = st.z + Math.sin(a) * 30 * METRE, h = heightAt(x, z); if(!low || h < low.h) low = {a, h, x, z}; }
+  const px = st.x + Math.cos(low.a) * 12 * METRE, pz = st.z + Math.sin(low.a) * 12 * METRE;
+  const g = new THREE.Group(); g.position.set(px, groundY(px, pz), pz); g.scale.setScalar(NG * 1.2); scene.add(g);
   const GR = mat(0x2f7a3a, 0.5), GREY = mat(0x7b7f84, 0.6), RED = mat(0xb3201c, 0.45);
   cylY(g, 0.55, 0.65, 0.5, GREY, 0, 0.25, 0, 18);
   const top = new THREE.Group(); top.position.y = 0.55; g.add(top);
@@ -1157,11 +1218,11 @@ function showStatic(c){
   box(hook, 0.3, 0.22, 0.3, mat(0x8a6a44, 0.8), 0, tip.y - 1.5, tip.z);
   sidePlates(top, plateMat('COLIN', '#2f7a3a', '#f2e6c8', '#d4af37'), 0.42, 0.12, 0.452, 0.2, 0);
   top.rotation.y = Math.atan2(Math.cos(low.a), Math.sin(low.a));
-  const c = {name: 'Colin', kind: 'Wharf crane', group: g, dist: 10,
+  const c = {name: 'Colin', kind: 'Wharf crane', group: g, dist: 0.07,
     desc: 'Colin is the steam crane at the Wharf, loading slate and goods between the narrow-gauge trains and the boats. He is painted green with red pulleys and cogwheels and a grey roof.'};
   statics.push(c); tagPick(g, () => showStatic(c));
   const baseYaw = top.rotation.y; let ph = 0;
-  frameHooks.push(dt => { ph += dt * simSpeed * 0.25; top.rotation.y = baseYaw + Math.sin(ph) * 1.1; });
+  frameHooks.push(dt => { ph += dt * timeScale * 0.05; top.rotation.y = baseYaw + Math.sin(ph) * 1.1; });
 })();
 
 // Madge: the Scammell Scarab lorry who carries loads where the rails don't reach.
@@ -1188,18 +1249,18 @@ function showStatic(c){
   for(const s of [-1, 1]) wheel(g, 0.15, s * 0.36, 0.15, -1.45, false);
   box(g, 0.6, 0.3, 0.8, mat(0x3c4552, 0.6), 0, 0.57, -0.7);
   g.scale.setScalar(NG);
-  const c = {name: 'Madge', kind: 'Lorry', group: g, dist: 9,
+  const c = {name: 'Madge', kind: 'Lorry', group: g, dist: 0.07,
     desc: 'Madge is a Scammell Scarab lorry who works with the Skarloey Railway, carrying loads to and from places the rails cannot reach. She is green with a cream upper cab and red hubcaps.'};
   statics.push(c); tagPick(g, () => showStatic(c));
   // A closed road round the quarry yard, so Madge never has to reverse.
   const road = [[-2.5, 1.4], [0, 1.15], [3, 1.15], [6, 1.4], [6.9, 2.05], [6, 2.75], [3, 2.95], [0, 2.95], [-2.5, 2.75], [-3.4, 2.05]]
-    .map(([t, n]) => f.o.clone().addScaledVector(f.t, t).addScaledVector(f.n, n));
+    .map(([t, n]) => f.o.clone().addScaledVector(f.t, t * 5 * METRE).addScaledVector(f.n, n * 5 * METRE));
   const loop = new THREE.CatmullRomCurve3(road, true, 'centripetal');
   loop.arcLengthDivisions = 400;
-  const loopLen = loop.getLength(), N = 160, half = 0.3, pos = [], idx = [];
+  const loopLen = loop.getLength(), N = 160, half = 2.6 * METRE, pos = [], idx = [];
   for(let i = 0; i <= N; i++){
     const q = loop.getPointAt(i / N % 1), tg = loop.getTangentAt(i / N % 1), nx = tg.z, nz = -tg.x, nl = Math.hypot(nx, nz) || 1;
-    for(const s of [-1, 1]){ const x = q.x + nx / nl * half * s, z = q.z + nz / nl * half * s; pos.push(x, groundY(x, z) + 0.035, z); }
+    for(const s of [-1, 1]){ const x = q.x + nx / nl * half * s, z = q.z + nz / nl * half * s; pos.push(x, groundY(x, z) + 0.3 * METRE, z); }
     if(i < N){ const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
   }
   const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); rg.setIndex(idx); rg.computeVertexNormals();
@@ -1208,23 +1269,175 @@ function showStatic(c){
   let s = 0.3, wait = 0;
   const q = new THREE.Vector3(), tg = new THREE.Vector3();
   frameHooks.push(dt => {
-    const d = dt * simSpeed;
+    const d = dt * timeScale;
     let move = 0;
     if(wait > 0) wait -= d;
     else {
       const prev = s;
-      s = (s + d * 0.45 / loopLen) % 1;
-      move = d * 0.45;
-      if(prev < 0.1 && s >= 0.1) wait = 3;                      // pause at the yard to load
+      s = (s + d * 5 * METRE / loopLen) % 1;
+      move = d * 5 * METRE;
+      if(prev < 0.1 && s >= 0.1) wait = 40;                      // pause at the yard to load
     }
     loop.getPointAt(s, q); loop.getTangentAt(s, tg);
-    const hf = groundY(q.x + tg.x * 0.6, q.z + tg.z * 0.6), hb = groundY(q.x - tg.x * 0.6, q.z - tg.z * 0.6);
-    g.position.set(q.x, groundY(q.x, q.z) + 0.03, q.z);
+    const hf = groundY(q.x + tg.x * 3 * METRE, q.z + tg.z * 3 * METRE), hb = groundY(q.x - tg.x * 3 * METRE, q.z - tg.z * 3 * METRE);
+    g.position.set(q.x, groundY(q.x, q.z) + 0.25 * METRE, q.z);
     g.rotation.order = 'YXZ';
-    g.rotation.set(-Math.atan2(hf - hb, 1.2), Math.atan2(tg.x, tg.z), 0);
+    g.rotation.set(-Math.atan2(hf - hb, 6 * METRE), Math.atan2(tg.x, tg.z), 0);
     if(move) wheels.forEach(({w, r}) => { w.rotation.x += move / (r * NG); });
   });
 })();
+
+// ------------------------------------------------------------------ close-up scenery
+// Only shown when zoomed in: station platforms and buildings, houses around the towns, and trees
+// generated around wherever the camera is looking. Placement is procedural (the maps give no
+// buildings or woodland), kept clear of the track.
+const CELL = 0.02;
+const trackCells = new Map();
+RAIL.lines.forEach(l => {
+  const R = l.real;
+  for(let j = 0; j < R.n; j++){
+    const k = Math.floor(R.x[j] / CELL) + ',' + Math.floor(R.z[j] / CELL);
+    if(!trackCells.has(k)) trackCells.set(k, []);
+    trackCells.get(k).push(R.x[j], R.z[j]);
+  }
+});
+function nearTrack(x, z, r){
+  const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL), r2 = r * r;
+  for(let i = -1; i <= 1; i++) for(let k = -1; k <= 1; k++){
+    const a = trackCells.get((cx + i) + ',' + (cz + k)); if(!a) continue;
+    for(let q = 0; q < a.length; q += 2){ const dx = a[q] - x, dz = a[q + 1] - z; if(dx * dx + dz * dz < r2) return true; }
+  }
+  return false;
+}
+const hash2 = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
+function valueNoise(x, z){
+  const x0 = Math.floor(x), z0 = Math.floor(z), fx = x - x0, fz = z - z0, sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+  const a = hash2(x0, z0), b = hash2(x0 + 1, z0), c = hash2(x0, z0 + 1), d = hash2(x0 + 1, z0 + 1);
+  return (a * (1 - sx) + b * sx) * (1 - sz) + (c * (1 - sx) + d * sx) * sz;
+}
+
+const sceneryNear = new THREE.Group(); scene.add(sceneryNear);   // platforms, buildings, houses
+const WALLS = [0xe8dcc0, 0xd9cfb4, 0x9a4a32, 0xa39c8e, 0xf0ece0, 0x8a5a3e], ROOFS = [0x4a4f58, 0x5a5f66, 0x8a3a2a, 0x6b3a2a];
+
+// Station platforms (laid in short pieces so they follow the curve) and station buildings.
+(function(){
+  const plat = new THREE.Group(), PM = mat(0xa8a49a, 0.85), EDGE = mat(0xeeeeee, 0.6);
+  const _a = new THREE.Vector3(), _d = new THREE.Vector3();
+  STATIONS.forEach((st, si) => {
+    const line = LINES[st.lines[0]];
+    if(!line) return;
+    const std = line.kind === 'standard', closed = st.kind === 'closed';
+    const lenM = std ? (MAJOR.has(st.name) ? 140 : 90) : line.kind === 'miniature' ? 22 : line.kind === 'industrial' ? 20 : 40;
+    const wM = std ? 4 : 2.8, off = ((std ? 3.6 : 2.3) / 2 + 0.6 + wM / 2) * METRE;
+    const segs = Math.ceil(lenM / 15), u0 = st.trackU;
+    for(let k = 0; k < segs; k++){
+      const du = ((k + 0.5) / segs - 0.5) * lenM * METRE / line.real.len;
+      realAt(line, u0 + du, _a); realDir(line, u0 + du, _d);
+      const nx = _d.z, nz = -_d.x, nl = Math.hypot(nx, nz) || 1;
+      const cx = _a.x + nx / nl * off, cz = _a.z + nz / nl * off, gy = Math.max(heightAt(cx, cz), _a.y - 0.55 * METRE);
+      const b = box(plat, wM * METRE, _a.y + 0.45 * METRE - gy, (lenM / segs + 0.3) * METRE, closed ? mat(0x8f8a7c, 0.95) : PM, cx, (gy + _a.y + 0.45 * METRE) / 2, cz);
+      b.rotation.y = Math.atan2(_d.x, _d.z);
+      if(!closed){ const e = box(plat, 0.3 * METRE, 0.06 * METRE, (lenM / segs + 0.3) * METRE, EDGE, cx - nx / nl * (wM / 2 - 0.15) * METRE, _a.y + 0.48 * METRE, cz - nz / nl * (wM / 2 - 0.15) * METRE); e.rotation.y = b.rotation.y; }
+    }
+    if(closed) return;
+    realAt(line, u0, _a); realDir(line, u0, _d);
+    const nx = _d.z, nz = -_d.x, nl = Math.hypot(nx, nz) || 1, bo = off + (wM / 2 + 4.5) * METRE;
+    const bx = _a.x + nx / nl * bo, bz = _a.z + nz / nl * bo, by = heightAt(bx, bz);
+    const W = (std ? 16 : 9) * METRE, D = (std ? 7 : 5) * METRE, H = (std ? 5 : 3.6) * METRE;
+    const g = new THREE.Group(); g.position.set(bx, by, bz); g.rotation.y = Math.atan2(_d.x, _d.z); plat.add(g);
+    box(g, D, H, W, mat(WALLS[si % WALLS.length], 0.8), 0, H / 2, 0);
+    // Triangular prism with its ridge up and along the building: a gable roof.
+    add(g, new THREE.CylinderGeometry(D * 0.6, D * 0.6, W * 1.06, 3).rotateX(-Math.PI / 2), mat(ROOFS[si % ROOFS.length], 0.7), 0, H + D * 0.3, 0);
+    for(let w = 0; w < 4; w++) for(const s of [-1, 1]) box(g, 0.05 * METRE, 1.2 * METRE, 1.0 * METRE, glassMat(), s * (D / 2 + 0.02 * METRE), H * 0.55, -W / 2 + W * (w + 0.5) / 4);
+    box(g, D * 1.05, 0.25 * METRE, W * 0.7, mat(0x3a3a3a, 0.6), 0, H * 0.82, 0).position.x = -D * 0.62;
+  });
+  bake(plat);
+  sceneryNear.add(plat);
+})();
+
+// Houses round each town, laid out square to the railway.
+(function(){
+  const spots = [];
+  STATIONS.forEach((st, si) => {
+    if(st.kind === 'closed') return;
+    const major = MAJOR.has(st.name), n = major ? 160 : 18, rad = major ? 0.3 : 0.1;
+    const line = LINES[st.lines[0]], d = realDir(line, st.trackU, new THREE.Vector3()), yaw = Math.atan2(d.x, d.z);
+    let seed = si * 977 + 13; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const placed = [];
+    for(let i = 0, tries = 0; i < n && tries < n * 8; tries++){
+      const r = rad * Math.sqrt(rnd()), a = rnd() * Math.PI * 2, x = st.x + Math.cos(a) * r, z = st.z + Math.sin(a) * r;
+      const h = heightAt(x, z);
+      if(h < 1.5 * METRE || r < 28 * METRE || nearTrack(x, z, 10 * METRE)) continue;
+      const w0 = (7 + rnd() * 6) * METRE, w = rnd() < 0.15 ? w0 * 2.2 : w0, dd = (6 + rnd() * 3) * METRE, hh = (4.5 + rnd() * 2.5) * METRE;
+      const rr = Math.max(w, dd) * 0.62 + 2.5 * METRE;                       // keep a garden's width apart
+      if(placed.some(p => (p.x - x) ** 2 + (p.z - z) ** 2 < (p.rr + rr) ** 2)) continue;
+      placed.push({x, z, rr});
+      spots.push({x, z, y: h - 0.4 * METRE, w, d: dd, h: hh, yaw: yaw + Math.floor(rnd() * 4) * Math.PI / 2,
+        wall: WALLS[Math.floor(rnd() * WALLS.length)], roof: ROOFS[Math.floor(rnd() * ROOFS.length)]});
+      i++;
+    }
+  });
+  const wallGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+  const roofGeo = new THREE.CylinderGeometry(0.62, 0.62, 1, 3).rotateX(-Math.PI / 2);      // gable prism, ridge along z
+  const walls = new THREE.InstancedMesh(wallGeo, new THREE.MeshStandardMaterial({roughness: 0.85}), spots.length);
+  const roofs = new THREE.InstancedMesh(roofGeo, new THREE.MeshStandardMaterial({roughness: 0.75}), spots.length);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), c = new THREE.Color(), up = new THREE.Vector3(), sc = new THREE.Vector3();
+  spots.forEach((s, i) => {
+    q.setFromEuler(e.set(0, s.yaw, 0));
+    m4.compose(up.set(s.x, s.y, s.z), q, sc.set(s.d, s.h, s.w)); walls.setMatrixAt(i, m4); walls.setColorAt(i, c.setHex(s.wall));
+    m4.compose(up.set(s.x, s.y + s.h + 0.31 * 0.9 * s.d, s.z), q, sc.set(s.d * 0.93, s.d * 0.9, s.w * 1.04)); roofs.setMatrixAt(i, m4); roofs.setColorAt(i, c.setHex(s.roof));
+  });
+  [walls, roofs].forEach(m => { m.castShadow = true; m.receiveShadow = true; sceneryNear.add(m); });
+})();
+
+// Trees, regenerated around the camera target as you move: patchy woodland, none on the line.
+const trees = (function(){
+  const CAP = 3200;
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.18, 1, 5).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({color: 0x5a4030, roughness: 0.9}), CAP);
+  const cone = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({roughness: 0.85}), CAP);
+  const ball = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({roughness: 0.85}), CAP);
+  const g = new THREE.Group(); g.add(trunk, cone, ball); scene.add(g);
+  [cone, ball].forEach(m => { m.castShadow = true; });
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), c = new THREE.Color();
+  const greens = [0x3f6b2e, 0x4c7a34, 0x2f5a2a, 0x5a8a3c, 0x3a5f30];
+  let last = null;
+  function fill(cx, cz, radius){
+    const step = 12 * METRE, n = Math.ceil(radius / step);
+    let nt = 0, nc = 0, nb = 0;
+    const ix0 = Math.floor(cx / step), iz0 = Math.floor(cz / step);
+    for(let i = -n; i <= n && nt < CAP; i++) for(let k = -n; k <= n && nt < CAP; k++){
+      const gi = ix0 + i, gk = iz0 + k, h1 = hash2(gi, gk);
+      const wood = valueNoise(gi * 0.045, gk * 0.045);
+      if(h1 > wood * wood * 1.6) continue;
+      const x = (gi + hash2(gk, gi)) * step, z = (gk + hash2(gi + 7, gk - 3)) * step;
+      if((x - cx) ** 2 + (z - cz) ** 2 > radius * radius) continue;
+      const h = heightAt(x, z);
+      if(h < 2 * METRE || nearTrack(x, z, 8 * METRE)) continue;
+      if(STATIONS.some(st => (st.x - x) ** 2 + (st.z - z) ** 2 < (MAJOR.has(st.name) ? 0.09 : 0.0016))) continue;
+      const th = (8 + hash2(gi * 3, gk) * 9) * METRE, conifer = hash2(gk * 5, gi) < 0.45;
+      m4.compose(v.set(x, h - 0.3 * METRE, z), q.identity(), s.set(th * 0.06, th * 0.45, th * 0.06)); trunk.setMatrixAt(nt, m4);
+      c.setHex(greens[Math.floor(hash2(gi, gk * 3) * greens.length)]);
+      if(conifer){ m4.compose(v.set(x, h + th * 0.2, z), q, s.set(th * 0.22, th * 0.85, th * 0.22)); cone.setMatrixAt(nc, m4); cone.setColorAt(nc++, c); }
+      else { m4.compose(v.set(x, h + th * 0.62, z), q, s.set(th * 0.3, th * 0.27, th * 0.3)); ball.setMatrixAt(nb, m4); ball.setColorAt(nb++, c); }
+      nt++;
+    }
+    trunk.count = nt; cone.count = nc; ball.count = nb;
+    [trunk, cone, ball].forEach(m => { m.instanceMatrix.needsUpdate = true; if(m.instanceColor) m.instanceColor.needsUpdate = true; });
+  }
+  return {group: g, update(){
+    const radius = Math.min(0.6, Math.max(0.12, camDist * 1.2));
+    if(!last || Math.hypot(camCenter.x - last.x, camCenter.z - last.z) > radius * 0.3 || Math.abs(radius - last.r) > last.r * 0.4){
+      fill(camCenter.x, camCenter.z, radius);
+      last = {x: camCenter.x, z: camCenter.z, r: radius};
+    }
+  }};
+})();
+frameHooks.push(() => {
+  sceneryNear.visible = camDist < 5;
+  sidingGroup.visible = camDist < 9;
+  trees.group.visible = camDist < 2.5;
+  if(trees.group.visible) trees.update();
+});
 
 // ------------------------------------------------------------------ roster panel
 const rosterList = document.getElementById('rosterList'), roster = document.getElementById('roster');
@@ -1235,8 +1448,6 @@ function rosterRow(name, sub, color, onClick){
   d.onclick = onClick; rosterList.appendChild(d);
 }
 const grp = t => { const h = document.createElement('div'); h.className = 'leg-group'; h.textContent = t; rosterList.appendChild(h); };
-const ENGINE_COLORS = {skarloey: 0x9b1730, rheneas: 0xd23a26, sirhandel: 0x1f4fbf, petersam: 0x2e8b6e, rusty: 0xff6a13, duncan: 0xe2a91f,
-  freddie: 0xc4c8cc, duke: 0x9a5426, bertram: 0x4f2f1c, mightymac: 0x2b2f86, luke: 0x6aa84f};
 grp('Engines');
 ENGINES.filter(E => E.train).forEach(E => rosterRow(E.name, E.no ? 'No. ' + E.no : E.wheels, hex(ENGINE_COLORS[E.id]), () => showEngine(E)));
 grp('Cranes, incline and lorry');
