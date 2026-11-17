@@ -1359,46 +1359,8 @@ let clearHouses = () => {};
 const clearZones = [];          // ground kept free of houses and trees
 function clearArea(x, z, r){ clearZones.push({x, z, r2: r * r}); clearHouses(x, z, r); }
 
-// Houses round each town, laid out square to the railway.
-(function(){
-  const spots = [];
-  STATIONS.forEach((st, si) => {
-    if(st.kind === 'closed') return;
-    const major = MAJOR.has(st.name), n = major ? 160 : 18, rad = major ? 0.3 : 0.1;
-    const line = LINES[st.lines[0]], d = realDir(line, st.trackU, new THREE.Vector3()), yaw = Math.atan2(d.x, d.z);
-    let seed = si * 977 + 13; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const placed = [];
-    for(let i = 0, tries = 0; i < n && tries < n * 8; tries++){
-      const r = rad * Math.sqrt(rnd()), a = rnd() * Math.PI * 2, x = st.x + Math.cos(a) * r, z = st.z + Math.sin(a) * r;
-      const h = heightAt(x, z);
-      if(h < 1.5 * METRE || r < 28 * METRE || nearTrack(x, z, 10 * METRE)) continue;
-      const w0 = (7 + rnd() * 6) * METRE, w = rnd() < 0.15 ? w0 * 2.2 : w0, dd = (6 + rnd() * 3) * METRE, hh = (4.5 + rnd() * 2.5) * METRE;
-      const rr = Math.max(w, dd) * 0.62 + 2.5 * METRE;                       // keep a garden's width apart
-      if(placed.some(p => (p.x - x) ** 2 + (p.z - z) ** 2 < (p.rr + rr) ** 2)) continue;
-      placed.push({x, z, rr});
-      spots.push({x, z, y: h - 0.4 * METRE, w, d: dd, h: hh, yaw: yaw + Math.floor(rnd() * 4) * Math.PI / 2,
-        wall: WALLS[Math.floor(rnd() * WALLS.length)], roof: ROOFS[Math.floor(rnd() * ROOFS.length)]});
-      i++;
-    }
-  });
-  const wallGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-  const roofGeo = new THREE.CylinderGeometry(0.62, 0.62, 1, 3).rotateX(-Math.PI / 2);      // gable prism, ridge along z
-  const walls = new THREE.InstancedMesh(wallGeo, new THREE.MeshStandardMaterial({roughness: 0.85}), spots.length);
-  const roofs = new THREE.InstancedMesh(roofGeo, new THREE.MeshStandardMaterial({roughness: 0.75}), spots.length);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), c = new THREE.Color(), up = new THREE.Vector3(), sc = new THREE.Vector3();
-  spots.forEach((s, i) => {
-    q.setFromEuler(e.set(0, s.yaw, 0));
-    m4.compose(up.set(s.x, s.y, s.z), q, sc.set(s.d, s.h, s.w)); walls.setMatrixAt(i, m4); walls.setColorAt(i, c.setHex(s.wall));
-    m4.compose(up.set(s.x, s.y + s.h + 0.31 * 0.9 * s.d, s.z), q, sc.set(s.d * 0.93, s.d * 0.9, s.w * 1.04)); roofs.setMatrixAt(i, m4); roofs.setColorAt(i, c.setHex(s.roof));
-  });
-  [walls, roofs].forEach(m => { m.castShadow = true; m.receiveShadow = true; sceneryNear.add(m); });
-  // Depots, docks and works built later (nwr.js) clear the houses off their ground.
-  clearHouses = (x, z, r) => {
-    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
-    spots.forEach((s, i) => { const rr = r + Math.max(s.w, s.d) * 0.6; if((s.x - x) ** 2 + (s.z - z) ** 2 < rr * rr){ walls.setMatrixAt(i, zero); roofs.setMatrixAt(i, zero); } });
-    walls.instanceMatrix.needsUpdate = roofs.instanceMatrix.needsUpdate = true;
-  };
-})();
+// Towns, streets and buildings are laid out in world.js; clearArea() marks ground they must keep off.
+const inClearZone = (x, z) => clearZones.some(c => (c.x - x) ** 2 + (c.z - z) ** 2 < c.r2);
 
 // Trees, regenerated around the camera target as you move: patchy woodland, none on the line.
 const trees = (function(){
@@ -1418,14 +1380,15 @@ const trees = (function(){
     const ix0 = Math.floor(cx / step), iz0 = Math.floor(cz / step);
     for(let i = -n; i <= n && nt < CAP; i++) for(let k = -n; k <= n && nt < CAP; k++){
       const gi = ix0 + i, gk = iz0 + k, h1 = hash2(gi, gk);
-      const wood = valueNoise(gi * 0.045, gk * 0.045);
-      if(h1 > wood * wood * 1.6) continue;
       const x = (gi + hash2(gk, gi)) * step, z = (gk + hash2(gi + 7, gk - 3)) * step;
+      // world.js's land map says where the woods, hedgerows and gardens are; before it loads, plain noise
+      const L = window.SODOR_LAND, dens = L ? L.trees(x, z) : (w => w * w * 1.6)(valueNoise(gi * 0.045, gk * 0.045));
+      if(h1 > dens) continue;
       if((x - cx) ** 2 + (z - cz) ** 2 > radius * radius) continue;
       const h = heightAt(x, z);
       if(h < 2 * METRE || nearTrack(x, z, 8 * METRE)) continue;
-      if(STATIONS.some(st => (st.x - x) ** 2 + (st.z - z) ** 2 < (MAJOR.has(st.name) ? 0.09 : 0.0016))) continue;
-      if(clearZones.some(c => (c.x - x) ** 2 + (c.z - z) ** 2 < c.r2)) continue;
+      if(!L && STATIONS.some(st => (st.x - x) ** 2 + (st.z - z) ** 2 < (MAJOR.has(st.name) ? 0.09 : 0.0016))) continue;
+      if(inClearZone(x, z) || (L && L.blocked(x, z))) continue;
       const th = (8 + hash2(gi * 3, gk) * 9) * METRE, conifer = hash2(gk * 5, gi) < 0.45;
       m4.compose(v.set(x, h - 0.3 * METRE, z), q.identity(), s.set(th * 0.06, th * 0.45, th * 0.06)); trunk.setMatrixAt(nt, m4);
       c.setHex(greens[Math.floor(hash2(gi, gk * 3) * greens.length)]);
@@ -1436,7 +1399,7 @@ const trees = (function(){
     trunk.count = nt; cone.count = nc; ball.count = nb;
     [trunk, cone, ball].forEach(m => { m.instanceMatrix.needsUpdate = true; if(m.instanceColor) m.instanceColor.needsUpdate = true; });
   }
-  return {group: g, update(){
+  return {group: g, invalidate(){ last = null; }, update(){
     const radius = Math.min(0.6, Math.max(0.12, camDist * 1.2));
     if(!last || Math.hypot(camCenter.x - last.x, camCenter.z - last.z) > radius * 0.3 || Math.abs(radius - last.r) > last.r * 0.4){
       fill(camCenter.x, camCenter.z, radius);
@@ -1476,5 +1439,5 @@ window.SODOR_SR = {ENGINES, SR_TRAINS, RUNNERS, statics, STOCK};
 // The model kit and train runner, shared with nwr.js.
 window.SODOR_KIT = {mat, add, box, cylZ, cylX, cylY, domeCap, arcZ, roof, bake, canvasTex, faceMat, plateMat, sidePlates, sidePlatesTex,
   glassMat, brassMat, bronzeMat, buildSteam, buildTender, wheelset, makeRunner, drawLoops, addMarker, RUNNERS, tagPick, lineU,
-  nearTrack, clearArea, ground, rosterRow, NG, STD, BLACK, BEAM_RED, BRASS};
+  nearTrack, clearArea, inClearZone, clearZones, ground, rosterRow, NG, STD, BLACK, BEAM_RED, BRASS, sceneryNear, trees};
 })();

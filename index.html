@@ -89,6 +89,7 @@
   <div class="sub">North Western Railway — Live Operations</div>
   <div class="stat-row"><span>Engines running</span><b id="statTrains">-</b></div>
   <div class="stat-row"><span>Stations</span><b id="statStations">-</b></div>
+  <div class="stat-row"><span>Towns · level crossings</span><b id="statTowns">-</b></div>
   <div class="stat-row"><span>Tunnels</span><b id="statTunnels">-</b></div>
   <div class="stat-row"><span>Lines</span><b id="statLines">-</b></div>
   <div class="stat-row"><span>Time of day</span><b id="statTime">06:00</b></div>
@@ -201,7 +202,11 @@ const MAP_SCALE = 1/6;                        // world units per map pixel
 const MAP_W = T.imgW*MAP_SCALE, MAP_D = T.imgH*MAP_SCALE;
 // The outline map's scale bar puts 10 miles at 183px, so one world unit is about 528 m.
 const METRE = 1 / (10*1609.344 / 183 / MAP_SCALE);
-const VEXAG = 0.55;                           // gentler hills, so life-size trains climb believable grades
+// True heights: Culdee Fell, Sodor's highest point, comes out at about 620 m (2,034 ft in the books).
+// The overview draws the relief taller (OVERVIEW_EX) so the hills still read from far away.
+const VEXAG = 0.0852;
+const OVERVIEW_EX = 5;
+let VK = 1;                                   // vertical exaggeration in use now: 1 close up, OVERVIEW_EX zoomed right out
 const HEIGHTS = (()=>{
   const bin = atob(T.heights), bytes = new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
@@ -215,6 +220,18 @@ const REGION = (()=>{
   return out;
 })();
 function mapToWorld(px,py){ return {x:(px-T.imgW/2)*MAP_SCALE, z:(py-T.imgH/2)*MAP_SCALE}; }
+// Culdee Fell Summit is the island's highest point (the map's peak had landed on Devil's Back): lift it.
+(function(){
+  const s = RAIL.stations.find(s=>s.name==="Culdee Fell Summit"); if(!s) return;
+  const w = mapToWorld(s.px[0], s.px[1]);
+  let max = 0; for(let i=0;i<HEIGHTS.length;i++) if(REGION[i]===1 && HEIGHTS[i]>max) max = HEIGHTS[i];
+  const amp = max + 25*METRE - heightAt(w.x, w.z), sig = 0.9;
+  if(amp <= 0) return;
+  for(let r=0;r<T.rows;r++) for(let c=0;c<T.cols;c++){
+    const p = mapToWorld(c*T.step, r*T.step), d2 = (p.x-w.x)**2 + (p.z-w.z)**2;
+    if(d2 < 9*sig*sig) HEIGHTS[r*T.cols+c] += amp*Math.exp(-d2/(2*sig*sig));
+  }
+})();
 // Height of the rendered surface itself (same triangle split as the mesh), so life-size
 // vehicles and track sit exactly on the ground rather than on a bilinear approximation.
 function heightAt(x,z){
@@ -250,6 +267,10 @@ sun.shadow.normalBias = 0.9;
 scene.add(sun);
 scene.add(sun.target);
 const SUN_DIR = sun.position.clone().normalize();
+// Everything that lies on the ground as seen from afar (terrain, route lines, station discs) is in
+// this group, stretched vertically by VK; everything seen close up uses true heights (VK = 1 there).
+const relief = new THREE.Group(); scene.add(relief);
+let terrainMesh = null;
 
 function buildTerrain(){
   const {cols, rows, step} = T;
@@ -276,7 +297,7 @@ function buildTerrain(){
   const SAND=C(0xdccb92), GRASS_LO=C(0x72b04e), GRASS=C(0x58963c), MOOR=C(0x7d8a52),
         ROCK=C(0x8c867a), PEAK=C(0xd9d6cf), SHALLOW=C(0xc9b98a), DEEP=C(0x1d3f52), tmp=new THREE.Color();
   for(let i=0;i<n;i++){
-    const h=HEIGHTS[i]/VEXAG, slope=Math.min(1,(1-nrm[i*3+1])/VEXAG);
+    const h=HEIGHTS[i]/VEXAG, slope=Math.min(1,(1-nrm[i*3+1])*0.55/(VEXAG*VEXAG));   // as steep-looking as before
     const gc=i%cols, gr=(i/cols)|0;
     const hs=Math.sin(gc*127.1+gr*311.7)*43758.5453;
     const jitter = (hs-Math.floor(hs)-0.5)*0.05;
@@ -315,10 +336,11 @@ function buildTerrain(){
   groundTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, map:groundTex, roughness:0.95, metalness:0}));
   mesh.castShadow = true; mesh.receiveShadow = true;
-  scene.add(mesh);
+  relief.add(mesh);
+  terrainMesh = mesh;
 
   // Diorama skirt: walls down each map edge so the cut-off Isle of Man / England read as a map border.
-  const BASE=-9, sk=[], skc=[], skIdx=[];
+  const BASE=-9/OVERVIEW_EX, sk=[], skc=[], skIdx=[];
   const edge = (cells)=>{
     const start = sk.length/3;
     cells.forEach(([c,r])=>{
@@ -342,11 +364,11 @@ function buildTerrain(){
   sgeo.setAttribute('color', new THREE.Float32BufferAttribute(skc,3));
   sgeo.setIndex(skIdx);
   sgeo.computeVertexNormals();
-  scene.add(new THREE.Mesh(sgeo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:1, side:THREE.DoubleSide})));
+  relief.add(new THREE.Mesh(sgeo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:1, side:THREE.DoubleSide})));
 
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(MAP_W+6, 2.5, MAP_D+6), new THREE.MeshStandardMaterial({color:0x2b1f16, roughness:0.8}));
-  plinth.position.y = BASE-1.25; plinth.receiveShadow = true;
-  scene.add(plinth);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(MAP_W+6, 2.5/OVERVIEW_EX, MAP_D+6), new THREE.MeshStandardMaterial({color:0x2b1f16, roughness:0.8}));
+  plinth.position.y = BASE-1.25/OVERVIEW_EX; plinth.receiveShadow = true;
+  relief.add(plinth);
 
   const water = new THREE.Mesh(new THREE.PlaneGeometry(MAP_W, MAP_D),
     new THREE.MeshStandardMaterial({color:0x2f86c0, transparent:true, opacity:0.72, roughness:0.2, metalness:0.05}));
@@ -437,10 +459,11 @@ function buildTrack(line){
   const inT = new Uint8Array(pts.length);
   tunnels.forEach(({i0,i1})=>{ for(let i=i0+1;i<i1;i++) inT[i]=1; });
   const W = line.kind==='rack' ? 2 : line.kind==='standard' ? 10 : 6;
-  const raw = ground.map(h=>h+0.3);
+  // the route line floats 0.3 units above the ground at full overview stretch (it lives in the relief group)
+  const raw = ground.map(h=>h+0.3/OVERVIEW_EX);
   tunnels.forEach(({i0,i1})=>{ for(let i=i0+1;i<i1;i++) raw[i] = raw[i0]+(raw[i1]-raw[i0])*(i-i0)/(i1-i0); });
   const y = raw.map((_,i)=>{ let s=0,c=0; for(let k=-W;k<=W;k++){ const j=i+k; if(j>=0 && j<raw.length){ s+=raw[j]; c++; } } return s/c; })
-               .map((v,i)=>Math.max(v, ground[i]+0.25));
+               .map((v,i)=>Math.max(v, ground[i]+0.25/OVERVIEW_EX));
   const p3 = pts.map((p,i)=>new THREE.Vector3(p.x, y[i], p.z));
   const closed = line.kind==='closed';
   const mat = new THREE.MeshStandardMaterial({color: line.colorHex, roughness:0.5, emissive: line.colorHex,
@@ -449,15 +472,16 @@ function buildTrack(line){
   let run = [];
   const flush = ()=>{
     if(run.length>=2){
-      const c = new THREE.CatmullRomCurve3(run, false, 'centripetal');
-      const m = new THREE.Mesh(new THREE.TubeGeometry(c, Math.max(4, run.length*2), 0.16*line.width, 6, false), mat);
+      // built at full overview stretch, then squashed back: round at the overview, a flat band at true scale
+      const c = new THREE.CatmullRomCurve3(run.map(p=>new THREE.Vector3(p.x, p.y*OVERVIEW_EX, p.z)), false, 'centripetal');
+      const m = new THREE.Mesh(new THREE.TubeGeometry(c, Math.max(4, run.length*2), 0.16*line.width, 6, false).scale(1, 1/OVERVIEW_EX, 1), mat);
       group.add(m);
     }
     run = [];
   };
   p3.forEach((p,i)=>{ if(inT[i]) flush(); else run.push(p); });
   flush();
-  scene.add(group);
+  relief.add(group);
 
   // --- life-size track on the ground
   const N = Math.max(4, Math.ceil(guideLen/TRACK_STEP));
@@ -627,11 +651,11 @@ const MARKERS = {
 };
 const pickGeo = new THREE.SphereGeometry(1.3, 8, 6);                // generous invisible tap target
 const pickMat = new THREE.MeshBasicMaterial({visible:false});
-const stationMarkers = new THREE.Group(); scene.add(stationMarkers);   // map discs, hidden up close
+const stationMarkers = new THREE.Group(); relief.add(stationMarkers);   // map discs, hidden up close
 STATIONS.forEach(st=>{
   const style = MARKERS[st.kind==='closed' ? 'closed' : 'station'];
   const m = new THREE.Mesh(style.geo, style.mat);
-  m.position.set(st.x, st.y+0.4, st.z);
+  m.position.set(st.x, st.y+0.4/OVERVIEW_EX, st.z); m.scale.y = 1/OVERVIEW_EX;
   stationMarkers.add(m);
   const hit = new THREE.Mesh(pickGeo, pickMat);
   hit.position.copy(m.position);
@@ -652,7 +676,7 @@ function scaleLabels(){
     l.visible = l.userData.major || d < 95;
     const h = Math.min(4.2, Math.max(0.0008, d*0.021));
     l.scale.set(h*l.userData.aspect, h, 1);
-    l.position.y = l.userData.baseY + Math.min(2.8, Math.max(12*METRE, d*0.012));
+    l.position.y = l.userData.baseY*VK + Math.min(2.8, Math.max(12*METRE, d*0.012));
   }
 }
 
@@ -860,8 +884,9 @@ let timeScale = 1;
 // Detail by zoom: map overlays from afar, life-size track, platforms and scenery up close.
 function applyLOD(){
   const d = camDist;
-  RAIL.lines.forEach(l=>{ l.mesh.visible = l.userVisible && d > 1.6; l.realMesh.visible = l.userVisible && d < 9; });
-  stationMarkers.visible = d > 1.6;
+  // the overview route bands and station discs are hundreds of metres wide: only from well out
+  RAIL.lines.forEach(l=>{ l.mesh.visible = l.userVisible && d > 6; l.realMesh.visible = l.userVisible && d < 9; });
+  stationMarkers.visible = d > 6;
   portalGroup.visible = d < 9;
 }
 function updateShadows(){
@@ -903,6 +928,7 @@ function animate(){
     camTheta += dt*0.035;
   }
   updateCam();
+  { const t = Math.max(0, Math.min(1, (camDist-12)/108)); VK = 1 + (OVERVIEW_EX-1)*t*t*(3-2*t); relief.scale.y = VK; }
   applyLOD();
   updateShadows();
   scaleLabels();
@@ -919,8 +945,9 @@ updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
-<script src="characters.js?v=9"></script>
-<script src="nwr.js?v=2"></script>
-<script src="cfr.js?v=1"></script>
+<script src="characters.js?v=10"></script>
+<script src="nwr.js?v=3"></script>
+<script src="cfr.js?v=2"></script>
+<script src="world.js?v=1"></script>
 </body>
 </html>

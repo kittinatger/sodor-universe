@@ -25,7 +25,8 @@ function bakeVC(group, shadow = true){
   const buckets = new Map();
   group.traverse(o => {
     if(!o.isMesh) return;
-    const m = o.material, tex = !!m.map;
+    // textured, see-through and glowing materials keep their own material (merged per material)
+    const m = o.material, tex = !!m.map || m.transparent || (m.emissive && m.emissive.getHex() !== 0);
     // a few surface classes only (paint, matt, rough, metal), so a vehicle bakes to a handful of meshes
     const metal = m.metalness > 0.3 ? 0.65 : 0;
     const rough = metal ? 0.35 : m.roughness < 0.5 ? 0.42 : m.roughness < 0.8 ? 0.65 : 0.92;
@@ -1174,7 +1175,7 @@ function portalCrane(o){
   roof(top, 4.1, 5.2, ty + 3.6, C, -0.6);
   box(top, 3.6, 2.2, 1.6, mat(o.counter === undefined ? 0x777777 : o.counter, 0.6), 0, ty + 1.3, -3.9);
   for(const s of [-1, 1]){ const w = add(top, new THREE.PlaneGeometry(1.2, 0.9), glassMat(), s * 2.006, ty + 2.4, 0.8); w.rotation.y = s * Math.PI / 2; }
-  faceOn(top, 0.95, o.face, 0, ty + 1.6, 1.92);
+  if(o.face) faceOn(top, 0.95, o.face, 0, ty + 1.6, 1.92);           // the harbours' working cranes have no faces
   const jib = new THREE.Group(); jib.position.set(0, ty + 2.6, 1.9); jib.rotation.x = -o.jibUp; top.add(jib);
   for(const s of [-1, 1]) box(jib, 0.25, 0.9, o.jib, C, s * 0.6, 0, o.jib / 2);
   for(let k = 0; k < Math.round(o.jib / 1.4); k++){ const b = box(jib, 1.3, 0.1, 0.1, C, 0, k % 2 ? 0.3 : -0.3, 0.6 + k * 1.4); b.rotation.x = k % 2 ? 0.5 : -0.5; }
@@ -2234,7 +2235,10 @@ function lod(v, near){
 }
 frameHooks.push(() => {
   const cp = camera.position;
-  K.RUNNERS.forEach(R => { R.unit.forEach(m => cullRunning(m.v, cp)); R.cars.forEach(c => cullRunning(c.v, cp)); });   // every railway's trains
+  K.RUNNERS.forEach(R => {                                              // every railway's trains
+    R.unit.forEach(m => cullRunning(m.v, cp)); R.cars.forEach(c => cullRunning(c.v, cp));
+    if(R.marker) R.marker.position.y *= VK;                              // dots sit on the stretched overview relief
+  });
   const showDepots = camDist < 5;
   depotGroup.visible = showDepots;
   allNWR.forEach(e => {
@@ -2250,6 +2254,7 @@ frameHooks.push(() => {
 window.SODOR_NWR = {FLEET, RUNS, DEPOTS, NWR_RUNNERS, STOCK_STD, byId};
 // The standard-gauge kit, depot builders and roster, shared with cfr.js.
 window.SODOR_STD = {bakeVC, faceMat, faceOn, letter, nameplate, lining, hazard, wheelS, rodsS, addWheels, finish, chimneyS, halfDrumX, gable, lamp, buffers,
-  findSite, siteKit, shedOver, building, heap, label, bakeSite, depotGroup, depotLabels, allNWR, taken, roadMat, frameOnLine, rosterGroup: group, rosterRow: row, STYLES, rrect};
+  findSite, siteKit, shedOver, building, heap, label, bakeSite, depotGroup, depotLabels, allNWR, taken, roadMat, frameOnLine, rosterGroup: group, rosterRow: row, STYLES, rrect,
+  portalCrane, latticeBox, lattice, NONRAIL};
 console.log(`NWR fleet: ${FLEET.length} engines, ${NWR_RUNNERS.length} running, built in ${Math.round(performance.now() - t0)} ms`);
 })();
