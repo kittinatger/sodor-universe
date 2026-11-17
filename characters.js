@@ -833,7 +833,9 @@ function makeRunner(o){
   R.aA = MARGIN + off[last] + lenN + gap + U;
   R.runRound = !o.noRunRound && R.aA < R.aB - 30 * METRE;     // railcars and trolleys just reverse
   if(!R.runRound){
-    R.aA = MARGIN + off[last] + lenN;
+    // the engine stays at one end: B normally, A for mountain engines pushing their coach uphill
+    if(o.side === 'A') R.aB = span - MARGIN - len0;
+    else R.aA = MARGIN + off[last] + lenN;
     if(R.aA > R.aB) R.aA = R.aB = (R.aA + R.aB) / 2;
   }
   R.stops = [];
@@ -848,7 +850,7 @@ function makeRunner(o){
   }
   R.a = R.aA + Math.random() * (R.aB - R.aA);
   R.dir = Math.random() < 0.5 ? 1 : -1;
-  R.side = R.runRound ? (R.dir > 0 ? 'B' : 'A') : 'B';
+  R.side = R.runRound ? (R.dir > 0 ? 'B' : 'A') : (o.side || 'B');
 
   // Unit (engine + tender) centres for a given anchor and side; the engine always faces B.
   R.unitX = (a, side) => {
@@ -1021,9 +1023,9 @@ ENGINES.forEach(E => {
   }));
 });
 
-// The other railways' engines built in the main script (Culdee, Rex) run on the same model.
-// The North Western Railway's fleet is in nwr.js.
-const NWR_RUNS = {Culdee: {passenger: true}, Rex: {passenger: true}};
+// Rex (Arlesdale Railway, built in the main script) runs on the same model.
+// The North Western Railway's fleet is in nwr.js, the Culdee Fell Railway's in cfr.js.
+const NWR_RUNS = {Rex: {passenger: true}};
 TRAINS.forEach(tr => {
   const run = NWR_RUNS[tr.name] || {};
   if(run.line && LINES[run.line]) tr.line = run.line;

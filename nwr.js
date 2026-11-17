@@ -192,10 +192,12 @@ function buffers(p, z, e, y = 1.06, wood = false){
 // ------------------------------------------------------------------ wheels and rods
 const wheelProtos = new Map();
 function wheelS(r, z, o = {}){
-  const key = [r, o.color, o.rim, o.spokes, o.tyre].join('|');
+  const hg = o.hg || HG;                                   // half gauge: 0.7175 standard, ~0.42 for the 800 mm rack line
+  const key = [r, o.color, o.rim, o.spokes, o.tyre, hg, o.pinion].join('|');
   let proto = wheelProtos.get(key);
   if(!proto){
     proto = new THREE.Group();
+    const HG = hg;
     // one surface class for the whole wheelset, so each bakes to a single mesh
     const C = mat(o.color === undefined ? BLACK : o.color, 0.55), T = mat(o.tyre || 0x45474a, 0.55), HUB = mat(0x6a6d70, 0.55), DK = mat(0x121212, 0.55);
     const spokes = o.spokes !== undefined ? o.spokes : (r >= 0.45 ? Math.max(10, Math.round(r * 9) * 2) : 0);
@@ -213,6 +215,12 @@ function wheelS(r, z, o = {}){
       cylX(proto, r * 0.18, r * 0.18, 0.08, HUB, x + s * 0.09, 0, 0, 12);
     }
     cylX(proto, 0.07, 0.07, 2 * HG, mat(IRON, 0.55), 0, 0, 0, 8);
+    if(o.pinion){                                          // rack pinions: two toothed wheels at the centre of the axle
+      for(const s of [-1, 1]){
+        cylX(proto, r * 0.8, r * 0.8, 0.06, mat(0x3a3c40, 0.55), s * 0.04, 0, 0, 20);
+        for(let k = 0; k < 10; k++){ const t = box(proto, 0.06, r * 1.74, 0.07, mat(0x5a5d62, 0.55), s * 0.04, 0, 0); t.rotation.x = k * Math.PI / 10 + (s > 0 ? Math.PI / 20 : 0); }
+      }
+    }
     bakeVC(proto, false);
     wheelProtos.set(key, proto);
   }
@@ -220,19 +228,20 @@ function wheelS(r, z, o = {}){
   return g;
 }
 function rodsS(root, axles, color){
-  const zs = axles.map(a => a.z), lo = Math.min(...zs), hi = Math.max(...zs), mid = (lo + hi) / 2, r = axles[0].r;
+  const zs = axles.map(a => a.z), lo = Math.min(...zs), hi = Math.max(...zs), mid = (lo + hi) / 2, r = axles[0].r, hg = axles[0].hg || HG;
   const m = mat(color === undefined ? 0x9fa2a6 : color, 0.3, 0.75), rods = [];
   for(const s of [-1, 1]){
-    const rod = box(root, 0.07, 0.14, hi - lo + 0.32, m, s * (HG + 0.17), r, mid);
+    const rod = box(root, 0.07, 0.14, hi - lo + 0.32, m, s * (hg + (axles[0].rodOut || 0.17)), r, mid);
     rods.push({mesh: rod, mid, r, rc: Math.min(0.3, r * 0.42), phase: s > 0 ? Math.PI / 2 : 0});
   }
   return rods;
 }
 function addWheels(root, list, o = {}){
   return list.map(a => {
-    const g = wheelS(a.r, a.z, {color: a.c ? o.color : (o.small === undefined ? o.color : o.small), rim: o.rim, spokes: a.spokes !== undefined ? a.spokes : o.spokes, tyre: o.tyre});
+    const g = wheelS(a.r, a.z, {color: a.c ? o.color : (o.small === undefined ? o.color : o.small), rim: o.rim, spokes: a.spokes !== undefined ? a.spokes : o.spokes, tyre: o.tyre,
+      hg: o.hg, pinion: a.pinion});
     root.add(g);
-    return {z: a.z, r: a.r, coupled: !!a.c, g};
+    return {z: a.z, r: a.r, coupled: !!a.c, g, hg: o.hg, rodOut: o.rodOut};
   });
 }
 function finish(root, body, axles, rodColor, extra = {}){
@@ -1844,7 +1853,7 @@ function siteKit(site){
   };
   // straight standard-gauge road between local (a0,b0) and (a1,b1), in metres
   kit.road = (a0, b0, a1, b1, kind = 'standard') => {
-    const half = (kind === 'standard' ? 1.8 : 1.15), x0 = sx * b0, x1 = sx * b1, len = Math.hypot(a1 - a0, x1 - x0);
+    const half = BED_M[kind] / 2, x0 = sx * b0, x1 = sx * b1, len = Math.hypot(a1 - a0, x1 - x0);
     const g = new THREE.PlaneGeometry(2 * half, len); g.rotateX(-Math.PI / 2);
     const uv = g.attributes.uv; for(let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * len / (kind === 'standard' ? 0.75 : 0.9));
     const m = new THREE.Mesh(g, roadMat(kind)); m.position.set((x0 + x1) / 2, 0.05, (a0 + a1) / 2); m.rotation.y = Math.atan2(x1 - x0, a1 - a0);
@@ -2158,12 +2167,12 @@ pickHandler = (x) => {
 // Roster: the NWR list with search, beside the Skarloey list.
 const nwrList = document.getElementById('nwrList'), search = document.getElementById('rosterSearch');
 const rosterRows = [];
-function group(title){ const h = document.createElement('div'); h.className = 'leg-group'; h.textContent = title; nwrList.appendChild(h); rosterRows.push({head: h}); return h; }
-function row(name, sub, color, onClick){
+function group(title, list = nwrList){ const h = document.createElement('div'); h.className = 'leg-group'; h.textContent = title; list.appendChild(h); rosterRows.push({head: h}); return h; }
+function row(name, sub, color, onClick, list = nwrList){
   const d = document.createElement('div'); d.className = 'ros-item';
   d.innerHTML = `<span class="ros-dot" style="background:${hex(color)}"></span><span class="ros-name"></span><span class="ros-sub"></span>`;
   d.querySelector('.ros-name').textContent = name; d.querySelector('.ros-sub').textContent = sub;
-  d.onclick = onClick; nwrList.appendChild(d); rosterRows.push({row: d, text: (name + ' ' + sub).toLowerCase()});
+  d.onclick = onClick; list.appendChild(d); rosterRows.push({row: d, text: (name + ' ' + sub).toLowerCase()});
 }
 const shown = rec => rec.veh && (rec.runner || rec.home);
 [['Steam', 'Steam engines'], ['Diesel', 'Diesel engines'], ['Other', 'Other engines'], ['Former', 'Former engines']].forEach(([cat, title]) => {
@@ -2195,9 +2204,11 @@ search.addEventListener('input', () => {
   flush();
 });
 document.querySelectorAll('#rosterTabs button').forEach(b => b.onclick = () => {
-  document.querySelectorAll('#rosterTabs button').forEach(x => x.classList.toggle('on', x === b));
-  ['nwrList', 'rosterList'].forEach(id => document.getElementById(id).style.display = id === b.dataset.tab ? '' : 'none');
-  search.style.display = b.dataset.tab === 'nwrList' ? '' : 'none';
+  document.querySelectorAll('#rosterTabs button').forEach(x => {
+    x.classList.toggle('on', x === b);
+    document.getElementById(x.dataset.tab).style.display = x === b ? '' : 'none';
+  });
+  search.style.display = b.dataset.tab === 'rosterList' ? 'none' : '';      // the Skarloey list is short; the others search
 });
 const stat = document.getElementById('statTrains');
 stat.textContent = (parseInt(stat.textContent, 10) || 0) + NWR_RUNNERS.length;
@@ -2206,11 +2217,15 @@ stat.textContent = (parseInt(stat.textContent, 10) || 0) + NWR_RUNNERS.length;
 // Vehicles further than ~700 m away are smaller than a pixel: hide them; hide wheels and rods
 // beyond ~240 m. Depot buildings only show when zoomed in.
 const FAR = 1.35, WHEELS = 0.45;
-const allRunVeh = [];
-K.RUNNERS.forEach(R => { R.unit.forEach(m => allRunVeh.push(m.v)); R.cars.forEach(c => allRunVeh.push(c.v)); });
 // the Skarloey Railway's stock parked in its yards gets the same treatment
-const runGroups = new Set(allRunVeh.map(v => v.group));
+const runGroups = new Set();
+K.RUNNERS.forEach(R => { R.unit.forEach(m => runGroups.add(m.v.group)); R.cars.forEach(c => runGroups.add(c.v.group)); });
 const srParked = scene.children.filter(c => c.userData.stockKey && !runGroups.has(c));
+function cullRunning(v, cp){
+  const g = v.group; if(!g.visible) return;
+  const d = cp.distanceTo(g.position);
+  if(d > FAR) g.visible = false; else lod(v, d < WHEELS);
+}
 function lod(v, near){
   if(v._lod === near) return;
   v._lod = near;
@@ -2219,11 +2234,7 @@ function lod(v, near){
 }
 frameHooks.push(() => {
   const cp = camera.position;
-  allRunVeh.forEach(v => {
-    const g = v.group; if(!g.visible) return;
-    const d = cp.distanceTo(g.position);
-    if(d > FAR) g.visible = false; else lod(v, d < WHEELS);
-  });
+  K.RUNNERS.forEach(R => { R.unit.forEach(m => cullRunning(m.v, cp)); R.cars.forEach(c => cullRunning(c.v, cp)); });   // every railway's trains
   const showDepots = camDist < 5;
   depotGroup.visible = showDepots;
   allNWR.forEach(e => {
@@ -2237,5 +2248,8 @@ frameHooks.push(() => {
 });
 
 window.SODOR_NWR = {FLEET, RUNS, DEPOTS, NWR_RUNNERS, STOCK_STD, byId};
+// The standard-gauge kit, depot builders and roster, shared with cfr.js.
+window.SODOR_STD = {bakeVC, faceMat, faceOn, letter, nameplate, lining, hazard, wheelS, rodsS, addWheels, finish, chimneyS, halfDrumX, gable, lamp, buffers,
+  findSite, siteKit, shedOver, building, heap, label, bakeSite, depotGroup, depotLabels, allNWR, taken, roadMat, frameOnLine, rosterGroup: group, rosterRow: row, STYLES, rrect};
 console.log(`NWR fleet: ${FLEET.length} engines, ${NWR_RUNNERS.length} running, built in ${Math.round(performance.now() - t0)} ms`);
 })();
