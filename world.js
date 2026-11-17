@@ -820,14 +820,45 @@ const stationGroup = new THREE.Group(); scene.add(stationGroup);
     }
     if(CITY.has(st.name) && main){
       // an arched train shed over the station: iron ribs and a glazed roof
-      const span = 2 * lx + 6, rib = mat(0x3a4a52, 0.5, 0.4), glass = new THREE.MeshStandardMaterial({color: 0x9fb8c4, roughness: 0.2, metalness: 0.2, transparent: true, opacity: 0.45, side: THREE.DoubleSide});
+      const span = 2 * lx + 6, shedLen = len + 30, rib = mat(0x3a4a52, 0.5, 0.4), IRON = mat(0x2f3a40, 0.45, 0.35);
+      const glass = new THREE.MeshStandardMaterial({color: 0x9fb8c4, roughness: 0.2, metalness: 0.2, transparent: true, opacity: 0.45, side: THREE.DoubleSide});
       for(let k = 0; k <= 10; k++){
-        const z = -len / 2 - 15 + k * (len + 30) / 10, ring = new THREE.Mesh(new THREE.TorusGeometry(span / 2, 0.25, 6, 24, Math.PI), rib);
+        const z = -len / 2 - 15 + k * shedLen / 10, ring = new THREE.Mesh(new THREE.TorusGeometry(span / 2, 0.25, 6, 24, Math.PI), rib);
         ring.position.set(0, 4, z); g.add(ring);
       }
-      const shell = new THREE.Mesh(new THREE.CylinderGeometry(span / 2, span / 2, len + 30, 24, 1, true, -Math.PI / 2, Math.PI), glass);
+      const shell = new THREE.Mesh(new THREE.CylinderGeometry(span / 2, span / 2, shedLen, 24, 1, true, -Math.PI / 2, Math.PI), glass);
       shell.rotation.x = -Math.PI / 2; shell.position.y = 4; g.add(shell);
-      for(const s of [-1, 1]) box(g, 1.2, 4, len + 30, mat(0x8e4532, 0.85), s * (span / 2 + 0.6), 2, 0);
+      for(const s of [-1, 1]) box(g, 1.2, 4, shedLen, mat(0x8e4532, 0.85), s * (span / 2 + 0.6), 2, 0);
+      // a row of slender iron columns down each platform, carrying the roof ribs
+      const colX = [-lx, lx];
+      for(let k = 1; k < 10; k++){ const z = -len / 2 - 15 + k * shedLen / 10; colX.forEach(cx => {
+        cylY(g, 0.14, 0.17, 4, IRON, cx, 2, z, 10);
+        box(g, 0.5, 0.12, 0.5, IRON, cx, 4.02, z);                     // a small capital where it meets the rib
+      }); }
+      // numbered platform signs (green-and-cream enamel discs) hung between the columns, platforms
+      // numbered in order across the station from the down side to the up
+      const plats = [{x: -lx, face: 1, no: 1}, {x: -lx, face: -1, no: 2}, {x: lx, face: 1, no: 3}, {x: lx, face: -1, no: 4}];
+      plats.forEach(pl => {
+        const tex = canvasTex(96, 96, (ctx, w, h) => {
+          ctx.fillStyle = '#eee9d8'; ctx.beginPath(); ctx.arc(w / 2, h / 2, w / 2 - 3, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#1f5c34'; ctx.lineWidth = 6; ctx.stroke();
+          ctx.fillStyle = '#1f5c34'; ctx.font = 'bold 52px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(pl.no), w / 2, h / 2 + 2);
+        });
+        const sign = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20), new THREE.MeshStandardMaterial({map: tex, roughness: 0.6}));
+        sign.position.set(pl.x, 3.35, 2); sign.rotation.y = pl.face > 0 ? Math.PI / 2 : -Math.PI / 2; g.add(sign);
+        const back = sign.clone(); back.rotation.y += Math.PI; g.add(back);
+        box(g, 0.08, 1.1, 0.08, IRON, pl.x, 2.8, 2);                   // the little bracket it hangs from
+      });
+      // a brick station clock tower rising beside the forecourt, in the style of the market towns
+      const twX = -(span / 2 + 7), th = 15, tw = 4.2;
+      box(g, tw, th, tw, mat(0x9a4a32, 0.85), twX, th / 2, -len / 2 - 5);
+      box(g, tw + 0.6, 0.6, tw + 0.6, mat(0x7a7a74, 0.7), twX, th + 0.3, -len / 2 - 5);
+      add(g, new THREE.ConeGeometry(tw * 0.78, 5, 4).rotateY(Math.PI / 4), mat(0x3a3f46, 0.7), twX, th + 3, -len / 2 - 5);
+      for(const s of [0, 1, 2, 3]){
+        const ang = s * Math.PI / 2, cx = twX + Math.sin(ang) * (tw / 2 + 0.05), cz = -len / 2 - 5 + Math.cos(ang) * (tw / 2 + 0.05);
+        const face = new THREE.Mesh(new THREE.CircleGeometry(1.1, 24), mat(0xf2f0e6, 0.5)); face.position.set(cx, th - 3.2, cz); face.rotation.y = ang; g.add(face);
+      }
+      for(let row = 0; row < 2; row++) box(g, tw * 0.9, 1.8, 0.1, glassMat(), twX, 4 + row * 4, -len / 2 - 5 + tw / 2 + 0.06);
     }
     S.bakeVC(g);
   });
