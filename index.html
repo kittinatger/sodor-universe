@@ -23,6 +23,15 @@
   .leg-item:hover{color:var(--gold);}
   .leg-swatch{width:14px;height:4px;border-radius:2px;flex-shrink:0;}
   .leg-item.dim{opacity:.35;}
+  #roster{top:250px;left:12px;padding:10px 12px;width:250px;max-height:calc(100vh - 330px);overflow:auto;font-size:12px;}
+  #roster h2{font-size:12px;margin:0 0 6px;color:var(--accent);cursor:pointer;user-select:none;display:flex;justify-content:space-between;}
+  #roster.collapsed h2{margin:0;}
+  #roster.collapsed #rosterList{display:none;}
+  .ros-item{display:flex;align-items:center;gap:8px;padding:5px 4px;border-radius:6px;cursor:pointer;}
+  .ros-item:hover{background:rgba(255,255,255,.06);}
+  .ros-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0;border:1px solid rgba(255,255,255,.35);}
+  .ros-name{color:var(--ink);}
+  .ros-sub{color:var(--muted);font-size:10px;margin-left:auto;text-align:right;}
   .leg-group{font-size:10px;color:var(--muted);margin:9px 0 3px;text-transform:uppercase;letter-spacing:.8px;}
   .leg-group:first-child{margin-top:0;}
   .leg-swatch.dashed{background-image:repeating-linear-gradient(90deg,transparent 0 3px,rgba(10,20,28,.9) 3px 5px);}
@@ -58,6 +67,8 @@
     #camctl{top:auto;bottom:12px;right:auto;left:12px;width:140px;padding:8px 10px;}
     #speedctl{width:130px;padding:8px 10px;}
     #legend{width:140px;padding:8px 10px;max-height:45vh;}
+    #roster{top:196px;width:150px;padding:8px 10px;max-height:40vh;}
+    .ros-sub{display:none;}
     #credit{display:none;}
     #hint{bottom:auto;top:12px;left:auto;right:auto;transform:none;display:none;}
   }
@@ -89,6 +100,11 @@
 <div id="legend" class="box">
   <h2 id="legendHead"><span>RAILWAY LINES</span><span id="legendArrow">▾</span></h2>
   <div id="legendList"></div>
+</div>
+
+<div id="roster" class="box">
+  <h2 id="rosterHead"><span>SKARLOEY RAILWAY</span><span id="rosterArrow">▾</span></h2>
+  <div id="rosterList"></div>
 </div>
 
 <div id="speedctl" class="box">
@@ -168,8 +184,6 @@ const TRAINS = [
   {name:"James",    line:"main",      color:0xb01818, speed:0.030, t:0.00, coaches:3, coach:0x8a3a2a, desc:"No.5 — a red mixed-traffic engine who loves his splendid paintwork."},
   {name:"Duck",     line:"littlewest",color:0x1f6a2a, speed:0.040, t:0.20, coaches:2, coach:0x8a4a2a, desc:"No.8 — the Great Western pannier tank who runs his own branch line to Arlesburgh."},
   {name:"Oliver",   line:"littlewest",color:0x2f7a3a, speed:0.032, t:1.30, coaches:1, coach:0x8a4a2a, desc:"No.11 — another Great Western engine, who works Duck's branch line with him."},
-  {name:"Skarloey", line:"skarloey",  color:0xb52a1a, speed:0.030, t:0.15, coaches:2, coach:0xa0522d, desc:"No.1 of the Skarloey Railway — one of the oldest narrow-gauge engines on the island."},
-  {name:"Rheneas",  line:"skarloey",  color:0xa8321f, speed:0.028, t:1.20, coaches:2, coach:0xa0522d, desc:"No.2 of the Skarloey Railway, famous for keeping the line open by refusing to stop."},
   {name:"Culdee",   line:"culdeefell",color:0x5a2a7a, speed:0.040, t:0.40, coaches:1, coach:0x6a3a8a, desc:"No.4 of the Culdee Fell Railway, a rack engine who climbs to the summit."},
   {name:"Rex",      line:"arlesdale", color:0x2f7a3a, speed:0.045, t:0.50, coaches:2, coach:0x8a7a5a, desc:"One of the small engines of the Arlesdale Railway."},
   {name:"Bill",     line:"chinaclay", color:0xd9b600, speed:0.040, t:0.20, coaches:2, coach:0xd8d0c0, desc:"One of the twin tank engines who work the china clay trains near Brendam."},
@@ -403,7 +417,7 @@ function buildTrack(line){
     const before = stopIdx.filter(s=>s.i<=i0).pop(), after = stopIdx.find(s=>s.i>=i1);
     const info = {type:'tunnel', name:t.name, line:line.id,
       between:[before&&STATIONS[before.k].name, after&&STATIONS[after.k].name], pos:p3[Math.round((i0+i1)/2)]};
-    const scale = line.kind==='standard' ? 1 : 0.75;
+    const scale = line.kind==='standard' ? 0.75 : 0.5;
     makePortal(p3[i0], new THREE.Vector3().subVectors(p3[Math.min(i0+1,p3.length-1)], p3[i0]), scale, info);
     makePortal(p3[i1], new THREE.Vector3().subVectors(p3[Math.max(i1-1,0)], p3[i1]), scale, info);
     return [cum[i0]/total, cum[i1]/total];
@@ -523,7 +537,7 @@ function scaleLabels(){
   for(const l of labels){
     const d = camera.position.distanceTo(l.position);
     l.visible = l.userData.major || d < 95;
-    const h = Math.min(4.2, Math.max(0.5, d*0.021));
+    const h = Math.min(4.2, Math.max(0.08, d*0.021));
     l.scale.set(h*l.userData.aspect, h, 1);
   }
 }
@@ -594,6 +608,7 @@ function pick(clientX, clientY){
   const hit = raycaster.intersectObjects(clickable, false).find(h=>shown(h.object));
   if(!hit) return;
   const o = hit.object;
+  if(o.userData.onPick){ o.userData.onPick(); return; }
   if(o.userData.type==='station'){
     const st = STATIONS[o.userData.id];
     const served = [...new Set(st.lines.map(id=>LINES[id].name))].join(' · ');
@@ -626,7 +641,7 @@ const camCenter = new THREE.Vector3(0,0,8);
 let flight = null, followTrain = null, lastInteraction = 0, autoOrbit = true;
 function clampCam(){
   camPhi = Math.max(0.05, Math.min(1.42, camPhi));
-  camDist = Math.max(8, Math.min(640, camDist));
+  camDist = Math.max(3.5, Math.min(640, camDist));
   camCenter.x = Math.max(-MAP_W/2, Math.min(MAP_W/2, camCenter.x));
   camCenter.z = Math.max(-MAP_D/2, Math.min(MAP_D/2, camCenter.z));
 }
@@ -722,6 +737,7 @@ const fmtTime = m=>{ m=((m%1440)+1440)%1440; return String(Math.floor(m/60)).pad
 setTimeout(()=>{ document.getElementById('hint').style.opacity = 0; }, 7000);
 
 // ===================== LOOP =====================
+const frameHooks = [];                 // per-frame updates registered by characters.js
 const clock = new THREE.Clock();
 function animate(){
   requestAnimationFrame(animate);
@@ -743,6 +759,7 @@ function animate(){
       placeOnCurve(car, line.curve, cu, back);
     });
   });
+  frameHooks.forEach(f=>f(dt));
 
   if(flight){
     const k = Math.min(1, (performance.now()-flight.start)/flight.dur);
@@ -754,7 +771,7 @@ function animate(){
     if(k>=1) flight = null;
   } else if(followTrain){
     camCenter.lerp(followTrain.mesh.position, Math.min(1, dt*2.5));
-    camDist += (22-camDist)*Math.min(1, dt*1.2);
+    camDist += ((followTrain.dist||22)-camDist)*Math.min(1, dt*1.2);
   } else if(autoOrbit && performance.now()-lastInteraction > 5000){
     camTheta += dt*0.035;
   }
@@ -773,5 +790,6 @@ updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
+<script src="characters.js?v=2"></script>
 </body>
 </html>
