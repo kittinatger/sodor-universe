@@ -3,7 +3,8 @@
 (function(){
 'use strict';
 
-const NG = 2.6 * METRE;     // narrow-gauge models: 1 model unit = 2.6 m, so Skarloey is ~5.6 m long
+const NG = 2.6 * METRE;
+const MINI = NG * 0.6;   // the 15-inch gauge Arlesdale engines, about 0.6 the size of the 2 ft 3 in ones     // narrow-gauge models: 1 model unit = 2.6 m, so Skarloey is ~5.6 m long
 const STD = 4.8 * METRE;    // the NWR's standard-gauge models: ~12 m engines and coaches
 const GAUGE = 0.56;         // model units between the wheel planes
 const BRASS = 0xc9a23a, BRONZE = 0xa8703c, BLACK = 0x18191b, IRON = 0x2b2c2e, BEAM_RED = 0xb3201c;
@@ -443,6 +444,11 @@ const STOCK = {
   tr4w:       {kind: 'coach', color: 0x7b2c22, upper: 0xead9b8, len: 1.45, n: 3, label: 'Talyllyn four-wheeled coach'},
   trSemiOpen: {kind: 'semiopen', color: 0x7b2c22, len: 1.5, label: 'Talyllyn semi-open coach'},
   gvtCoach:   {kind: 'coach', color: 0x3f5a2c, upper: 0xd9cfa5, len: 1.7, n: 4, label: 'Glyn Valley Tramway coach', clerestory: true},
+  adOpen:     {kind: 'semiopen', color: 0x8a6a3a, len: 1.9, label: 'Arlesdale open-topped coach', open: true},
+  adSemi:     {kind: 'semiopen', color: 0x7a2a22, len: 1.9, label: 'Arlesdale semi-open coach'},
+  adSaloon:   {kind: 'coach', color: 0x7a2a22, upper: 0xe6d8b8, len: 2.0, n: 4, label: 'Arlesdale saloon coach'},
+  adHopper:   {kind: 'steel', color: 0x4a4d52, len: 1.1, label: 'Arlesdale hopper', text: 'A.R.'},
+  adFlat:     {kind: 'bogieflat', color: 0x5d4a3a, len: 2.2, label: 'Arlesdale bogie flatbed'},
   skBrake:    {kind: 'brake', color: 0x8a2a1d, len: 1.4, label: 'Skarloey brake van'},
   trBrake:    {kind: 'brake', color: 0x5b2a20, len: 1.3, label: 'Talyllyn brake van'},
   padBrake:   {kind: 'brake', color: 0x8d8d82, len: 1.3, label: 'Padarn brake van'},
@@ -517,10 +523,12 @@ function buildStock(key){
       box(body, 0.84, 0.36, L - 0.08, C, 0, y0 + 0.18, 0);
       for(const s of [-1, 1]) box(body, 0.846, 0.02, L - 0.14, GOLD, 0, y0 + 0.33, 0);
       const posts = Math.round(L / 0.36);
-      for(let i = 0; i <= posts; i++) for(const s of [-1, 1]) box(body, 0.04, 0.42, 0.04, C, s * 0.4, y0 + 0.57, -L / 2 + 0.06 + i * (L - 0.12) / posts);
+      if(!D.open) for(let i = 0; i <= posts; i++) for(const s of [-1, 1]) box(body, 0.04, 0.42, 0.04, C, s * 0.4, y0 + 0.57, -L / 2 + 0.06 + i * (L - 0.12) / posts);
       for(let i = 0; i < posts; i++) box(body, 0.7, 0.06, 0.1, mat(0x6b4a2e, 0.7), 0, y0 + 0.4, -L / 2 + 0.06 + (i + 0.5) * (L - 0.12) / posts);
-      for(const e of [1, -1]) box(body, 0.84, 0.42, 0.04, C, 0, y0 + 0.57, e * (L / 2 - 0.06));
-      roof(body, 0.92, L, y0 + 0.86, ROOF, 0);
+      if(!D.open){
+        for(const e of [1, -1]) box(body, 0.84, 0.42, 0.04, C, 0, y0 + 0.57, e * (L / 2 - 0.06));
+        roof(body, 0.92, L, y0 + 0.86, ROOF, 0);
+      }
       break;
     }
     case 'refresh': {
@@ -773,7 +781,49 @@ const ENGINES = [
      plates: Object.assign(plate('Luke', 22, '#6aa84f', '#ffffff', '#6aa84f'), {numberOnCab: true, numBg: '#111111', nameW: 0.36}),
      axles: [{z: 0.38, r: 0.22, coupled: true}, {z: -0.26, r: 0.22, coupled: true}]}),
    line: 'skarloey', from: 'Blue Mountain Quarry', to: 'Cronk Abbey', consist: ['bmqTruck', 'bmqTruck', 'bmqTruck', 'bmqPowder'], speed: 0.6},
+  // ---- the Arlesdale Railway: 15-inch gauge, Arlesburgh West to Arlesdale (built smaller, see MINI)
+  ...arlesdale(),
 ];
+// Rex, Bert and Mike are tender engines after the Ravenglass and Eskdale's River Irt, River Esk and
+// River Mite; Jock is the new engine; the diesels take turns on the trains and the ballast workings.
+function arlesdale(){
+  const big = (o) => () => buildSteam(Object.assign({len: 2.5, tank: 'well', cab: 'closed', chimneyH: 0.42, capColor: null, dome: true, domeAt: 0.45,
+    bunkerLen: 0, cabLen: 0.55}, o));
+  const ax8 = [{z: 0.95, r: 0.15}, {z: 0.5, r: 0.21, coupled: true}, {z: 0.08, r: 0.21, coupled: true}, {z: -0.34, r: 0.21, coupled: true}, {z: -0.76, r: 0.21, coupled: true}, {z: -1.08, r: 0.15}];
+  const ax6 = [{z: 0.95, r: 0.15}, {z: 0.45, r: 0.23, coupled: true}, {z: -0.03, r: 0.23, coupled: true}, {z: -0.51, r: 0.23, coupled: true}, {z: -1.0, r: 0.15}];
+  const A = {rail: 'ar', line: 'arlesdale'};
+  return [
+    {...A, id: 'rex', name: 'Rex', no: '', wheels: '0-8-2+T', basis: 'Ravenglass and Eskdale Railway River Irt', livery: 'Green with yellow lining and red bufferbeams',
+     job: 'Passenger trains from Arlesburgh West with the open-topped coaches',
+     build: big({color: 0x2f7a3a, lining: 0xf2c419, face: {smile: 0.7, brow: -0.2}, plates: Object.assign(plate('Rex', '', '#2f7a3a', '#f2c419'), {number: null, nameW: 0.34}), axles: ax8.slice(1)}),
+     tender: {color: 0x2f7a3a, lining: 0xf2c419},
+     from: 'Arlesburgh West', to: 'Ffarquhar Road', consist: ['adOpen', 'adOpen', 'adSemi', 'adOpen'], speed: 0.85, passenger: true},
+    {...A, id: 'bert', name: 'Bert', no: '', wheels: '2-8-2+T', basis: 'Ravenglass and Eskdale Railway River Esk', livery: 'Blue with red lining',
+     job: 'Passenger trains up the valley to Arlesdale with the saloons',
+     build: big({color: 0x2a5fb0, lining: 0xc8262b, face: {smile: 0.9, brow: 0.1}, plates: Object.assign(plate('Bert', '', '#2a5fb0', '#f2f2f2'), {number: null, nameW: 0.34}), axles: ax8}),
+     tender: {color: 0x2a5fb0, lining: 0xc8262b},
+     from: 'Marthwaite', to: 'Arlesdale', consist: ['adSaloon', 'adSemi', 'adSaloon'], speed: 0.85, passenger: true},
+    {...A, id: 'mike', name: 'Mike', no: '', wheels: '2-8-2+T', basis: 'Ravenglass and Eskdale Railway River Mite', livery: 'Red with yellow lining',
+     job: 'Takes turns with Bert on the valley trains', relief: 'bert',
+     build: big({color: 0xb3262a, lining: 0xf2c419, face: {smile: 0.2, brow: 0.6}, plates: Object.assign(plate('Mike', '', '#b3262a', '#f2c419'), {number: null, nameW: 0.34}), axles: ax8}),
+     tender: {color: 0xb3262a, lining: 0xf2c419}},
+    {...A, id: 'jock', name: 'Jock', no: '', wheels: '2-6-2+T', basis: 'Ravenglass and Eskdale Railway Northern Rock', livery: 'Dark green with red and white lining',
+     job: 'Takes turns with Rex on the trains from Arlesburgh West', relief: 'rex',
+     build: big({color: 0x1f4a32, lining: 0xc8262b, chimneyH: 0.46, face: {smile: 1.0, brow: -0.3}, plates: Object.assign(plate('Jock', '', '#1f4a32', '#f2f2f2'), {number: null, nameW: 0.34}), axles: ax6}),
+     tender: {color: 0x1f4a32, lining: 0xc8262b}},
+    {...A, id: 'frank', name: 'Frank', no: '', wheels: '4wDM', basis: 'Ravenglass and Eskdale Railway works diesel', livery: 'Maroon with yellow warning panels',
+     job: 'Ballast trains of hoppers and bogie flatbeds between Ffarquhar Road and Marthwaite',
+     build: () => buildRusty({color: 0x7a2a22, face: {smile: 0.6, brow: 0.2}}),
+     from: 'Ffarquhar Road', to: 'Marthwaite', consist: ['adHopper', 'adHopper', 'adHopper', 'adFlat'], speed: 0.6, diesel: true, inset: 45},
+    {...A, id: 'sigrid', name: 'Sigrid of Arlesdale', no: '', wheels: '4wDH', basis: 'Ravenglass and Eskdale Railway Lady Wakefield', livery: 'Blue with yellow ends',
+     job: 'Takes turns with Frank and on quiet days covers for the steam engines', relief: 'frank', diesel: true,
+     build: () => buildRusty({color: 0x2a6ab0, face: {smile: 0.8, brow: -0.4, lashes: true}})},
+    {...A, id: 'blister1', name: 'Blister I', no: '', wheels: '4wDH', basis: 'Ravenglass and Eskdale Railway diesel-hydraulic', livery: 'Mustard yellow',
+     job: 'Covers for Rex and Jock', relief: 'rex', diesel: true, build: () => buildRusty({color: 0xc9a227, face: {smile: 0.4, brow: 0.2}})},
+    {...A, id: 'blister2', name: 'Blister II', no: '', wheels: '4wDH', basis: 'Ravenglass and Eskdale Railway diesel-hydraulic', livery: 'Mustard yellow',
+     job: 'Covers for Bert and Mike', relief: 'bert', diesel: true, build: () => buildRusty({color: 0xc9a227, face: {smile: 0.2, brow: 0.5}})},
+  ];
+}
 
 // ------------------------------------------------------------------ trains on the line
 const smokeTex = canvasTex(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 2, 32, 32, 30); r.addColorStop(0, 'rgba(240,240,240,0.9)'); r.addColorStop(1, 'rgba(240,240,240,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
@@ -802,10 +852,10 @@ function engineDesc(E){
   return `${E.name}${E.no ? ' (No. ' + E.no + ')' : ''} is a ${E.wheels} engine based on ${E.basis}. Livery: ${E.livery}. Job here: ${E.job}. Train: ${train}.${now ? ' ' + now : ''}`;
 }
 function showEngine(E){
-  openPanel('Skarloey Railway engine', E.name, engineDesc(E), `${E.wheels}${E.no ? ' · No. ' + E.no : ''} · ${LINES[E.line].name}`);
-  const pos = E.train.engine.group.position;
+  openPanel(E.rail === 'ar' ? 'Arlesdale Railway engine' : 'Skarloey Railway engine', E.name, engineDesc(E), `${E.wheels}${E.no ? ' · No. ' + E.no : ''} · ${LINES[E.line].name}`);
+  const g = E.train ? E.train.engine.group : E.engine.group, pos = g.position;
   flyTo(pos.x, pos.y, pos.z, 0.05, undefined, 1.12);
-  const b = addPanelButton('Follow engine', () => { followTrain = {mesh: E.train.engine.group, dist: 0.05}; b.classList.add('active'); });
+  const b = addPanelButton('Follow engine', () => { followTrain = {mesh: g, dist: 0.05}; b.classList.add('active'); });
 }
 
 // ------------------------------------------------------------------ train runner
@@ -1018,7 +1068,8 @@ function addMarker(R, color, onPick, trainRef){
 }
 
 const ENGINE_COLORS = {skarloey: 0x9b1730, rheneas: 0xd23a26, sirhandel: 0x1f4fbf, petersam: 0x2e8b6e, rusty: 0xff6a13, duncan: 0xe2a91f,
-  freddie: 0xc4c8cc, duke: 0x9a5426, bertram: 0x4f2f1c, mightymac: 0x2b2f86, luke: 0x6aa84f};
+  freddie: 0xc4c8cc, duke: 0x9a5426, bertram: 0x4f2f1c, mightymac: 0x2b2f86, luke: 0x6aa84f,
+  rex: 0x2f7a3a, bert: 0x2a5fb0, mike: 0xb3262a, jock: 0x1f4a32, frank: 0x7a2a22, sigrid: 0x2a6ab0, blister1: 0xc9a227, blister2: 0xb08a1a};
 const RUNNERS = [], SR_TRAINS = [];
 ENGINES.forEach(E => {
   const line = LINES[E.line];
@@ -1026,11 +1077,18 @@ ENGINES.forEach(E => {
   const eng = E.build();
   const unit = [eng];
   if(E.tender) unit.push(buildTender(E.tender));
+  const mini = line.kind === 'miniature', SC = mini ? MINI : NG;
+  if(E.relief){                       // takes turns on another engine's train (ops.js swaps it in)
+    unit.forEach(v => { v.group.scale.setScalar(SC); scene.add(v.group); allVehicles.push(v); });
+    E.unit = unit; E.engine = eng; tagPick(eng.group, () => showEngine(E));
+    return;
+  }
   const cars = E.consist.map(k => buildStock(k));
-  [...unit, ...cars].forEach(v => { v.group.scale.setScalar(NG); scene.add(v.group); allVehicles.push(v); });
-  const uA = E.from ? lineU(line, E.from) : (E.fromU || 0), uB = E.to ? lineU(line, E.to) : (E.toU === undefined ? 1 : E.toU);
-  const R = makeRunner({line, uA, uB, unit, cars, scale: NG, gap: 0.5 * METRE, vmax: 6.5 * METRE * E.speed,
-    passenger: !!E.passenger, loopW: 3.4 * METRE, bedM: 2.3, diesel: !!E.diesel});
+  [...unit, ...cars].forEach(v => { v.group.scale.setScalar(SC); scene.add(v.group); allVehicles.push(v); });
+  let uA = E.from ? lineU(line, E.from) : (E.fromU || 0), uB = E.to ? lineU(line, E.to) : (E.toU === undefined ? 1 : E.toU);
+  if(E.inset){ const d = E.inset * METRE / line.real.len * Math.sign(uB - uA); uA += d; uB -= d; }   // keep clear of a neighbour's terminus
+  const R = makeRunner({line, uA, uB, unit, cars, scale: SC, gap: (mini ? 0.3 : 0.5) * METRE, vmax: 6.5 * METRE * E.speed,
+    passenger: !!E.passenger, loopW: (mini ? 2.4 : 3.4) * METRE, bedM: mini ? 1.3 : 2.3, diesel: !!E.diesel});
   R.E = E; R.engine = eng;
   E.train = R;
   drawLoops(R);
@@ -1446,7 +1504,9 @@ function rosterRow(name, sub, color, onClick){
 }
 const grp = t => { const h = document.createElement('div'); h.className = 'leg-group'; h.textContent = t; rosterList.appendChild(h); };
 grp('Engines');
-ENGINES.filter(E => E.train).forEach(E => rosterRow(E.name, E.no ? 'No. ' + E.no : E.wheels, hex(ENGINE_COLORS[E.id]), () => showEngine(E)));
+ENGINES.filter(E => E.train && E.rail !== 'ar').forEach(E => rosterRow(E.name, E.no ? 'No. ' + E.no : E.wheels, hex(ENGINE_COLORS[E.id]), () => showEngine(E)));
+grp('Arlesdale Railway');
+ENGINES.filter(E => E.rail === 'ar' && (E.train || E.unit)).forEach(E => rosterRow(E.name, E.wheels, hex(ENGINE_COLORS[E.id]), () => showEngine(E)));
 grp('Cranes, incline and lorry');
 const STATIC_COLORS = {Owen: 0xe8731e, Merrick: 0xa0142c, Colin: 0x2f7a3a, Madge: 0x2f6b3a};
 statics.forEach(c => rosterRow(c.name, c.kind, hex(STATIC_COLORS[c.name]), () => showStatic(c)));

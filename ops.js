@@ -98,7 +98,11 @@ NWR.NWR_RUNNERS.forEach(R => {
 SR.ENGINES.forEach(E => {
   if(!E.train) return;
   const R = E.train;
-  addDuty({id: E.id, rail: 'sr', R, rota: [member(E.name, R.unit.map(m => m.v), SR.COLORS[E.id], () => SR.show(E), E, !!E.diesel)], dd: DUT.sr[E.id] || {}, job: lc(E.job), railName: 'Skarloey Railway'});
+  const ar = E.rail === 'ar', dd = (ar ? DUT.ar : DUT.sr)[E.id] || {};
+  // relief engines on the Arlesdale Railway (characters.js) join the rota of the train they cover
+  const rota = [member(E.name, R.unit.map(m => m.v), SR.COLORS[E.id], () => SR.show(E), E, !!E.diesel)]
+    .concat(SR.ENGINES.filter(o => o.relief === E.id && o.unit).map(o => member(o.name, o.unit, SR.COLORS[o.id], () => SR.show(o), o, !!o.diesel)));
+  addDuty({id: E.id, rail: ar ? 'ar' : 'sr', R, rota, dd, job: lc(E.job), railName: ar ? 'Arlesdale Railway' : 'Skarloey Railway'});
 });
 if(CFR) CFR.ENG.forEach(e => {
   if(!e.runner) return;
@@ -315,6 +319,8 @@ function stepDuty(D, dt){
       if(stepMover(D, dt)){ D.mover = null; D.state = 'shed'; D.since = simTime; }
       break;
     case 'shed':
+      if(want < 0 && !D.tid && simTime - D.since > 60) goTidmouth(D);
+      if(want >= 0 && D.tid) leaveTidmouth(D);
       if(want >= 0){ D.coming = want; moveTo(D, want, parkQ(D, want), 0); D.state = 'fromShed'; if(want !== D.cur){ D.rota[want].unit.forEach(v => { const e = entryOf.get(v); if(e) e.parked = true; }); } }
       break;
     case 'fromShed':
@@ -437,6 +443,25 @@ function approach(st, target, dt, vmax = 1.3, acc = 0.15){
   if(st.rec && st.rec.cat !== 'Diesel') smoke(st.vehs[0], true, dt, st);
   return Math.abs(target - st.rho) < 1e-4;
 }
+// The Steam Team live at Tidmouth Sheds: once an engine has been on shed a while it is put away in
+// a stall of its own there, and comes back to its duty's shed when its next turn begins.
+const STEAM_TEAM = new Set(['thomas', 'gordon', 'james', 'percy', 'emily', 'rebecca', 'nia']);
+function goTidmouth(D){
+  const m = D.rota[D.cur];
+  D.tid = 'none';
+  if(!RH || !m.rec || !STEAM_TEAM.has(m.rec.id)) return;
+  const st = RH.stalls.find(s => !s.vehs.length && !s.guest);
+  if(!st) return;
+  st.guest = D; st.vehs = m.unit; st.off = []; st.L = 0;
+  st.vehs.forEach(v => { st.off.push(st.L + v.len / 2); st.L += v.len + 0.15; });
+  st.L -= 0.15; st.flip = false; st.rho = Math.max(RH.R0 + 1, (st.end || RH.R1) - 1 - st.L);
+  placeStall(st, st.phi);
+  D.tid = st;
+}
+function leaveTidmouth(D){
+  if(D.tid && D.tid !== 'none'){ D.tid.vehs = []; D.tid.guest = null; }
+  D.tid = null;
+}
 const setBridge = () => { RH.bridge.rotation.y = RH.sx * (Math.PI / 2 - RH.phiB); };
 function stepRoundhouse(dt){
   if(!RH) return;
@@ -494,6 +519,7 @@ function dutyStatus(D, i){
     if(D.state === 'uncouple') return `Uncoupling from the train${at} to go on shed.`;
     if(D.state === 'toShed') return `Running into the engine shed${at}.`;
     if(D.state === 'couple') return `Coupled on${at}, about to start ${job}.`;
+    if(D.state === 'shed' && D.tid) return `Home at Tidmouth Sheds with the Steam Team until ${next}.`;
   }
   return `On shed${at}. Next turn: ${next}.`;
 }

@@ -1752,7 +1752,7 @@ const RUNS = {
 };
 // Depots and works, and who is stabled there. Order: by road.
 const DEPOTS = [
-  {key: 'tidmouth', label: 'Tidmouth Sheds', station: 'Tidmouth', line: 'main', kind: 'roundhouse', engines: ['nia', 'hank', 'molly', 'neville', 'donald', 'douglas', 'charlie'], stock: [['snow']]},
+  {key: 'tidmouth', label: 'Tidmouth Sheds', station: 'Tidmouth', line: 'main', kind: 'roundhouse', engines: ['nia'], stock: [['snow']]},      // the rest of the Steam Team come home here at night (ops.js)
   // Knapford Yards lies alongside the station on the west, its six roads fed by a ladder off the
   // down Main Line (drawn by knapford.js); siteFn puts it there instead of searching for a site.
   {key: 'knapford', label: 'Knapford Yards', station: 'Knapford', line: 'main', kind: 'yard', len: 200,
@@ -1764,9 +1764,9 @@ const DEPOTS = [
      const o = KNAP.at(s0, -26); const base = KNAP.y(-150); o.y = 0;
      return {o, t, n, len: 200 * M, wid: 34 * M, side: -1, base};
    }},
-  {key: 'vicarstown', label: 'Vicarstown Sheds', station: 'Vicarstown', line: 'main', kind: 'shed', roads: [['rosie'], ['sonny']]},
+  {key: 'vicarstown', label: 'Vicarstown Sheds', station: 'Vicarstown', line: 'main', kind: 'shed', roads: [['rosie'], ['sonny'], ['hank'], ['douglas', 'donald']]},
   {key: 'dieselworks', label: 'Vicarstown Dieselworks', station: 'Vicarstown Dieselworks', line: 'dieselworks', kind: 'works', color: 0x5f7a9a, roads: [['den', 'dart'], ['dennis', 'norman'], ['sidney'], ['arry', 'bert']]},
-  {key: 'wellsworth', label: 'Wellsworth Sheds', station: 'Wellsworth', line: 'main', kind: 'shed', roads: [['philip']]},
+  {key: 'wellsworth', label: 'Wellsworth Sheds', station: 'Wellsworth', line: 'main', kind: 'shed', roads: [['philip'], ['molly'], ['neville'], ['charlie']]},
   {key: 'scrapyard', label: 'Wellsworth Scrap Yard', station: 'Suddery', line: 'brendam', kind: 'scrap', roads: [['thomasTruck', 'thomasTruck']]},
   {key: 'arlesburgh', label: 'Arlesburgh Yard', station: 'Arlesburgh', line: 'littlewest', kind: 'yard', roads: [['ryan', 'dexter'], ['jibRunner', 'judy', 'jibRunner', 'jerome', 'toolVan']]},
   {key: 'brendam', label: 'Brendam Docks', station: 'Brendam Docks', line: 'brendam', kind: 'docks', roads: [['porter', 'vanBrown', 'vanGrey']]},
@@ -2010,7 +2010,7 @@ function bakeSite(G){
 // gravel yard, and an arcaded retaining wall behind.
 function buildRoundhouse(D){
   const ids = D.engines, units = vehiclesFor(ids, D).concat((D.stock || []).map(s => vehiclesFor(s, D)).flat());
-  while(units.length < 7) units.push([]);               // spare stalls stand empty
+  while(units.length < 8) units.push([]);               // spare stalls stand empty
   const n = units.length, R0 = 12, PITCH = 5.6;
   const site = findSite(D.station, D.line, 124, 92, {lats: [14, 22, 32, 45, 60]});
   const kit = siteKit(site), G = kit.G, lx = kit.lx, sx = kit.sx;

@@ -62,7 +62,12 @@ window.SODOR_DUTIES = {
     patrick: {shifts: [['09:00', '17:30', '0']]},
     alaric:  {shifts: [['06:30', '11:30', '0', '1111110'], ['13:00', '16:00', '0', '1111110']]},
   },
-  rex: {shifts: [['08:00', '19:00', '0']]},
+  // Arlesdale Railway (rota order: the train engine, then its relief engines as listed in characters.js)
+  ar: {
+    rex:   {shifts: [['08:00', '19:00', '0120001']], note: 'Rex works most days; Jock and Blister I take their turns.'},
+    bert:  {shifts: [['08:30', '19:30', '0102010']], note: 'Bert and Mike share the valley trains; Blister II steps in on Sundays.'},
+    frank: {shifts: [['07:00', '16:00', '0101010', '1111110']], note: 'Frank and Sigrid take turns on the ballast trains.'},
+  },
   // Engines in the depots and yards shunt during these hours and are put away for the rest.
   yards: {
     default: ['06:00', '19:00'],

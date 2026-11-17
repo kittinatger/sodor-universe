@@ -212,7 +212,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="terrain.js?v=6"></script>
-<script src="railways.js?v=6"></script>
+<script src="railways.js?v=7"></script>
 <script>
 // ===================== DATA =====================
 // Network (stations + track paths, in outline-map pixels) comes from railways.js,
@@ -235,7 +235,9 @@ const LORE = {
   "Culdee Fell Summit": "It is the top of Culdee Fell, Sodor's highest mountain, reached by rack engines such as Culdee, Ernest and Wilfred.",
   "Kirk Machan": "The Culdee Fell mountain railway starts its climb here.",
   "Arlesburgh": "Here Duck's branch line meets the 15-inch Arlesdale Railway.",
-  "Arlesdale": "The Arlesdale Railway is worked by small engines including Rex, Bert, Mike and Frank.",
+  "Arlesdale": "Top of the 15-inch Arlesdale Railway, worked by Rex, Bert, Mike and Jock with the diesels Frank, Sigrid and the Blisters.",
+  "Arlesburgh West": "The seaside terminus of the Arlesdale Railway.",
+  "Ffarquhar Road": "A wayside halt on the Arlesdale Railway, where Frank's ballast trains are loaded.",
   "Peel Godred": "It is a town beneath the fells, with aluminium works and a power station.",
   "Kirk Ronan": "It is a small port on the Kirk Ronan inlet.",
   "Killdane": "From here the Peel Godred Branch Line climbs north into the high fells.",
@@ -266,7 +268,6 @@ RAIL.lines.forEach(l=>{ LINES[l.id] = Object.assign(l, {colorHex: parseInt(l.col
 
 // The North Western Railway's fleet is built in nwr.js and the Culdee Fell Railway's in cfr.js.
 const TRAINS = [
-  {name:"Rex",      line:"arlesdale", color:0x2f7a3a, speed:0.045, t:0.50, coaches:2, coach:0x8a7a5a, desc:"One of the small engines of the Arlesdale Railway."},
 ];
 
 // ===================== TERRAIN =====================
@@ -1247,12 +1248,12 @@ updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
-<script src="characters.js?v=12"></script>
-<script src="duties.js?v=1"></script>
-<script src="nwr.js?v=9"></script>
+<script src="characters.js?v=13"></script>
+<script src="duties.js?v=2"></script>
+<script src="nwr.js?v=10"></script>
 <script src="cfr.js?v=3"></script>
 <script src="knapford.js?v=3"></script>
-<script src="ops.js?v=3"></script>
+<script src="ops.js?v=4"></script>
 <script src="world.js?v=3"></script>
 <script src="life.js?v=2"></script>
 </body>
