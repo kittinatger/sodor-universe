@@ -2,76 +2,98 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Island of Sodor — Live Operations</title>
 <style>
-  html,body{margin:0;padding:0;overflow:hidden;background:#0b1a24;font-family:'Segoe UI',Arial,sans-serif;color:#eef3f6;}
-  #canvas-wrap{position:fixed;inset:0;}
-  #hud{position:fixed;top:12px;left:12px;z-index:10;background:rgba(10,20,28,.78);border:1px solid #2a4a5c;border-radius:10px;padding:14px 16px;max-width:300px;backdrop-filter:blur(6px);}
-  #hud h1{font-size:16px;margin:0 0 4px;color:#9fe0ff;letter-spacing:.5px;}
-  #hud .sub{font-size:11px;color:#89a2ad;margin-bottom:10px;}
+  :root{--panel:rgba(10,20,28,.82);--edge:#2a4a5c;--accent:#9fe0ff;--gold:#ffd166;--ink:#eef3f6;--muted:#89a2ad;}
+  html,body{margin:0;padding:0;overflow:hidden;background:#0b1a24;font-family:'Segoe UI',Arial,sans-serif;color:var(--ink);height:100%;}
+  #canvas-wrap{position:fixed;inset:0;touch-action:none;}
+  #canvas-wrap canvas{display:block;touch-action:none;}
+  .box{position:fixed;z-index:10;background:var(--panel);border:1px solid var(--edge);border-radius:10px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+  #hud{top:12px;left:12px;padding:14px 16px;width:250px;}
+  #hud h1{font-size:16px;margin:0 0 4px;color:var(--accent);letter-spacing:.5px;}
+  #hud .sub{font-size:11px;color:var(--muted);margin-bottom:10px;}
   .stat-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-top:1px solid rgba(255,255,255,.06);}
-  .stat-row b{color:#ffd166;}
-  #legend{position:fixed;top:12px;right:12px;z-index:10;background:rgba(10,20,28,.78);border:1px solid #2a4a5c;border-radius:10px;padding:10px 14px;font-size:11px;max-height:92vh;overflow:auto;width:190px;backdrop-filter:blur(6px);}
-  #legend h2{font-size:12px;margin:0 0 8px;color:#9fe0ff;}
-  .leg-item{display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer;}
-  .leg-item:hover{color:#ffd166;}
+  .stat-row b{color:var(--gold);}
+  #legend{top:12px;right:12px;padding:10px 14px;font-size:11px;max-height:70vh;overflow:auto;width:180px;}
+  #legend h2{font-size:12px;margin:0 0 8px;color:var(--accent);cursor:pointer;user-select:none;display:flex;justify-content:space-between;}
+  #legend.collapsed h2{margin:0;}
+  #legend.collapsed #legendList{display:none;}
+  .leg-item{display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;}
+  .leg-item:hover{color:var(--gold);}
   .leg-swatch{width:14px;height:4px;border-radius:2px;flex-shrink:0;}
   .leg-item.dim{opacity:.35;}
-  #panel{position:fixed;bottom:12px;left:12px;right:12px;max-width:520px;margin:0 auto;z-index:10;background:rgba(10,20,28,.92);border:1px solid #3a6a80;border-radius:12px;padding:16px 18px;display:none;backdrop-filter:blur(8px);box-shadow:0 8px 30px rgba(0,0,0,.5);}
+  #camctl{top:12px;right:212px;padding:10px 14px;font-size:11px;width:160px;}
+  #camctl label{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--accent);margin-bottom:8px;}
+  .btn{width:100%;padding:6px 0;background:#15313f;border:1px solid #3a6a80;color:var(--ink);border-radius:6px;cursor:pointer;font-size:11px;}
+  .btn:hover{background:#1e4559;}
+  #camctl .row{display:flex;gap:6px;margin-top:6px;}
+  #speedctl{bottom:12px;right:12px;padding:10px 14px;font-size:11px;width:170px;}
+  #speedctl label{display:block;margin-bottom:6px;color:var(--accent);}
+  #speedctl input{width:100%;}
+  #panel{bottom:12px;left:12px;right:12px;max-width:520px;margin:0 auto;padding:16px 18px;display:none;box-shadow:0 8px 30px rgba(0,0,0,.5);border-color:#3a6a80;background:rgba(10,20,28,.94);z-index:20;}
   #panel.show{display:block;}
-  #panel h3{margin:0 0 4px;font-size:17px;color:#ffd166;}
+  #panel h3{margin:0 0 4px;font-size:17px;color:var(--gold);}
   #panel .ptype{font-size:11px;color:#7fc8e0;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
   #panel p{font-size:13px;line-height:1.5;color:#dce8ec;margin:0 0 8px;}
-  #panel .closebtn{position:absolute;top:10px;right:14px;cursor:pointer;color:#89a2ad;font-size:18px;}
-  #panel .meta{font-size:11px;color:#7fa;display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;}
-  #panel .meta span{color:#9fe0ff;}
-  #speedctl{position:fixed;bottom:12px;right:12px;z-index:10;background:rgba(10,20,28,.78);border:1px solid #2a4a5c;border-radius:10px;padding:10px 14px;font-size:11px;width:170px;backdrop-filter:blur(6px);}
-  #speedctl label{display:block;margin-bottom:6px;color:#9fe0ff;}
-  #speedctl input{width:100%;}
-  #camctl{position:fixed;top:12px;right:212px;z-index:10;background:rgba(10,20,28,.78);border:1px solid #2a4a5c;border-radius:10px;padding:10px 14px;font-size:11px;width:170px;backdrop-filter:blur(6px);}
-  #camctl label{display:flex;align-items:center;gap:6px;cursor:pointer;color:#9fe0ff;margin-bottom:8px;}
-  #camctl button{width:100%;padding:6px 0;background:#15313f;border:1px solid #3a6a80;color:#eef3f6;border-radius:6px;cursor:pointer;font-size:11px;}
-  #camctl button:hover{background:#1e4559;}
-  #panel .actions{display:flex;gap:8px;margin-top:10px;}
-  #panel .actions button{background:#15313f;border:1px solid #3a6a80;color:#ffd166;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;}
+  #panel .closebtn{position:absolute;top:8px;right:12px;cursor:pointer;color:var(--muted);font-size:20px;padding:4px;}
+  #panel .meta{font-size:11px;color:#7fa;margin-top:6px;}
+  #panel .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  #panel .actions button{background:#15313f;border:1px solid #3a6a80;color:var(--gold);border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;}
   #panel .actions button:hover{background:#1e4559;}
-  #panel .actions button.active{background:#ffd166;color:#0b1a24;}
-  #loading{position:fixed;inset:0;background:#0b1a24;z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#9fe0ff;font-size:14px;}
-  #loading .spin{width:36px;height:36px;border:3px solid #234;border-top-color:#9fe0ff;border-radius:50%;animation:sp 1s linear infinite;margin-bottom:12px;}
+  #panel .actions button.active{background:var(--gold);color:#0b1a24;}
+  #credit{position:fixed;left:12px;bottom:8px;z-index:5;font-size:10px;color:#5f7f8c;pointer-events:none;}
+  #hint{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:6;font-size:11px;color:#9fb8c2;background:rgba(10,20,28,.6);padding:5px 10px;border-radius:12px;pointer-events:none;transition:opacity .8s;}
+  #loading{position:fixed;inset:0;background:#0b1a24;z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--accent);font-size:14px;}
+  #loading .spin{width:36px;height:36px;border:3px solid #234;border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;margin-bottom:12px;}
   @keyframes sp{to{transform:rotate(360deg)}}
+  @media (max-width: 760px){
+    #hud{padding:8px 10px;width:150px;}
+    #hud h1{font-size:13px;}
+    #hud .sub{font-size:10px;margin-bottom:6px;}
+    .stat-row{font-size:11px;}
+    #camctl{top:auto;bottom:12px;right:auto;left:12px;width:140px;padding:8px 10px;}
+    #speedctl{width:130px;padding:8px 10px;}
+    #legend{width:140px;padding:8px 10px;max-height:45vh;}
+    #credit{display:none;}
+    #hint{bottom:auto;top:12px;left:auto;right:auto;transform:none;display:none;}
+  }
 </style>
 </head>
 <body>
-<div id="loading"><div class="spin"></div>Loading the Island of Sodor...</div>
+<div id="loading"><div class="spin"></div>Building the Island of Sodor…</div>
 <div id="canvas-wrap"></div>
 
-<div id="hud">
+<div id="hud" class="box">
   <h1>ISLAND OF SODOR</h1>
   <div class="sub">North Western Railway — Live Operations</div>
-  <div class="stat-row"><span>Trains running</span><b id="statTrains">-</b></div>
+  <div class="stat-row"><span>Engines running</span><b id="statTrains">-</b></div>
   <div class="stat-row"><span>Stations</span><b id="statStations">-</b></div>
-  <div class="stat-row"><span>Active lines</span><b id="statLines">-</b></div>
+  <div class="stat-row"><span>Lines</span><b id="statLines">-</b></div>
   <div class="stat-row"><span>Time of day</span><b id="statTime">06:00</b></div>
 </div>
 
-<div id="legend">
-  <h2>RAILWAY LINES</h2>
+<div id="camctl" class="box">
+  <label><input type="checkbox" id="autoOrbitChk" checked> Auto-orbit when idle</label>
+  <button class="btn" id="overviewBtn">Reset view</button>
+  <div class="row">
+    <button class="btn" id="topBtn">Top-down</button>
+    <button class="btn" id="lowBtn">Low angle</button>
+  </div>
+</div>
+
+<div id="legend" class="box">
+  <h2 id="legendHead"><span>RAILWAY LINES</span><span id="legendArrow">▾</span></h2>
   <div id="legendList"></div>
 </div>
 
-<div id="speedctl">
-  <label>Simulation speed: <span id="speedVal">1x</span></label>
+<div id="speedctl" class="box">
+  <label>Simulation speed: <span id="speedVal">1.0x</span></label>
   <input type="range" id="speedSlider" min="0" max="5" step="0.1" value="1">
 </div>
 
-<div id="camctl">
-  <label><input type="checkbox" id="autoOrbitChk" checked> Auto-orbit when idle</label>
-  <button id="overviewBtn">Reset view</button>
-</div>
-
-<div id="panel">
-  <span class="closebtn" onclick="closePanel()">✕</span>
+<div id="panel" class="box">
+  <span class="closebtn" id="closeBtn">✕</span>
   <div class="ptype" id="pType">Station</div>
   <h3 id="pTitle">—</h3>
   <p id="pDesc">—</p>
@@ -79,229 +101,344 @@
   <div class="actions" id="pActions"></div>
 </div>
 
+<div id="hint">Drag to orbit · right-drag or two fingers to pan · scroll or pinch to zoom · tap a station or engine</div>
+<div id="credit">Coastline: CC BY-SA 2.5 Island of Sodor outline map</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="terrain.js"></script>
 <script>
-// ---------- DATA: Sodor lines & stations (approximate, lore-based layout) ----------
+// ===================== DATA =====================
+// Station positions are pixels on the 1200x883 outline map (reference/sodor-outline.png).
 const LINES = {
-  main:      { name: "Main Line",            color: 0xd9433d, width: 2.4 },
-  ffarquhar: { name: "Ffarquhar Branch",     color: 0x5aa8e0, width: 1.8 },
-  brendam:   { name: "Brendam Branch",       color: 0x3355c9, width: 1.8 },
-  littlewest:{ name: "The Little Western",   color: 0x3a7d35, width: 1.8 },
-  peelgodred:{ name: "Peel Godred Branch",   color: 0xaa3dd1, width: 1.8 },
-  kirkronan: { name: "Kirk Ronan Branch",    color: 0x4fdc5c, width: 1.8 },
-  harwick:   { name: "Harwick Branch",       color: 0x7a1414, width: 1.8 },
-  norramby:  { name: "Norramby Branch",      color: 0x8a5a2a, width: 1.8 },
-  skarloey:  { name: "Skarloey Railway",     color: 0xe08a2a, width: 1.4 },
-  arlesdale: { name: "Arlesdale Light Rly",  color: 0xa07a5a, width: 1.4 },
-  culdeefell:{ name: "Culdee Fell Railway",  color: 0x2a2a6a, width: 1.4 },
+  main:      { name: "Main Line",           color: 0xd9433d, width: 2.2 },
+  ffarquhar: { name: "Ffarquhar Branch",    color: 0x5aa8e0, width: 1.6 },
+  brendam:   { name: "Brendam Branch",      color: 0x3355c9, width: 1.6 },
+  littlewest:{ name: "The Little Western",  color: 0x3a9d45, width: 1.6 },
+  peelgodred:{ name: "Peel Godred Branch",  color: 0xaa3dd1, width: 1.6 },
+  kirkronan: { name: "Kirk Ronan Branch",   color: 0x8ce35c, width: 1.6 },
+  harwick:   { name: "Harwick Branch",      color: 0x9a1c1c, width: 1.6 },
+  norramby:  { name: "Norramby Branch",     color: 0x9a6a3a, width: 1.6 },
+  skarloey:  { name: "Skarloey Railway",    color: 0xf08a2a, width: 1.2 },
+  arlesdale: { name: "Arlesdale Light Rly", color: 0xc8a27a, width: 1.1 },
+  culdeefell:{ name: "Culdee Fell Railway", color: 0x6a4ac0, width: 1.2 },
 };
 
-// station coordinates normalized roughly to source map (x east, z south), scaled to scene units
 const STATIONS = {
-  tidmouth:    {x:-42, z:4,  lines:["main"], desc:"Tidmouth is the headquarters of the North Western Railway, home to Tidmouth Sheds where the famous engines Thomas, Edward, Henry, Gordon, James, Percy, Toby, Duck, Donald & Douglas, Oliver and Emily rest between duties.", meta:"Sheds: Tidmouth · HQ of Sir Topham Hatt"},
-  knapford:    {x:-46, z:10, lines:["main"], desc:"Knapford is a major junction station near Tidmouth, often the starting point for branch line connections and goods traffic to Knapford Harbour.", meta:"Junction station"},
-  wellsworth:  {x:-18, z:10, lines:["main","brendam"], desc:"Wellsworth is a market town station on the Main Line, junction for the Brendam Branch which heads south to the docks.", meta:"Junction: Brendam Branch"},
-  killdane:    {x:18, z:8,   lines:["main","peelgodred"], desc:"Killdane links the Main Line to the Peel Godred Branch, which climbs toward the quarries beneath Culdee Fell.", meta:"Junction: Peel Godred Branch"},
-  crovansgate: {x:54, z:6,   lines:["main","skarloey","culdeefell"], desc:"Crovan's Gate is where the narrow-gauge Skarloey Railway and the Culdee Fell Mountain Railway connect with the standard-gauge Main Line — engines are transferred at the works here.", meta:"Triple junction · Skarloey Works"},
-  vicarstown:  {x:70, z:2,   lines:["main"], desc:"Vicarstown sits at the eastern edge of Sodor, connecting the NWR Main Line onward to the mainland via Barrow-in-Furness.", meta:"Mainland connection"},
-  elsbridge:   {x:-34, z:2,  lines:["main"], desc:"Elsbridge is a quiet stop on the Main Line near Tidmouth, often passed by engines heading to or from the sheds.", meta:"Main Line halt"},
-  maithwaite:  {x:-20, z:-6, lines:["ffarquhar"], desc:"Maithwaite lies along the Ffarquhar Branch, the line famously worked by Thomas the Tank Engine.", meta:"Ffarquhar Branch"},
-  ffarquhar:   {x:-6,  z:-12,lines:["ffarquhar"], desc:"Ffarquhar is the terminus of Thomas's branch line, with a quarry nearby supplying stone traffic.", meta:"Branch terminus · Thomas's line"},
-  suddery:     {x:-6, z:20,  lines:["brendam"], desc:"Suddery is the capital of Sodor, a stop on the Brendam Branch.", meta:"Capital of Sodor"},
-  brendam:     {x:6,  z:30,  lines:["brendam"], desc:"Brendam Docks is a busy harbour terminus where goods are transferred between trains and ships — frequently worked by Duck and Oliver.", meta:"Docks terminus"},
-  callan:      {x:-54,z:-14, lines:["littlewest"], desc:"Callan is a station on the Little Western, the line Duck is proud to call his own.", meta:"Little Western"},
-  arlesburgh:  {x:-60,z:-8,  lines:["littlewest"], desc:"Arlesburgh is a harbour town on the Little Western line, terminus for goods and passenger services on Sodor's west coast.", meta:"Little Western terminus"},
-  peelgodred:  {x:30, z:-28, lines:["peelgodred"], desc:"Peel Godred lies at the foot of Culdee Fell, terminus of its branch line and gateway to the Culdee Fell Mountain Railway.", meta:"Branch terminus"},
-  kirkronan:   {x:14, z:52,  lines:["kirkronan"], desc:"Kirk Ronan is the southernmost terminus on Sodor, reached via a scenic branch line.", meta:"Southern terminus"},
-  harwick:     {x:-66,z:-30, lines:["harwick"], desc:"Harwick is a remote northern terminus, home to Skarloey Railway heritage connections and quiet coastal scenery.", meta:"Northern terminus"},
-  norramby:    {x:86, z:16,  lines:["norramby"], desc:"Norramby lies east of Vicarstown, served by a short branch line.", meta:"Branch terminus"},
-  skarloeyStn: {x:62, z:-6,  lines:["skarloey"], desc:"Skarloey station serves the narrow-gauge Skarloey Railway, worked by the tiny engines Skarloey, Rheneas, Sir Handel, Peter Sam, Rusty and Duncan.", meta:"Narrow gauge · 2ft 3in"},
-  rheneas:     {x:68, z:-14, lines:["skarloey"], desc:"Rheneas station sits deep in the hills, on the Skarloey Railway's climb toward the slate quarries.", meta:"Narrow gauge"},
-  culdeefellS: {x:40, z:-40, lines:["culdeefell"], desc:"The Culdee Fell Railway is a rack railway climbing the tallest mountain on Sodor, worked by Lord Harry, Wilfred, and other named mountain engines.", meta:"Rack railway · summit line"},
-  arlesdaleEnd:{x:-30,z:-20, lines:["arlesdale"], desc:"Arlesdale End is the terminus of the Arlesdale Light Railway, a miniature line run by small engines including Rex, Bert, Mike and Frank.", meta:"15in gauge miniature railway"},
+  tidmouth:    {name:"Tidmouth", px:[78,482], desc:"Tidmouth is the headquarters of the North Western Railway and home to Tidmouth Sheds, where Thomas, Edward, Henry, Gordon, James, Percy, Toby and the others rest between duties.", meta:"Tidmouth Sheds · NWR headquarters"},
+  knapford:    {name:"Knapford", px:[62,532], desc:"Knapford is a busy junction just south of Tidmouth, with goods traffic running down to Knapford Harbour.", meta:"Main Line junction"},
+  elsbridge:   {name:"Elsbridge", px:[129,516], desc:"Elsbridge sits near Tidmouth where the Ffarquhar branch heads inland toward the hills.", meta:"Junction for the Ffarquhar Branch"},
+  crosby:      {name:"Crosby", px:[186,542], desc:"Crosby is a Main Line station on the run east from Knapford toward Wellsworth.", meta:"Main Line"},
+  wellsworth:  {name:"Wellsworth", px:[296,549], desc:"Wellsworth is a market town on the Main Line and the junction for Edward's branch line south to Brendam.", meta:"Junction for the Brendam Branch"},
+  maron:       {name:"Maron", px:[474,543], desc:"Maron lies east of Wellsworth. Between the two is Gordon's Hill, the steep bank where Edward once had to push Gordon's train to the top.", meta:"Main Line · Gordon's Hill"},
+  killdane:    {name:"Killdane", px:[599,542], desc:"Killdane links the Main Line to the Peel Godred Branch, which climbs north into Sodor's high fells.", meta:"Junction for the Peel Godred Branch"},
+  kellsthorpe: {name:"Kellsthorpe Road", px:[786,663], desc:"Kellsthorpe Road is a Main Line station in the south-east and the junction for the branch down to Kirk Ronan.", meta:"Junction for the Kirk Ronan Branch"},
+  crovansgate: {name:"Crovan's Gate", px:[952,582], desc:"Crovan's Gate is where the narrow-gauge Skarloey Railway meets the standard-gauge Main Line. The Skarloey Railway's workshops are here.", meta:"Main Line / Skarloey Railway interchange"},
+  ballahoo:    {name:"Ballahoo", px:[970,419], desc:"Ballahoo sits on the Main Line between Crovan's Gate and Vicarstown and is the junction for the Norramby branch.", meta:"Junction for the Norramby Branch"},
+  vicarstown:  {name:"Vicarstown", px:[1089,370], desc:"Vicarstown is the NWR's eastern terminus on Sodor. From here the line crosses the bridge to the English mainland.", meta:"Gateway to the mainland"},
+  barrow:      {name:"Barrow-in-Furness", px:[1162,343], desc:"Barrow-in-Furness, on the English mainland, is where the NWR connects with the national railway network across the Vicarstown bridge.", meta:"England · mainland connection"},
+  maithwaite:  {name:"Maithwaite", px:[282,420], desc:"Maithwaite lies on the Ffarquhar Branch, the line famously worked by Thomas the Tank Engine.", meta:"Ffarquhar Branch"},
+  ffarquhar:   {name:"Ffarquhar", px:[370,410], desc:"Ffarquhar is the terminus of Thomas's branch line, with a quarry nearby supplying stone traffic.", meta:"Branch terminus · Thomas's line"},
+  suddery:     {name:"Suddery", px:[426,651], desc:"Suddery is the capital of Sodor and a stop on the Brendam Branch.", meta:"Capital of Sodor"},
+  brendam:     {name:"Brendam", px:[413,778], desc:"Brendam Docks is a busy harbour terminus where goods move between trains and ships.", meta:"Docks terminus"},
+  callan:      {name:"Callan", px:[143,340], desc:"Callan is a station on the Little Western, the line Duck is proud to call his own.", meta:"Little Western"},
+  arlesburgh:  {name:"Arlesburgh", px:[166,326], desc:"Arlesburgh is a harbour town on Sodor's west coast, terminus of the Little Western and the Arlesdale Light Railway.", meta:"Little Western terminus"},
+  peelgodred:  {name:"Peel Godred", px:[562,319], desc:"Peel Godred lies at the head of its branch beneath Sodor's high fells, close to the Culdee Fell Railway.", meta:"Branch terminus"},
+  kirkronan:   {name:"Kirk Ronan", px:[674,826], desc:"Kirk Ronan is a southern terminus on the coast, reached by the branch from Kellsthorpe Road.", meta:"Southern terminus"},
+  harwick:     {name:"Harwick", px:[249,172], desc:"Harwick is a coastal town in Sodor's far north-west, the terminus of the Harwick branch.", meta:"Northern terminus"},
+  norramby:    {name:"Norramby", px:[1095,542], desc:"Norramby lies on the east coast at the end of a short branch from Ballahoo.", meta:"Branch terminus"},
+  skarloey:    {name:"Skarloey", px:[713,304], desc:"Skarloey is the upper terminus of the narrow-gauge Skarloey Railway, worked by Skarloey, Rheneas, Sir Handel, Peter Sam, Rusty and Duncan.", meta:"Narrow gauge · 2ft 3in"},
+  rheneas:     {name:"Rheneas", px:[746,430], desc:"Rheneas station sits deep in the hills on the Skarloey Railway's climb toward the slate quarries.", meta:"Narrow gauge"},
+  culdeefell:  {name:"Culdee Fell", px:[648,252], desc:"Culdee Fell is the highest mountain on Sodor. Its rack railway is worked by mountain engines such as Culdee, Ernest and Wilfred.", meta:"Rack railway · summit"},
+  arlesdaleEnd:{name:"Arlesdale End", px:[414,257], desc:"Arlesdale End is the upper terminus of the Arlesdale Light Railway, a 15-inch gauge line worked by small engines including Rex, Bert, Mike and Frank.", meta:"15in gauge miniature railway"},
 };
 
-// Each line's station sequence defines the path for trains
-LINES.main.seq = ["tidmouth","knapford","elsbridge","wellsworth","killdane","crovansgate","vicarstown"];
-LINES.ffarquhar.seq = ["elsbridge","maithwaite","ffarquhar"];
-LINES.brendam.seq = ["wellsworth","suddery","brendam"];
-LINES.littlewest.seq = ["knapford","arlesburgh","callan"];
+LINES.main.seq       = ["tidmouth","knapford","elsbridge","crosby","wellsworth","maron","killdane","kellsthorpe","crovansgate","ballahoo","vicarstown","barrow"];
+LINES.ffarquhar.seq  = ["elsbridge","maithwaite","ffarquhar"];
+LINES.brendam.seq    = ["wellsworth","suddery","brendam"];
+LINES.littlewest.seq = ["tidmouth","callan","arlesburgh"];
 LINES.peelgodred.seq = ["killdane","peelgodred"];
-LINES.kirkronan.seq = ["killdane","kirkronan"];
-LINES.harwick.seq = ["callan","harwick"];
-LINES.norramby.seq = ["vicarstown","norramby"];
-LINES.skarloey.seq = ["crovansgate","skarloeyStn","rheneas"];
-LINES.arlesdale.seq = ["maithwaite","arlesdaleEnd"];
-LINES.culdeefell.seq = ["peelgodred","culdeefellS"];
+LINES.kirkronan.seq  = ["kellsthorpe","kirkronan"];
+LINES.harwick.seq    = ["arlesburgh","harwick"];
+LINES.norramby.seq   = ["ballahoo","norramby"];
+LINES.skarloey.seq   = ["crovansgate","rheneas","skarloey"];
+LINES.arlesdale.seq  = ["arlesburgh","arlesdaleEnd"];
+LINES.culdeefell.seq = ["peelgodred","culdeefell"];
 
-// Named trains (engine, line, color, offset along path, speed)
 const TRAINS = [
-  {name:"Thomas",   line:"ffarquhar", color:0x3355cc, speed:0.055, t:0.1, desc:"No.1 — a cheeky blue tank engine who runs the branch line to Ffarquhar."},
-  {name:"Edward",   line:"main",      color:0x2a6a2a, speed:0.03,  t:0.3, desc:"No.2 — the kindest engine on Sodor, always ready to help on the Main Line."},
-  {name:"Henry",    line:"main",      color:0x1a5a3a, speed:0.032, t:0.55,desc:"No.3 — a big green express engine, fast and strong."},
-  {name:"Gordon",   line:"main",      color:0x0f3a6a, speed:0.045, t:0.75,desc:"No.4 — the big blue express engine, proud of pulling the fastest trains."},
-  {name:"James",    line:"main",      color:0xb01010, speed:0.04,  t:0.0, desc:"No.5 — a red mixed-traffic engine who loves splendid paintwork."},
-  {name:"Percy",    line:"littlewest",color:0x1a6a1a, speed:0.05,  t:0.2, desc:"No.6 — a small green engine who works goods and shunting duties."},
-  {name:"Toby",     line:"brendam",   color:0x5a3a1a, speed:0.035, t:0.4, desc:"No.7 — an old tram engine fitted with cowcatchers and side plates."},
-  {name:"Duck",     line:"littlewest",color:0x0a4a8a, speed:0.038, t:0.7, desc:"No.8 — the Great Western pannier tank, proud of his branch line."},
-  {name:"Skarloey", line:"skarloey",  color:0xd08a2a, speed:0.03,  t:0.15,desc:"One of the oldest narrow-gauge engines on the island."},
-  {name:"Rheneas",  line:"skarloey",  color:0xaa5a1a, speed:0.028, t:0.6, desc:"Skarloey's great friend, running the narrow-gauge line."},
+  {name:"Thomas",   line:"ffarquhar", color:0x2f5fd0, speed:0.050, t:0.10, coaches:2, coach:0xb5651d, desc:"No.1 — a cheeky blue tank engine who runs the branch line to Ffarquhar with his coaches Annie and Clarabel."},
+  {name:"Toby",     line:"ffarquhar", color:0x6a4a2a, speed:0.030, t:1.40, coaches:1, coach:0x7a6a50, desc:"No.7 — an old tram engine with cowcatchers and side plates who works Thomas's branch and the quarry line."},
+  {name:"Percy",    line:"ffarquhar", color:0x2a8a3a, speed:0.045, t:0.70, coaches:1, coach:0x5a4a3a, desc:"No.6 — a small green engine who works goods trains and shunting duties."},
+  {name:"Edward",   line:"brendam",   color:0x2a4fa0, speed:0.035, t:0.30, coaches:2, coach:0x8a3a2a, desc:"No.2 — the kindest engine on Sodor, who runs his own branch line from Wellsworth to Brendam."},
+  {name:"Henry",    line:"main",      color:0x1f6a3a, speed:0.026, t:0.55, coaches:3, coach:0x8a3a2a, desc:"No.3 — a big green engine who pulls the Flying Kipper and express trains."},
+  {name:"Gordon",   line:"main",      color:0x1a3f8a, speed:0.034, t:1.25, coaches:4, coach:0x8a3a2a, desc:"No.4 — the big blue express engine, proud of pulling the fastest trains on the Main Line."},
+  {name:"James",    line:"main",      color:0xb01818, speed:0.030, t:0.00, coaches:3, coach:0x8a3a2a, desc:"No.5 — a red mixed-traffic engine who loves his splendid paintwork."},
+  {name:"Duck",     line:"littlewest",color:0x1f6a2a, speed:0.040, t:0.20, coaches:2, coach:0x8a4a2a, desc:"No.8 — the Great Western pannier tank who runs the Little Western to Arlesburgh."},
+  {name:"Oliver",   line:"littlewest",color:0x2f7a3a, speed:0.032, t:1.30, coaches:1, coach:0x8a4a2a, desc:"No.11 — another Great Western engine, who works the Little Western with Duck."},
+  {name:"Skarloey", line:"skarloey",  color:0xb52a1a, speed:0.030, t:0.15, coaches:2, coach:0xa0522d, desc:"No.1 of the Skarloey Railway — one of the oldest narrow-gauge engines on the island."},
+  {name:"Rheneas",  line:"skarloey",  color:0xa8321f, speed:0.028, t:1.20, coaches:2, coach:0xa0522d, desc:"No.2 of the Skarloey Railway, famous for keeping the line open by refusing to stop."},
+  {name:"Culdee",   line:"culdeefell",color:0x5a2a7a, speed:0.040, t:0.40, coaches:1, coach:0x6a3a8a, desc:"No.4 of the Culdee Fell Railway, a rack engine who climbs to the summit."},
+  {name:"Rex",      line:"arlesdale", color:0x2f7a3a, speed:0.045, t:0.50, coaches:2, coach:0x8a7a5a, desc:"One of the small engines of the Arlesdale Light Railway."},
 ];
 
-// ---------- THREE.JS SETUP ----------
+// ===================== TERRAIN =====================
+const T = window.SODOR_TERRAIN;
+const MAP_SCALE = 1/6;                        // world units per map pixel
+const MAP_W = T.imgW*MAP_SCALE, MAP_D = T.imgH*MAP_SCALE;
+const HEIGHTS = (()=>{
+  const bin = atob(T.heights), bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  const i16 = new Int16Array(bytes.buffer), out = new Float32Array(i16.length);
+  for(let i=0;i<i16.length;i++) out[i]=i16[i]/T.hScale;
+  return out;
+})();
+const REGION = (()=>{
+  const bin = atob(T.region), out = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+  return out;
+})();
+function mapToWorld(px,py){ return {x:(px-T.imgW/2)*MAP_SCALE, z:(py-T.imgH/2)*MAP_SCALE}; }
+function heightAt(x,z){
+  const c = Math.max(0, Math.min(T.cols-1.001, (x/MAP_SCALE + T.imgW/2)/T.step));
+  const r = Math.max(0, Math.min(T.rows-1.001, (z/MAP_SCALE + T.imgH/2)/T.step));
+  const c0=Math.floor(c), r0=Math.floor(r), fc=c-c0, fr=r-r0, i=r0*T.cols+c0;
+  const h00=HEIGHTS[i], h10=HEIGHTS[i+1], h01=HEIGHTS[i+T.cols], h11=HEIGHTS[i+T.cols+1];
+  return (h00*(1-fc)+h10*fc)*(1-fr) + (h01*(1-fc)+h11*fc)*fr;
+}
+
+// ===================== SCENE =====================
 const wrap = document.getElementById('canvas-wrap');
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b1a24);
-scene.fog = new THREE.Fog(0x0b1a24, 180, 420);
+scene.background = new THREE.Color(0x0e1d28);
+scene.fog = new THREE.Fog(0x0e1d28, 650, 1400);
 
-const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 2000);
-camera.position.set(0, 140, 160);
-camera.lookAt(0,0,0);
-
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.5, 3000);
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 wrap.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-const sun = new THREE.DirectionalLight(0xfff3de, 1.0);
-sun.position.set(100,160,60);
+scene.add(new THREE.HemisphereLight(0xd8ecff, 0x2a3a22, 0.62));
+const sun = new THREE.DirectionalLight(0xfff1d6, 1.05);
+sun.position.set(-90, 140, 70);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, {left:-120, right:120, top:100, bottom:-100, near:10, far:420});
+sun.shadow.bias = -0.0015;
+sun.shadow.normalBias = 0.9;
 scene.add(sun);
 
-// Island base — coastline traced from the clean CC-licensed Sodor outline map
-// (Isle of Man / England reference, ~1200x883). Raw points are (imageX, imageY)
-// pixels; converted below to scene units (x = east/west, z = north/south).
-function makeIslandShape(){
-  const raw = [
-    [165,40],[200,20],[260,8],[330,3],[400,2],[460,8],[490,12],[540,6],
-    [610,2],[680,6],[740,14],[790,24],[840,38],[880,55],[915,72],[945,90],
-    [970,108],[995,130],[1020,155],[1045,180],[1065,198],[1080,188],
-    [1095,205],[1112,228],[1098,248],[1108,268],[1135,290],[1165,320],
-    [1185,355],[1197,390],[1200,420],[1190,450],[1165,475],[1135,492],
-    [1100,505],[1065,518],[1030,532],[1012,545],[1030,558],[1065,570],
-    [1100,588],[1118,610],[1122,630],[1105,652],[1082,672],[1058,692],
-    [1035,712],[1008,732],[978,750],[948,765],[915,777],[885,788],
-    [865,802],[875,822],[855,838],[825,848],[795,843],[765,838],[735,843],
-    [705,853],[675,860],[655,848],[645,828],[655,808],[635,798],[605,803],
-    [585,788],[572,758],[560,726],[552,694],[540,664],[522,642],[503,622],
-    [492,606],[485,628],[468,655],[448,685],[428,715],[410,745],[393,772],
-    [378,794],[370,812],[358,792],[348,762],[340,728],[333,692],[325,655],
-    [315,618],[300,585],[278,560],[250,545],[220,535],[190,528],[160,515],
-    [130,500],[100,480],[75,455],[55,425],[38,390],[25,355],[15,320],
-    [8,285],[5,250],[8,215],[18,180],[32,148],[50,118],[72,92],[98,70],
-    [128,55],[150,48]
-  ];
-  const cx=600, cy=440, scale=1/7;
-  const pts = raw.map(([ix,iy]) => new THREE.Vector2((ix-cx)*scale, (iy-cy)*scale));
-  return new THREE.Shape(pts);
+function buildTerrain(){
+  const {cols, rows, step} = T;
+  const n = cols*rows;
+  const pos = new Float32Array(n*3);
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const i = r*cols+c, w = mapToWorld(c*step, r*step);
+    pos[i*3]=w.x; pos[i*3+1]=HEIGHTS[i]; pos[i*3+2]=w.z;
+  }
+  const idx = new Uint32Array((cols-1)*(rows-1)*6);
+  let k=0;
+  for(let r=0;r<rows-1;r++) for(let c=0;c<cols-1;c++){
+    const a=r*cols+c, b=a+1, d=a+cols, e=d+1;
+    idx[k++]=a; idx[k++]=d; idx[k++]=b;
+    idx[k++]=b; idx[k++]=d; idx[k++]=e;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setIndex(new THREE.BufferAttribute(idx,1));
+  geo.computeVertexNormals();
+
+  const nrm = geo.attributes.normal.array, col = new Float32Array(n*3);
+  const C = (h)=>new THREE.Color(h);
+  const SAND=C(0xdccb92), GRASS_LO=C(0x72b04e), GRASS=C(0x58963c), MOOR=C(0x7d8a52),
+        ROCK=C(0x8c867a), PEAK=C(0xd9d6cf), SHALLOW=C(0xc9b98a), DEEP=C(0x1d3f52), tmp=new THREE.Color();
+  for(let i=0;i<n;i++){
+    const h=HEIGHTS[i], slope=1-nrm[i*3+1];
+    const gc=i%cols, gr=(i/cols)|0;
+    const hs=Math.sin(gc*127.1+gr*311.7)*43758.5453;
+    const jitter = (hs-Math.floor(hs)-0.5)*0.05;
+    if(h<0){
+      tmp.copy(SHALLOW).lerp(DEEP, Math.min(1, -h/2.2));
+    } else if(h<0.45){
+      tmp.copy(SAND).lerp(GRASS_LO, h/0.45);
+    } else if(h<3.5){
+      tmp.copy(GRASS_LO).lerp(GRASS, (h-0.45)/3.05);
+    } else if(h<7.5){
+      tmp.copy(GRASS).lerp(MOOR, (h-3.5)/4);
+    } else if(h<11){
+      tmp.copy(MOOR).lerp(ROCK, (h-7.5)/3.5);
+    } else {
+      tmp.copy(ROCK).lerp(PEAK, Math.min(1,(h-11)/2.5));
+    }
+    if(h>0.45) tmp.lerp(ROCK, Math.min(1, Math.max(0, (slope-0.18)*2.2)));
+    if(h>0 && REGION[i]!==1){                  // Isle of Man / England: muted so Sodor reads first
+      const g=(tmp.r+tmp.g+tmp.b)/3; tmp.r=tmp.r*0.55+g*0.45; tmp.g=tmp.g*0.55+g*0.45; tmp.b=tmp.b*0.55+g*0.45;
+      tmp.multiplyScalar(0.85);
+    }
+    col[i*3]=Math.min(1,tmp.r+jitter); col[i*3+1]=Math.min(1,tmp.g+jitter); col[i*3+2]=Math.min(1,tmp.b+jitter*0.5);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col,3));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95, metalness:0}));
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  scene.add(mesh);
+
+  // Diorama skirt: walls down each map edge so the cut-off Isle of Man / England read as a map border.
+  const BASE=-9, sk=[], skc=[], skIdx=[];
+  const edge = (cells)=>{
+    const start = sk.length/3;
+    cells.forEach(([c,r])=>{
+      const i=r*cols+c, w=mapToWorld(c*step,r*step), h=HEIGHTS[i], top=Math.max(h,0);
+      const wet = h<0;
+      sk.push(w.x,top,w.z, w.x,BASE,w.z);
+      const tc = wet ? [0.22,0.52,0.70] : [0.42,0.31,0.20];
+      skc.push(...tc, 0.10,0.08,0.07);
+    });
+    for(let j=0;j<cells.length-1;j++){
+      const a=start+j*2, b=a+1, c2=a+2, d=a+3;
+      skIdx.push(a,b,c2, c2,b,d);
+    }
+  };
+  const top=[],bot=[],lef=[],rig=[];
+  for(let c=0;c<cols;c++){ top.push([c,0]); bot.push([cols-1-c,rows-1]); }
+  for(let r=0;r<rows;r++){ rig.push([cols-1,r]); lef.push([0,rows-1-r]); }
+  [top,rig,bot,lef].forEach(edge);
+  const sgeo = new THREE.BufferGeometry();
+  sgeo.setAttribute('position', new THREE.Float32BufferAttribute(sk,3));
+  sgeo.setAttribute('color', new THREE.Float32BufferAttribute(skc,3));
+  sgeo.setIndex(skIdx);
+  sgeo.computeVertexNormals();
+  scene.add(new THREE.Mesh(sgeo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:1, side:THREE.DoubleSide})));
+
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(MAP_W+6, 2.5, MAP_D+6), new THREE.MeshStandardMaterial({color:0x2b1f16, roughness:0.8}));
+  plinth.position.y = BASE-1.25; plinth.receiveShadow = true;
+  scene.add(plinth);
+
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(MAP_W, MAP_D),
+    new THREE.MeshStandardMaterial({color:0x2f86c0, transparent:true, opacity:0.72, roughness:0.2, metalness:0.05}));
+  water.rotation.x = -Math.PI/2;
+  water.position.y = 0;
+  scene.add(water);
+  return water;
 }
-const islandGeo = new THREE.ExtrudeGeometry(makeIslandShape(), {depth:2, bevelEnabled:true, bevelThickness:0.5, bevelSize:0.5, bevelSegments:2});
-islandGeo.rotateX(-Math.PI/2);
-const islandMat = new THREE.MeshStandardMaterial({color:0x3a7d3f, flatShading:true, roughness:0.95});
-const island = new THREE.Mesh(islandGeo, islandMat);
-island.position.y=-2.3;
-scene.add(island);
+const water = buildTerrain();
 
-// water
-const waterGeo = new THREE.PlaneGeometry(900,700);
-waterGeo.rotateX(-Math.PI/2);
-const water = new THREE.Mesh(waterGeo, new THREE.MeshStandardMaterial({color:0x1b4a63, roughness:0.6, metalness:0.1}));
-water.position.y=-6;
-scene.add(water);
-
-// mountains (central highlands) — simple cones
-[[20,-10,16],[8,-30,10],[-10,-18,12],[40,-35,14]].forEach(([x,z,h])=>{
-  const m = new THREE.Mesh(new THREE.ConeGeometry(14+Math.random()*6, h, 6), new THREE.MeshStandardMaterial({color:0x4a5a44, flatShading:true}));
-  m.position.set(x,h/2-2,z);
-  scene.add(m);
-});
-
-// ---------- helper: station world pos ----------
-function stPos(id){ const s=STATIONS[id]; return new THREE.Vector3(s.x, 0.4, s.z); }
-
-// ---------- draw lines ----------
+// ===================== RAIL LINES (draped on terrain) =====================
+for(const id in STATIONS){
+  const s = STATIONS[id], w = mapToWorld(s.px[0], s.px[1]);
+  s.x = w.x; s.z = w.z; s.y = Math.max(heightAt(w.x,w.z), 0);
+}
 const legendList = document.getElementById('legendList');
-let lineVisible = {};
 Object.keys(LINES).forEach(key=>{
   const line = LINES[key];
-  lineVisible[key]=true;
-  const pts = line.seq.map(stPos);
-  const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.05);
-  const geo = new THREE.TubeGeometry(curve, Math.max(8,pts.length*10), 0.35*line.width, 6, false);
-  const mat = new THREE.MeshBasicMaterial({color: line.color});
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.userData.lineKey = key;
+  const guide = new THREE.CatmullRomCurve3(line.seq.map(id=>new THREE.Vector3(STATIONS[id].x,0,STATIONS[id].z)), false, 'centripetal');
+  const samples = Math.max(40, Math.round(guide.getLength()*2.5));
+  const pts = guide.getSpacedPoints(samples).map(p=>new THREE.Vector3(p.x, Math.max(heightAt(p.x,p.z),0)+0.3, p.z));
+  const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+  const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, samples*2, 0.16*line.width, 6, false),
+    new THREE.MeshStandardMaterial({color: line.color, roughness:0.5, emissive:line.color, emissiveIntensity:0.25}));
+  mesh.castShadow = true;
   scene.add(mesh);
-  line.mesh = mesh;
-  line.curve = curve;
+  line.mesh = mesh; line.curve = curve; line.length = curve.getLength();
 
   const item = document.createElement('div');
   item.className='leg-item';
   item.innerHTML = `<span class="leg-swatch" style="background:#${line.color.toString(16).padStart(6,'0')}"></span>${line.name}`;
   item.onclick = ()=>{
-    lineVisible[key] = !lineVisible[key];
-    mesh.visible = lineVisible[key];
-    item.classList.toggle('dim', !lineVisible[key]);
+    line.mesh.visible = !line.mesh.visible;
+    item.classList.toggle('dim', !line.mesh.visible);
+    TRAINS.forEach(tr=>{ if(tr.line===key) tr.mesh.visible = line.mesh.visible; });
   };
   legendList.appendChild(item);
 });
 
-// ---------- draw stations ----------
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-const clickable = [];
-const labelSprites = [];
-
+// ===================== STATIONS =====================
+const clickable = [], labels = [];
 function makeLabelSprite(text){
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  canvas.width=256; canvas.height=64;
-  ctx.font='28px Segoe UI, Arial';
-  ctx.fillStyle='rgba(255,255,255,0.95)';
-  ctx.textAlign='center';
-  ctx.shadowColor='#000'; ctx.shadowBlur=4;
-  ctx.fillText(text,128,40);
+  ctx.font = '600 30px Segoe UI, Arial';
+  const tw = Math.ceil(ctx.measureText(text).width);
+  canvas.width = tw+28; canvas.height = 48;
+  ctx.font = '600 30px Segoe UI, Arial';
+  ctx.fillStyle = 'rgba(10,20,28,0.72)';
+  const r=14, w=canvas.width, h=canvas.height;
+  ctx.beginPath(); ctx.moveTo(r,0); ctx.arcTo(w,0,w,h,r); ctx.arcTo(w,h,0,h,r); ctx.arcTo(0,h,0,0,r); ctx.arcTo(0,0,w,0,r); ctx.fill();
+  ctx.fillStyle = '#f4f8fa'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(text, w/2, h/2+1);
   const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false});
-  const spr = new THREE.Sprite(mat);
-  spr.scale.set(14,3.5,1);
+  tex.minFilter = THREE.LinearFilter;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false}));
+  spr.scale.set(canvas.width/48*2.4, 2.4, 1);
+  spr.renderOrder = 10;
   return spr;
 }
-
-Object.entries(STATIONS).forEach(([id, st])=>{
-  const geo = new THREE.SphereGeometry(0.9,16,16);
-  const mat = new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffcc66, emissiveIntensity:0.4});
-  const sph = new THREE.Mesh(geo, mat);
-  sph.position.set(st.x,0.5,st.z);
-  sph.userData = {type:'station', id, name: id};
-  scene.add(sph);
-  clickable.push(sph);
-
-  const label = makeLabelSprite(id.charAt(0).toUpperCase()+id.slice(1).replace(/Stn|S$/,''));
-  label.position.set(st.x, 4.2, st.z);
+const stationGeo = new THREE.CylinderGeometry(0.75, 0.75, 0.5, 18);
+const stationMat = new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffcc66, emissiveIntensity:0.45});
+for(const id in STATIONS){
+  const st = STATIONS[id];
+  const m = new THREE.Mesh(stationGeo, stationMat);
+  m.position.set(st.x, st.y+0.45, st.z);
+  m.userData = {type:'station', id};
+  m.castShadow = true;
+  scene.add(m); clickable.push(m);
+  const label = makeLabelSprite(st.name);
+  label.position.set(st.x, st.y+3.0, st.z);
+  label.userData = {type:'station', id, aspect: label.scale.x/label.scale.y};
   scene.add(label);
-  labelSprites.push(label);
-});
+  labels.push(label); clickable.push(label);
+}
+function scaleLabels(){
+  for(const l of labels){
+    const h = Math.min(4.2, Math.max(0.55, camera.position.distanceTo(l.position)*0.022));
+    l.scale.set(h*l.userData.aspect, h, 1);
+  }
+}
 
-// ---------- trains ----------
+// ===================== ENGINES =====================
+function makeEngine(color){
+  const g = new THREE.Group();
+  const paint = new THREE.MeshStandardMaterial({color, roughness:0.45, metalness:0.2});
+  const black = new THREE.MeshStandardMaterial({color:0x151515, roughness:0.7});
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.3,2.4), black); frame.position.y=0.25;
+  const boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.42,1.6,14), paint);
+  boiler.rotation.x = Math.PI/2; boiler.position.set(0,0.75,0.35);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(1.0,1.0,0.8), paint); cab.position.set(0,0.9,-0.8);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.1,0.1,0.9), black); roof.position.set(0,1.45,-0.8);
+  const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.16,0.45,10), black); chimney.position.set(0,1.3,0.95);
+  const face = new THREE.Mesh(new THREE.CircleGeometry(0.38,16), new THREE.MeshStandardMaterial({color:0xcfcfcf}));
+  face.position.set(0,0.75,1.16);
+  [frame,boiler,cab,roof,chimney,face].forEach(p=>{ p.castShadow=true; g.add(p); });
+  return g;
+}
+function makeCoach(color){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.95,2.3), new THREE.MeshStandardMaterial({color, roughness:0.6}));
+  body.position.y = 0.75; body.castShadow = true;
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.05,0.12,2.35), new THREE.MeshStandardMaterial({color:0x3a3a3a}));
+  roof.position.y = 1.28;
+  g.add(body, roof);
+  return g;
+}
 const trainGroup = new THREE.Group();
 scene.add(trainGroup);
 TRAINS.forEach(tr=>{
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.4,1.2,1.3), new THREE.MeshStandardMaterial({color: tr.color}));
-  body.position.y=0.9;
-  const cab = new THREE.Mesh(new THREE.BoxGeometry(1.0,1.0,1.3), new THREE.MeshStandardMaterial({color: tr.color}));
-  cab.position.set(-0.7,1.5,0);
-  const g = new THREE.Group();
-  g.add(body); g.add(cab);
-  g.userData = {type:'train', train: tr};
-  trainGroup.add(g);
-  tr.mesh = g;
-  clickable.push(body); body.parent._clickTarget = g;
+  tr.mesh = makeEngine(tr.color);
+  tr.mesh.traverse(o=>{ if(o.isMesh){ o.userData.train = tr; clickable.push(o); } });
+  trainGroup.add(tr.mesh);
+  tr.cars = [];
+  for(let k=0;k<tr.coaches;k++){ const c = makeCoach(tr.coach); tr.cars.push(c); trainGroup.add(c); }
 });
+const _p = new THREE.Vector3(), _t = new THREE.Vector3();
+function placeOnCurve(obj, curve, u, reversed){
+  u = Math.max(0, Math.min(1, u));
+  curve.getPointAt(u, _p); curve.getTangentAt(u, _t);
+  obj.position.set(_p.x, _p.y-0.1, _p.z);
+  obj.rotation.set(0, Math.atan2(_t.x,_t.z) + (reversed?Math.PI:0), 0);
+}
 
-// ---------- interaction ----------
-const panel = document.getElementById('panel');
-const pActions = document.getElementById('pActions');
+// ===================== UI: panel =====================
+const panel = document.getElementById('panel'), pActions = document.getElementById('pActions');
 function openPanel(kind,title,desc,meta){
   document.getElementById('pType').textContent = kind;
   document.getElementById('pTitle').textContent = title;
@@ -310,169 +447,184 @@ function openPanel(kind,title,desc,meta){
   pActions.innerHTML = '';
   panel.classList.add('show');
 }
-function closePanel(){ panel.classList.remove('show'); }
-
-function addPanelButton(label, onClick, isActive){
+function addPanelButton(label, onClick){
   const b = document.createElement('button');
-  b.textContent = label;
-  if(isActive) b.classList.add('active');
-  b.onclick = onClick;
-  pActions.appendChild(b);
-  return b;
+  b.textContent = label; b.onclick = onClick; pActions.appendChild(b); return b;
+}
+document.getElementById('closeBtn').onclick = ()=>panel.classList.remove('show');
+
+const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pick(clientX, clientY){
+  ndc.set((clientX/innerWidth)*2-1, -(clientY/innerHeight)*2+1);
+  raycaster.setFromCamera(ndc, camera);
+  const hit = raycaster.intersectObjects(clickable, false)[0];
+  if(!hit) return;
+  const o = hit.object;
+  if(o.userData.type==='station'){
+    const st = STATIONS[o.userData.id];
+    openPanel('Station', st.name, st.desc, st.meta);
+    followTrain = null;
+    flyTo(st.x, st.y, st.z, 40, undefined, 0.85);
+    addPanelButton('Fly closer', ()=>flyTo(st.x, st.y, st.z, 18, undefined, 1.0));
+  } else if(o.userData.train){
+    const tr = o.userData.train;
+    openPanel('Engine', tr.name, tr.desc, `Line: ${LINES[tr.line].name}`);
+    flyTo(tr.mesh.position.x, tr.mesh.position.y, tr.mesh.position.z, 22, undefined, 0.95);
+    const b = addPanelButton('Follow engine', ()=>{ followTrain = tr; b.classList.add('active'); });
+  }
 }
 
-renderer.domElement.addEventListener('click', (e)=>{
-  if(dragMoved) return; // don't trigger click after a drag
-  mouse.x = (e.clientX/innerWidth)*2-1;
-  mouse.y = -(e.clientY/innerHeight)*2+1;
-  raycaster.setFromCamera(mouse, camera);
-  const hits = raycaster.intersectObjects(clickable, false);
-  if(hits.length===0) return;
-  const obj = hits[0].object;
-  if(obj.userData.type==='station'){
-    const id = obj.userData.id;
-    const st = STATIONS[id];
-    const title = id.charAt(0).toUpperCase()+id.slice(1).replace(/Stn|S$/,'');
-    openPanel('Station', title, st.desc, st.meta);
-    followTrain = null;
-    flyTo(st.x, st.z, 42, undefined, 0.75);
-    addPanelButton('Fly closer ↗', ()=>flyTo(st.x, st.z, 22, undefined, 0.85));
-  } else {
-    // climb to parent group holding train data
-    let p = obj;
-    while(p && !(p.userData && p.userData.type==='train')) p=p.parent;
-    if(p){
-      const tr = p.userData.train;
-      openPanel('Engine', tr.name, tr.desc, `Line: ${LINES[tr.line].name}`);
-      flyTo(tr.mesh.position.x, tr.mesh.position.z, 24, undefined, 0.8);
-      addPanelButton('Follow engine ↗', (ev)=>{
-        followTrain = tr;
-        document.querySelectorAll('#pActions button').forEach(b=>b.classList.remove('active'));
-        ev.target.classList.add('active');
-      });
-    }
-  }
-});
-
-// ---------- camera: spherical orbit around a movable focus point, with
-// smooth fly-to transitions, idle auto-orbit, and train-follow mode ----------
-let isDragging=false, dragMoved=false, prevX=0, prevY=0;
-let camTheta = 0.8, camPhi = 0.95, camDist = 200;
-const camCenter = new THREE.Vector3(0,0,0);
-let flight = null;        // active fly-to tween
-let followTrain = null;   // engine the camera is tracking
-let lastInteraction = 0;  // timestamp of last manual camera input
-let autoOrbitEnabled = true;
-
+// ===================== CAMERA =====================
+// Distance at which the whole map width fits the screen (portrait phones need to sit further back).
+function fitDist(){
+  const halfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov/2)) * Math.min(camera.aspect, 1.35);
+  return Math.max(240, 0.98*(MAP_W/2)/halfTan);
+}
+let camTheta = 0, camPhi = 0.92, camDist = fitDist();
+const camCenter = new THREE.Vector3(0,0,8);
+let flight = null, followTrain = null, lastInteraction = 0, autoOrbit = true;
+function clampCam(){
+  camPhi = Math.max(0.05, Math.min(1.42, camPhi));
+  camDist = Math.max(8, Math.min(640, camDist));
+  camCenter.x = Math.max(-MAP_W/2, Math.min(MAP_W/2, camCenter.x));
+  camCenter.z = Math.max(-MAP_D/2, Math.min(MAP_D/2, camCenter.z));
+}
 function updateCam(){
-  camera.position.x = camCenter.x + camDist*Math.sin(camPhi)*Math.sin(camTheta);
-  camera.position.z = camCenter.z + camDist*Math.sin(camPhi)*Math.cos(camTheta);
-  camera.position.y = camCenter.y + camDist*Math.cos(camPhi);
+  clampCam();
+  const s = Math.sin(camPhi);
+  camera.position.set(camCenter.x + camDist*s*Math.sin(camTheta), camCenter.y + camDist*Math.cos(camPhi), camCenter.z + camDist*s*Math.cos(camTheta));
   camera.lookAt(camCenter);
 }
-function flyTo(x, z, dist, theta, phi){
-  flight = {
-    sC: camCenter.clone(), eC: new THREE.Vector3(x,0,z),
-    sD: camDist, eD: dist!==undefined ? dist : camDist,
-    sT: camTheta, eT: theta!==undefined ? theta : camTheta,
-    sP: camPhi,  eP: phi!==undefined ? phi : camPhi,
-    start: performance.now(), dur: 1100
-  };
+function flyTo(x, y, z, dist, theta, phi){
+  let eT = theta!==undefined ? theta : camTheta;
+  flight = { sC: camCenter.clone(), eC: new THREE.Vector3(x,y,z), sD: camDist, eD: dist!==undefined?dist:camDist,
+             sT: camTheta, eT, sP: camPhi, eP: phi!==undefined?phi:camPhi, start: performance.now(), dur: 1200 };
   lastInteraction = performance.now();
 }
-document.getElementById('overviewBtn').addEventListener('click', ()=>{
-  followTrain = null;
-  flyTo(0, 0, 200, 0.8, 0.95);
-});
-document.getElementById('autoOrbitChk').addEventListener('change', (e)=>{
-  autoOrbitEnabled = e.target.checked;
-});
-updateCam();
-renderer.domElement.addEventListener('mousedown', e=>{isDragging=true;dragMoved=false;prevX=e.clientX;prevY=e.clientY;});
-window.addEventListener('mouseup', ()=>isDragging=false);
-window.addEventListener('mousemove', e=>{
-  if(!isDragging) return;
-  const dx=e.clientX-prevX, dy=e.clientY-prevY;
-  if(Math.abs(dx)+Math.abs(dy) > 3) dragMoved = true;
-  flight = null; followTrain = null;
-  camTheta -= dx*0.004;
-  camPhi = Math.max(0.25, Math.min(1.5, camPhi - dy*0.004));
-  prevX=e.clientX; prevY=e.clientY;
-  lastInteraction = performance.now();
-  updateCam();
-});
-renderer.domElement.addEventListener('wheel', e=>{
-  flight = null;
-  camDist = Math.max(20, Math.min(420, camDist + e.deltaY*0.1));
-  lastInteraction = performance.now();
-  updateCam();
-});
+function shortestTheta(target){ return camTheta + Math.atan2(Math.sin(target-camTheta), Math.cos(target-camTheta)); }
+document.getElementById('overviewBtn').onclick = ()=>{ followTrain=null; flyTo(0,0,8,fitDist(),shortestTheta(0),0.92); };
+document.getElementById('topBtn').onclick = ()=>{ followTrain=null; flyTo(0,0,0,fitDist()*0.8,shortestTheta(0),0.05); };
+document.getElementById('lowBtn').onclick = ()=>{ followTrain=null; flyTo(camCenter.x,camCenter.y,camCenter.z,Math.min(camDist,90),undefined,1.32); };
+document.getElementById('autoOrbitChk').onchange = e=>{ autoOrbit = e.target.checked; };
 
-// ---------- HUD stats ----------
+// Pointer controls: one finger/left = orbit, right/shift or two fingers = pan, wheel/pinch = zoom.
+const pointers = new Map();
+let tapStart = null, pinchDist = 0, pinchMid = null;
+const el = renderer.domElement;
+function panBy(dx, dy){
+  const k = camDist*0.0016;
+  const fx = -Math.sin(camTheta), fz = -Math.cos(camTheta);  // screen-up direction on the ground
+  const rx =  Math.cos(camTheta), rz = -Math.sin(camTheta);
+  camCenter.x += (-dx*rx + dy*fx)*k;
+  camCenter.z += (-dx*rz + dy*fz)*k;
+}
+function userMoved(){ flight=null; followTrain=null; lastInteraction=performance.now(); }
+el.addEventListener('contextmenu', e=>e.preventDefault());
+el.addEventListener('pointerdown', e=>{
+  el.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  tapStart = pointers.size===1 ? {x:e.clientX, y:e.clientY, t:performance.now()} : null;
+  if(pointers.size===2){
+    const [a,b] = [...pointers.values()];
+    pinchDist = Math.hypot(a.x-b.x, a.y-b.y); pinchMid = {x:(a.x+b.x)/2, y:(a.y+b.y)/2};
+  }
+});
+el.addEventListener('pointermove', e=>{
+  const p = pointers.get(e.pointerId);
+  if(!p) return;
+  const dx = e.clientX-p.x, dy = e.clientY-p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if(tapStart && Math.hypot(e.clientX-tapStart.x, e.clientY-tapStart.y) > 6) tapStart = null;
+  if(pointers.size===1){
+    if(Math.abs(dx)+Math.abs(dy)===0) return;
+    userMoved();
+    if((e.buttons & 2) || e.shiftKey) panBy(dx, dy);
+    else { camTheta -= dx*0.005; camPhi -= dy*0.005; }
+  } else if(pointers.size===2){
+    const [a,b] = [...pointers.values()];
+    const d = Math.hypot(a.x-b.x, a.y-b.y), mid = {x:(a.x+b.x)/2, y:(a.y+b.y)/2};
+    userMoved();
+    if(pinchDist>0) camDist *= pinchDist/d;
+    panBy(mid.x-pinchMid.x, mid.y-pinchMid.y);
+    pinchDist = d; pinchMid = mid;
+  }
+});
+function endPointer(e){
+  if(tapStart && pointers.size===1 && performance.now()-tapStart.t < 450) pick(e.clientX, e.clientY);
+  pointers.delete(e.pointerId);
+  tapStart = null;
+  if(pointers.size<2) pinchDist = 0;
+}
+el.addEventListener('pointerup', endPointer);
+el.addEventListener('pointercancel', e=>{ pointers.delete(e.pointerId); tapStart=null; pinchDist=0; });
+el.addEventListener('wheel', e=>{
+  e.preventDefault(); userMoved();
+  camDist *= Math.exp(e.deltaY*0.0012);
+}, {passive:false});
+
+// ===================== HUD =====================
 document.getElementById('statTrains').textContent = TRAINS.length;
 document.getElementById('statStations').textContent = Object.keys(STATIONS).length;
 document.getElementById('statLines').textContent = Object.keys(LINES).length;
-
 let simSpeed = 1;
 const speedSlider = document.getElementById('speedSlider');
-speedSlider.addEventListener('input', ()=>{
-  simSpeed = parseFloat(speedSlider.value);
-  document.getElementById('speedVal').textContent = simSpeed.toFixed(1)+'x';
-});
+speedSlider.oninput = ()=>{ simSpeed = parseFloat(speedSlider.value); document.getElementById('speedVal').textContent = simSpeed.toFixed(1)+'x'; };
+const legend = document.getElementById('legend');
+document.getElementById('legendHead').onclick = ()=>{
+  legend.classList.toggle('collapsed');
+  document.getElementById('legendArrow').textContent = legend.classList.contains('collapsed') ? '▸' : '▾';
+};
+if(innerWidth < 760){ legend.classList.add('collapsed'); document.getElementById('legendArrow').textContent='▸'; }
+let simTime = 6*60;
+const fmtTime = m=>{ m=((m%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(Math.floor(m%60)).padStart(2,'0'); };
+setTimeout(()=>{ document.getElementById('hint').style.opacity = 0; }, 7000);
 
-let simTime = 6*60; // minutes, start 6:00
-function fmtTime(mins){
-  mins = ((mins%1440)+1440)%1440;
-  const h = Math.floor(mins/60), m = Math.floor(mins%60);
-  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
-}
-
-// ---------- animation loop ----------
+// ===================== LOOP =====================
 const clock = new THREE.Clock();
 function animate(){
   requestAnimationFrame(animate);
-  const dt = clock.getDelta();
+  const dt = Math.min(clock.getDelta(), 0.1);
   simTime += dt*4*simSpeed;
   document.getElementById('statTime').textContent = fmtTime(simTime);
 
   TRAINS.forEach(tr=>{
-    tr.t += dt*tr.speed*simSpeed;
-    let tt = tr.t % 2;
-    let u = tt<1 ? tt : 2-tt; // ping-pong back and forth on branch
-    const curve = LINES[tr.line].curve;
-    const pos = curve.getPointAt(Math.max(0,Math.min(1,u)));
-    const tangent = curve.getTangentAt(Math.max(0,Math.min(1,u)));
-    tr.mesh.position.set(pos.x, 0.9, pos.z);
-    const angle = Math.atan2(tangent.x, tangent.z);
-    tr.mesh.rotation.y = angle + (tt>1 ? Math.PI : 0);
+    const line = LINES[tr.line];
+    tr.t += dt*tr.speed*simSpeed * (60/Math.max(line.length,30));
+    const tt = tr.t % 2, back = tt>1, u = back ? 2-tt : tt;
+    placeOnCurve(tr.mesh, line.curve, u, back);
+    const gap = 2.6/line.length;
+    tr.cars.forEach((car,k)=>{
+      car.visible = tr.mesh.visible;
+      placeOnCurve(car, line.curve, back ? u+gap*(k+1) : u-gap*(k+1), back);
+    });
   });
 
-  // ---- camera movement: fly-to tween > follow-train > idle auto-orbit ----
   if(flight){
     const k = Math.min(1, (performance.now()-flight.start)/flight.dur);
-    const ek = k<0.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2; // ease-in-out quad
-    camCenter.lerpVectors(flight.sC, flight.eC, ek);
-    camDist  = flight.sD + (flight.eD-flight.sD)*ek;
-    camTheta = flight.sT + (flight.eT-flight.sT)*ek;
-    camPhi   = flight.sP + (flight.eP-flight.sP)*ek;
+    const e = k<0.5 ? 4*k*k*k : 1-Math.pow(-2*k+2,3)/2;
+    camCenter.lerpVectors(flight.sC, flight.eC, e);
+    camDist = flight.sD + (flight.eD-flight.sD)*e;
+    camTheta = flight.sT + (flight.eT-flight.sT)*e;
+    camPhi = flight.sP + (flight.eP-flight.sP)*e;
     if(k>=1) flight = null;
   } else if(followTrain){
-    camCenter.lerp(followTrain.mesh.position, Math.min(1, dt*2.2));
-    camDist = THREE.MathUtils.lerp(camDist, 26, dt*1.5);
-  } else if(autoOrbitEnabled && performance.now()-lastInteraction > 4000){
-    camTheta += dt*0.04;
+    camCenter.lerp(followTrain.mesh.position, Math.min(1, dt*2.5));
+    camDist += (22-camDist)*Math.min(1, dt*1.2);
+  } else if(autoOrbit && performance.now()-lastInteraction > 5000){
+    camTheta += dt*0.035;
   }
   updateCam();
-
+  scaleLabels();
+  water.material.opacity = 0.70 + Math.sin(performance.now()*0.0008)*0.02;
   renderer.render(scene, camera);
 }
 
-window.addEventListener('resize', ()=>{
+addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
-
+updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
