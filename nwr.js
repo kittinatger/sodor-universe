@@ -1723,9 +1723,9 @@ const NONRAIL_INFO = [
 // ------------------------------------------------------------------ duties: who runs where
 // The Main Line is double track (lane +1 next to the platforms, lane -1 the far road).
 const RUNS = {
-  gordon:  {line: 'main', from: 'Tidmouth', to: 'Kellsthorpe Road', lane: 1, speed: 30, passenger: true, stopsAt: ['Knapford', 'Wellsworth', 'Killdane'], consist: Array(6).fill('greenExpress'), job: 'the Express from Tidmouth to Kellsthorpe Road'},
+  gordon:  {line: 'main', from: 'Tidmouth', to: 'Kellsthorpe Road', lane: 1, knap: 'up', speed: 30, passenger: true, stopsAt: ['Knapford', 'Wellsworth', 'Killdane'], consist: Array(6).fill('greenExpress'), job: 'the Express from Tidmouth to Kellsthorpe Road'},
   rebecca: {line: 'main', from: 'Kellsthorpe Road', to: 'Barrow-in-Furness', lane: 1, speed: 30, passenger: true, stopsAt: ["Crovan's Gate", 'Vicarstown'], consist: Array(5).fill('greenExpress'), job: 'the Express on to Vicarstown and Barrow'},
-  henry:   {line: 'main', from: 'Knapford', to: 'Killdane', lane: -1, speed: 24, consist: ['vanFish', 'vanFish', 'vanGrey', 'vanFish', 'vanBrown', 'vanFish', 'brakeVan'], job: 'the Flying Kipper fish train'},
+  henry:   {line: 'main', from: 'Knapford', to: 'Killdane', lane: -1, knap: 'down', fromShift: -63, speed: 24, consist: ['vanFish', 'vanFish', 'vanGrey', 'vanFish', 'vanBrown', 'vanFish', 'brakeVan'], job: 'the Flying Kipper fish train'},
   james:   {line: 'main', from: 'Killdane', to: 'Lower Kellsthorpe', lane: -1, speed: 20, consist: Array(6).fill('jamesTruck').concat(['spiteful']), job: 'a goods train of his blue trucks'},
   murdoch: {line: 'main', from: "Crovan's Gate", to: 'Vicarstown', lane: -1, speed: 18, consist: ['hector', 'truck', 'truckB', 'truck', 'truck', 'truckB', 'truck', 'truck', 'brakeVan'], job: 'the long goods train to Vicarstown'},
   thomas:  {line: 'ffarquhar', speed: 15, passenger: true, consist: ['annie', 'clarabel'], job: 'his branch line passenger train with Annie and Clarabel'},
@@ -1745,7 +1745,7 @@ const RUNS = {
   daisy:   {line: 'harwick', speed: 18, passenger: true, consist: [], diesel: true, job: 'the passenger service on the Harwick branch'},
   stanley: {line: 'greatwaterton', speed: 12, consist: ['stoneTruck', 'truck', 'stoneTruck', 'brakeVan'], job: 'building materials to Great Waterton'},
   belle:   {line: 'rescue', speed: 15, consist: ['waterTank'], job: 'running to the Search and Rescue Centre with a water tank wagon'},
-  salty:   {line: 'harbour', speed: 8, consist: ['vanFish', 'vanFish', 'truck'], diesel: true, job: 'shunting fish vans at Knapford Harbour'},
+  salty:   {line: 'harbour', speed: 8, noRunRound: true, consist: ['vanFish', 'vanFish', 'truck'], diesel: true, job: 'shunting fish vans at Knapford Harbour'},
   diesel10:{line: 'dieselworks', speed: 12, consist: ['thomasTruck', 'thomasTruck', 'thomasTruck'], diesel: true, job: 'scrap trucks to and from the Dieselworks'},
   bill:    {line: 'chinaclay', fromU: 0, toU: 0.5, speed: 10, consist: ['clayTruck', 'clayTruck', 'clayTruck'], job: 'china clay trains from the pits'},
   ben:     {line: 'chinaclay', fromU: 0.5, toU: 1, speed: 10, consist: ['clayTruck', 'clayTruck', 'clayTruck'], job: 'china clay trains to the docks'},
@@ -1753,7 +1753,17 @@ const RUNS = {
 // Depots and works, and who is stabled there. Order: by road.
 const DEPOTS = [
   {key: 'tidmouth', label: 'Tidmouth Sheds', station: 'Tidmouth', line: 'main', kind: 'roundhouse', engines: ['nia', 'hank', 'molly', 'neville', 'donald', 'douglas', 'charlie'], stock: [['snow']]},
-  {key: 'knapford', label: 'Knapford Yards', station: 'Knapford', line: 'main', kind: 'yard', roads: [['diesel', 'harvey'], ['stafford', 'billy'], ['calliope', 'draisine'], ['jibRunner', 'crane15', 'toolVan']]},
+  // Knapford Yards lies alongside the station on the west, its six roads fed by a ladder off the
+  // down Main Line (drawn by knapford.js); siteFn puts it there instead of searching for a site.
+  {key: 'knapford', label: 'Knapford Yards', station: 'Knapford', line: 'main', kind: 'yard', len: 200,
+   roads: [['diesel', 'harvey'], ['stafford', 'billy'], ['calliope', 'draisine'], ['jibRunner', 'crane15', 'toolVan'],
+           ['truck', 'truckB', 'truck', 'truckB', 'truck'], ['vanGrey', 'vanBrown', 'vanGrey', 'oilTank', 'oilTank']],
+   siteFn: () => {
+     if(!KNAP.line) return null;
+     const s0 = -265, t = KNAP.tangent(s0), n = new THREE.Vector3(-t.z, 0, t.x);     // n points west, away from the station
+     const o = KNAP.at(s0, -26); const base = KNAP.y(-150); o.y = 0;
+     return {o, t, n, len: 200 * M, wid: 34 * M, side: -1, base};
+   }},
   {key: 'vicarstown', label: 'Vicarstown Sheds', station: 'Vicarstown', line: 'main', kind: 'shed', roads: [['rosie'], ['sonny']]},
   {key: 'dieselworks', label: 'Vicarstown Dieselworks', station: 'Vicarstown Dieselworks', line: 'dieselworks', kind: 'works', color: 0x5f7a9a, roads: [['den', 'dart'], ['dennis', 'norman'], ['sidney'], ['arry', 'bert']]},
   {key: 'wellsworth', label: 'Wellsworth Sheds', station: 'Wellsworth', line: 'main', kind: 'shed', roads: [['philip']]},
@@ -1795,11 +1805,14 @@ Object.keys(RUNS).forEach(id => {
   if(!rec || !line) return;
   const unit = engineUnit(rec);
   const cars = run.consist.length ? run.consist.map(k => scaleAdd(makeStock(k))) : [dummy()];
-  const uA = run.from ? K.lineU(line, run.from) : (run.fromU || 0), uB = run.to ? K.lineU(line, run.to) : (run.toU === undefined ? 1 : run.toU);
+  let uA = run.from ? K.lineU(line, run.from) : (run.fromU || 0), uB = run.to ? K.lineU(line, run.to) : (run.toU === undefined ? 1 : run.toU);
   const sgn = uB >= uA ? 1 : -1, lane = (run.lane || 0) * MAIN_LANE * sgn;
+  if(run.fromShift) uA += run.fromShift * M / line.real.len * sgn;         // start a little short of the station, so the train stands centred on its platform
   const loopW = run.lane === 1 ? -3.5 * sgn : (lane < 0 ? -4.6 : 4.6);
+  // through Knapford a Main Line train follows its own platform road rather than its lane
+  const latFn = run.knap && line.id === 'main' && KNAP.line ? KNAP.profile(run.knap, uA, sgn) : null;
   const R = K.makeRunner({line, uA, uB, unit, cars, scale: M, gap: 0.12 * M, vmax: run.speed * M, passenger: !!run.passenger, stopsAt: run.stopsAt,
-    loopW: loopW * M, lane: lane * M, bedM: 3.6, diesel: !!run.diesel || rec.cat === 'Diesel', noRunRound: !run.consist.length});
+    loopW: loopW * M, lane: lane * M, bedM: 3.6, diesel: !!run.diesel || rec.cat === 'Diesel', noRunRound: !run.consist.length || !!run.noRunRound, latFn});
   R.rec = rec; rec.runner = R; rec.run = run;
   if(run.lane !== 1) K.drawLoops(R);
   K.addMarker(R, rec.dot, () => pickHandler(rec));
@@ -1853,7 +1866,7 @@ function siteKit(site){
     const x = site.o.x + site.t.x * a + site.n.x * b, z = site.o.z + site.t.z * a + site.n.z * b, h = Math.max(0, heightAt(x, z));
     hmin = Math.min(hmin, h); hmax = Math.max(hmax, h);
   }
-  const base = Math.max(hmax, 0.6 * M) + 0.25 * M;
+  const base = site.base !== undefined ? site.base : Math.max(hmax, 0.6 * M) + 0.25 * M;
   const yaw = Math.atan2(site.t.x, site.t.z);
   const G = new THREE.Group(); G.position.set(site.o.x, base, site.o.z); G.rotation.y = yaw; G.scale.setScalar(M);
   const sx = site.side < 0 ? -1 : 1;     // local x = across * sx (see siteKit.pt)
@@ -1946,8 +1959,8 @@ function buildDepot(D){
   const yardLen = Math.max(30, ...rowLen);
   const shedLen = D.kind === 'shed' ? 26 : D.kind === 'works' ? 40 : 0;
   const extra = D.kind === 'clay' || D.kind === 'quarry' || D.kind === 'dump' || D.kind === 'scrap' || D.kind === 'cement' || D.kind === 'rescue' || D.kind === 'harbour' ? 18 : D.victor ? 12 : 0;
-  const len = yardLen + shedLen + 8, wid = Math.max(1, roads.length) * SITE_STEP + 4 + extra;
-  const site = findSite(D.station, D.line, len, wid);
+  const len = D.len || (yardLen + shedLen + 8), wid = Math.max(1, roads.length) * SITE_STEP + 4 + extra;
+  const site = (D.siteFn && D.siteFn()) || findSite(D.station, D.line, len, wid);
   const kit = siteKit(site);
   roads.forEach((units, i) => {
     const b = 3 + i * SITE_STEP;

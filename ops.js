@@ -57,7 +57,7 @@ const _a = new V3(), _b = new V3(), _c = new V3(), _q = new V3();
 // A point beside the running line: x along the train's stretch, lat to the side (plus the line's lane).
 function pathPoint(R, x, lat, out){
   K.trackFrame(R, x);
-  const t = K._t, nl = Math.hypot(t.x, t.z) || 1, L = lat + (R.o.lane || 0);
+  const t = K._t, nl = Math.hypot(t.x, t.z) || 1, L = lat + (R.o.lane || 0) + (R.o.latFn ? R.o.latFn(x) : 0);
   return out.set(K._p.x + t.z / nl * L, K._p.y, K._p.z - t.x / nl * L);
 }
 // Put a vehicle on a curve that leaves the line sideways (a siding), turned to follow it.

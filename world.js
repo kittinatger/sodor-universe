@@ -865,98 +865,7 @@ const stationGroup = new THREE.Group(); scene.add(stationGroup);
   });
 })();
 
-// ------------------------------------------------------------------ Knapford: a proper overall-roof terminus
-// Built by hand rather than generically: a wide arched glass shed on lattice columns over three
-// platform faces (two through platforms and a bay), a brick clock tower, a lattice signal gantry
-// guarding the throat, and a small goods yard with a water tower and a loading gauge.
-(function(){
-  const st = STATIONS.find(s => s.name === 'Knapford'); if(!st) return;
-  const line = LINES[st.lines[0]]; if(!line) return;
-  const p = realAt(line, st.trackU, new V3()), d = realDir(line, st.trackU, new V3()); d.y = 0; d.normalize();
-  const g = new THREE.Group(); g.position.set(p.x, p.y - 0.55 * M, p.z); g.rotation.y = Math.atan2(d.x, d.z); g.scale.setScalar(M);
-  const IRON = mat(0x2f3a40, 0.45, 0.35), RIB = mat(0x37434a, 0.5, 0.4), BRICK = mat(0x9a4a32, 0.85), STONE_T = mat(0x7a7a74, 0.7);
-  const glass = new THREE.MeshStandardMaterial({color: 0x9fb8c4, roughness: 0.2, metalness: 0.2, transparent: true, opacity: 0.4, side: THREE.DoubleSide});
-  const LAT = S.lattice(0x24302f);
-  const lx = (3.6 / 2 + 0.6 + 4 / 2 + MAIN_LANE);               // the two real platforms' offset from the centreline (metres), matching the generic platforms built in characters.js
-  const len = 90;                                               // platform / shed length, metres
-  const leftX = -(lx + 16), rightX = lx + 4;                    // the shed's off-centre span: a bay platform to the left, clear of the station building to the right
-  const centerX = (leftX + rightX) / 2, halfSpan = (rightX - leftX) / 2, shedLen = len + 34;
-
-  // the bay platform and its short dead-end siding (decorative — not a real running line)
-  const bayTrackX = leftX + 8.5, bayLo = leftX, bayHi = leftX + 7.5, bayZ0 = -len / 2 + 6, bayZ1 = len / 2 - 14;
-  box(g, 2.6, 0.12, bayZ1 - bayZ0, mat(0x4a4b4e, 0.9), bayTrackX, 0.06, (bayZ0 + bayZ1) / 2);
-  box(g, (bayHi - bayLo), 0.5, bayZ1 - bayZ0 + 1, mat(0xa8a49a, 0.85), (bayLo + bayHi) / 2, 0.25, (bayZ0 + bayZ1) / 2);
-  box(g, 0.3, 0.1, bayZ1 - bayZ0 + 1, mat(0xeeeeee, 0.6), bayHi - 0.2, 0.52, (bayZ0 + bayZ1) / 2);
-  S.buffers(g, bayZ1, 1);
-
-  // a row of slender lattice columns down each platform edge, carrying the roof ribs
-  const colRows = [leftX + 7.5 + 2.3, -lx, lx];
-  for(let k = 1; k < 9; k++){ const z = -len / 2 - 17 + k * shedLen / 9; colRows.forEach(cx => {
-    S.latticeBox(g, 0.5, 4.4, 0.5, LAT, cx, 2.2, z);
-    box(g, 0.7, 0.14, 0.7, IRON, cx, 4.45, z);
-  }); }
-
-  // the arched glazed roof, off-centre over the whole width, on brick dwarf walls
-  for(let k = 0; k <= 12; k++){
-    const z = -len / 2 - 17 + k * shedLen / 12, ring = new THREE.Mesh(new THREE.TorusGeometry(halfSpan, 0.3, 6, 28, Math.PI), RIB);
-    ring.position.set(centerX, 4.6, z); g.add(ring);
-  }
-  const shell = new THREE.Mesh(new THREE.CylinderGeometry(halfSpan, halfSpan, shedLen, 28, 1, true, -Math.PI / 2, Math.PI), glass);
-  shell.rotation.x = -Math.PI / 2; shell.position.set(centerX, 4.6, 0); g.add(shell);
-  box(g, 1.3, 4.6, shedLen, BRICK, leftX - 0.65, 2.3, 0);
-  box(g, 1.3, 4.6, shedLen, BRICK, rightX + 0.65, 2.3, 0);
-
-  // numbered platform boards (bay, down, up), hanging between the columns
-  [{x: leftX + 7.5 - 0.3, no: 1}, {x: -lx, no: 2}, {x: lx, no: 3}].forEach(pl => {
-    const tex = canvasTex(160, 72, (ctx, w, h) => {
-      ctx.fillStyle = '#eee9d8'; ctx.fillRect(0, 0, w, h); ctx.strokeStyle = '#1f5c34'; ctx.lineWidth = 6; ctx.strokeRect(4, 4, w - 8, h - 8);
-      ctx.fillStyle = '#1f5c34'; ctx.fillRect(w / 2 - 22, 8, 44, h - 16);
-      ctx.fillStyle = '#eee9d8'; ctx.font = 'bold 44px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(pl.no), w / 2, h / 2 + 2);
-      ctx.fillStyle = '#1f5c34'; ctx.font = 'bold 20px Arial'; ctx.fillText('KNAPFORD', w * 0.26, h / 2 + 1); ctx.fillText('KNAPFORD', w * 0.74, h / 2 + 1);
-    });
-    const boardMat = new THREE.MeshStandardMaterial({map: tex, roughness: 0.6});
-    for(const z of [-len / 4, len / 4]){
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.17), boardMat); sign.position.set(pl.x, 3.5, z); sign.rotation.y = Math.PI / 2; g.add(sign);
-      const back = sign.clone(); back.rotation.y = -Math.PI / 2; g.add(back);
-      box(g, 0.08, 0.9, 0.08, IRON, pl.x, 3.9, z);
-    }
-  });
-
-  // the station clock tower, apart from the shed at the gable end
-  const twX = leftX - 6, twZ = -len / 2 - 20, th = 17, tw = 4.6;
-  box(g, tw, th, tw, BRICK, twX, th / 2, twZ);
-  for(let row = 0; row < 3; row++) for(const s of [-1, 1]) box(g, 0.06, 1.5, 0.9, glassMat(), twX + s * (tw / 2 + 0.03), 2.6 + row * 4, twZ, ).rotation.y = Math.PI / 2;
-  box(g, tw + 0.7, 0.6, tw + 0.7, STONE_T, twX, th + 0.3, twZ);
-  add(g, new THREE.ConeGeometry(tw * 0.72, 6, 4).rotateY(Math.PI / 4), mat(0x3a3f46, 0.7), twX, th + 3.6, twZ);
-  for(const s of [0, 1, 2, 3]){
-    const ang = s * Math.PI / 2, cx = twX + Math.sin(ang) * (tw / 2 + 0.05), cz = twZ + Math.cos(ang) * (tw / 2 + 0.05);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.25, 24), mat(0x2a2f33, 0.6)); ring.position.set(cx, th - 3.4, cz); ring.rotation.y = ang; g.add(ring);
-    const face = new THREE.Mesh(new THREE.CircleGeometry(0.9, 24), mat(0xf2f0e6, 0.45)); face.position.set(cx, th - 3.4, cz); face.rotation.y = ang; g.add(face);
-  }
-  box(g, tw - 1.4, th - 4, 0.1, mat(0xcfc8b4, 0.8), twX, (th - 4) / 2, twZ + tw / 2 + 0.06);        // a plain porch front, facing the forecourt
-
-  // a lattice signal gantry guarding the throat, with arms over each road
-  const gz = -len / 2 - 30, gh = 7.2;
-  for(const x of [leftX + 1, -1.2, 1.2, rightX - 1]) S.latticeBox(g, 0.55, gh, 0.55, LAT, x, gh / 2, gz);
-  S.latticeBox(g, rightX - leftX + 2, 0.7, 0.7, LAT, centerX, gh, gz);
-  [[leftX + 7.5, 1, 1], [-lx, 1, 0.3], [lx, -1, -0.3], [rightX - 3, -1, -1]].forEach(([x, e, tilt], i) => {
-    const arm = box(g, 0.08, 0.32, 1.7, mat(0xc8262b, 0.5), x + e * 0.9, gh - 0.4 - i * 0.35, gz); arm.rotation.y = tilt * 0.1;
-    box(g, 0.1, 0.1, 0.1, mat(0xeeeeee, 0.5), x, gh - 0.4 - i * 0.35, gz);
-  });
-
-  // a small goods yard beside the bay: a water tower on lattice legs, and a loading gauge
-  const yx = leftX - 3, yz = len / 2 + 10;
-  cylY(g, 3.4, 3.4, 3.2, mat(0x5a5f66, 0.55, 0.3), yx, 9.6, yz, 16);
-  for(const a of [0.6, 2.2, 3.9, 5.5]){ const lxg = S.latticeBox(g, 0.45, 8, 0.45, LAT, yx + Math.cos(a) * 2.6, 4, yz + Math.sin(a) * 2.6); }
-  cylZ(g, 0.12, 0.12, 2.2, IRON, yx, 7.6, yz + 3.4, 8);
-  const gaugeZ = bayZ1 - 6;
-  for(const s of [-1, 1]) box(g, 0.3, 5.2, 0.3, IRON, bayTrackX + s * 2.1, 2.6, gaugeZ).rotation.z = s * 0.08;
-  box(g, 4.6, 0.2, 0.2, mat(0xeeeeee, 0.6), bayTrackX, 5.0, gaugeZ);
-
-  S.bakeVC(g);
-  stationGroup.add(g);
-  K.clearArea(p.x, p.z, (shedLen / 2 + 20) * M);
-})();
+// Knapford is built by knapford.js (its station, throats and yard).
 
 lap('stations');
 // ------------------------------------------------------------------ rail bridges over water, and embankments
@@ -1165,12 +1074,12 @@ const lampGeo = mergeGeos([[new THREE.CylinderGeometry(0.07, 0.1, 5, 6), 0, 2.5,
       const u = j / (R.n - 1); if(inTunnel(line, u)) continue;
       const tx = R.x[j + 1] - R.x[j - 1], tz = R.z[j + 1] - R.z[j - 1], tl = Math.hypot(tx, tz) || 1, nx = tz / tl, nz = -tx / tl;
       const x = R.x[j] - nx * (half + 4 * M), z = R.z[j] - nz * (half + 4 * M);
-      if(wet(x, z) || roadClear(x, z) < 1 * M) continue;
+      if(wet(x, z) || roadClear(x, z) < 1 * M || (KNAP.inside && KNAP.inside(x, z))) continue;
       poles.push({x, y: H(x, z) - 0.2 * M, z, yaw: Math.atan2(tx, tz)});
     }
     // semaphore signals guarding each station, one each way
     line.stops.forEach(k => {
-      const st = STATIONS[k]; if(st.kind === 'closed') return;
+      const st = STATIONS[k]; if(st.kind === 'closed' || st.name === 'Knapford') return;      // Knapford has its own gantries
       const u0 = realU(line, st);
       for(const e of [-1, 1]){
         const u = u0 + e * 110 * M / R.len; if(u <= 0.002 || u >= 0.998 || inTunnel(line, u)) continue;
@@ -1365,7 +1274,7 @@ if(glowOK){
   // platform lamps at every open station
   const _a = new V3(), _d = new V3();
   STATIONS.forEach(st => {
-    const line = LINES[st.lines[0]]; if(!line || st.kind === 'closed') return;
+    const line = LINES[st.lines[0]]; if(!line || st.kind === 'closed' || st.name === 'Knapford') return;
     const std = line.kind === 'standard', lenM = std ? (MAJOR.has(st.name) ? 140 : 90) : line.kind === 'miniature' ? 22 : 40;
     const wM = std ? 4 : 2.8, off = ((std ? 3.6 : 2.3) / 2 + 0.6 + wM - 0.4 + (line.id === 'main' ? MAIN_LANE : 0)) * M;
     for(let s = -lenM / 2 + 6; s <= lenM / 2 - 6; s += 18){

@@ -888,7 +888,7 @@ function placeVeh(R, veh, x, lat){
   g.rotation.order = 'YXZ';
   g.rotation.set(-Math.asin(Math.max(-0.35, Math.min(0.35, _t.y))), Math.atan2(_t.x, _t.z), 0);
   const nx = _t.z, nz = -_t.x, nl = Math.hypot(nx, nz) || 1;
-  const L = lat + (R.o.lane || 0);       // lane: which road of a double-track line
+  const L = lat + (R.o.lane || 0) + (R.o.latFn ? R.o.latFn(x) : 0);       // lane: which road of a double-track line; latFn: a station's own roads (Knapford)
   g.position.set(_p.x + nx / nl * L, _p.y, _p.z + nz / nl * L);
   g.visible = R.line.userVisible && (Math.abs(lat) > Math.abs(R.o.loopW) * 0.5 || !inTunnel(R.line, u));
 }
@@ -910,7 +910,7 @@ function drawLoops(R){
     let along = 0, prev = null;
     for(let x = loop.lo; x <= loop.hi + 1e-9; x += 3 * METRE){
       trackFrame(R, x);
-      const lat = loopLat(R, loop, x) + (R.o.lane || 0), nl = Math.hypot(_t.z, _t.x) || 1, nx = _t.z / nl, nz = -_t.x / nl;
+      const lat = loopLat(R, loop, x) + (R.o.lane || 0) + (R.o.latFn ? R.o.latFn(x) : 0), nl = Math.hypot(_t.z, _t.x) || 1, nx = _t.z / nl, nz = -_t.x / nl;
       const cx = _p.x + nx * lat, cz = _p.z + nz * lat, y = Math.max(_p.y, heightAt(cx, cz) + 0.5 * METRE);
       if(prev) along += Math.hypot(cx - prev[0], cz - prev[1]);
       const b = vp.length / 3;
@@ -1347,7 +1347,7 @@ const WALLS = [0xe8dcc0, 0xd9cfb4, 0x9a4a32, 0xa39c8e, 0xf0ece0, 0x8a5a3e], ROOF
   const _a = new THREE.Vector3(), _d = new THREE.Vector3();
   STATIONS.forEach((st, si) => {
     const line = LINES[st.lines[0]];
-    if(!line) return;
+    if(!line || st.name === 'Knapford') return;            // Knapford is built by knapford.js
     const std = line.kind === 'standard', closed = st.kind === 'closed';
     const lenM = std ? (MAJOR.has(st.name) ? 140 : 90) : line.kind === 'miniature' ? 22 : line.kind === 'industrial' ? 20 : 40;
     const wM = std ? 4 : 2.8, off = ((std ? 3.6 : 2.3) / 2 + 0.6 + wM / 2 + (line.id === 'main' ? MAIN_LANE : 0)) * METRE;

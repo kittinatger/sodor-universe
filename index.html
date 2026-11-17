@@ -631,9 +631,83 @@ function makePortal(pos, into, widthM, info){
   portalGroup.add(g);
 }
 
+// ===================== KNAPFORD: the station's own track plan =====================
+// Knapford is laid out by hand. The Main Line's two roads spread apart into platforms 2 and 3;
+// the harbour and Ffarquhar branches run into their own bays (platforms 4 and 5) and leave by
+// the south throat, the harbour line crossing the Main Line on diamonds. Henry and Thomas run
+// round on their own loop roads (1 and 6). Positions: s = metres along the Main Line from the
+// station (towards Wellsworth), x = metres to the side (east, the town side, positive),
+// following the line's curve.
+const KNAP = {
+  ROAD: {T1:-14.4, T2:-9.8, T3:0.4, T4:5.0, T5:15.2, T6:19.8},
+  LO: -85, HI: 85,            // the platforms' ends
+  RAMP: 105,                  // the Main Line roads are back on their own lanes this far beyond them
+  BUF: -88,                   // buffer stops at the head of the bays
+  EXIT: 95,                   // where the branches start to curve away
+  CUT: 200,                   // the plain Main Line ribbon stops this far either side (the station draws its own)
+  BRANCH: {harbour: {road:'T4', side:-1}, ffarquhar: {road:'T5', side:1}},
+  line: null, u0: 0, len: 1,
+  init(line){
+    const st = RAIL.stations.find(s=>s.name==='Knapford'); if(!st) return;
+    const w = mapToWorld(st.px[0], st.px[1]), R = line.real;
+    let bi=0, bd=Infinity; for(let j=0;j<R.n;j++){ const d=(R.x[j]-w.x)**2+(R.z[j]-w.z)**2; if(d<bd){ bd=d; bi=j; } }
+    this.line = line; this.u0 = bi/(R.n-1); this.len = R.len;
+  },
+  uAt(s){ return this.u0 + s*METRE/this.len; },
+  // world point at (s, x) and the line's horizontal tangent / normal there
+  at(s, x, out = new THREE.Vector3()){
+    const u = this.uAt(s), p = realAt(this.line, u, out), d = realDir(this.line, u, _kd); const l = Math.hypot(d.x, d.z)||1;
+    out.x += d.z/l*x*METRE; out.z -= d.x/l*x*METRE; return out;
+  },
+  tangent(s, out = new THREE.Vector3()){ const d = realDir(this.line, this.uAt(s), out); d.y = 0; return d.normalize(); },
+  y(s){ return realAt(this.line, this.uAt(s), _kd).y; },
+  // how far a Main Line road has spread from its lane: 1 along the platforms, easing to 0 through the throats
+  w(s){ const a = this.LO - this.RAMP, b = this.HI + this.RAMP, sm = t=>{ t=Math.max(0,Math.min(1,t)); return t*t*(3-2*t); };
+    return s < this.LO ? sm((s-a)/this.RAMP) : s > this.HI ? sm((b-s)/this.RAMP) : 1; },
+  // lateral position (metres) of a Main Line road at s: 'down' runs into road 2, 'up' into road 3
+  mainX(which, s){ const lane = which==='down' ? -MAIN_LANE : MAIN_LANE, road = which==='down' ? this.ROAD.T2 : this.ROAD.T3; return lane + (road-lane)*this.w(s); },
+  inCut(u){ if(!this.line) return false; const s = (u - this.u0)*this.len/METRE; return s > -this.CUT && s < this.CUT; },
+  // a runner on the Main Line keeps to its lane, except through Knapford where it follows its road:
+  // returns the extra sideways offset (world units, runner's side convention) for runner position x
+  profile(which, uA, sgn){
+    const L = this.len, lane = which==='down' ? -MAIN_LANE : MAIN_LANE;
+    return x => { const s = ((uA + sgn*x*1/L) - this.u0)*L/METRE; if(s < this.LO-this.RAMP || s > this.HI+this.RAMP) return 0; return (this.mainX(which, s) - lane)*METRE*sgn; };
+  },
+  // the Ffarquhar and harbour branches: their first stretch is rebuilt to start at buffer stops in
+  // their bays, run the length of the platform, and curve away through the south throat to rejoin
+  // their mapped course
+  edit(lineId, rp){
+    const B = this.BRANCH[lineId]; if(!B || !this.line) return null;
+    const rx = this.ROAD[B.road], pts = [];
+    for(let s = this.BUF; s < this.EXIT; s += 6) pts.push(this.at(s, rx).setY(0));
+    const E0 = this.at(this.EXIT, rx).setY(0), t = this.tangent(this.EXIT), n = new THREE.Vector3(t.z, 0, -t.x);
+    const origin = rp[0];
+    let best = null;
+    for(const Rm of [120, 160, 200, 260, 330]) for(let th = 15; th <= 85; th += 5){
+      const R = Rm*METRE, a = th*Math.PI/180, side = B.side;
+      const E = E0.clone().addScaledVector(n, side*R*(1-Math.cos(a))).addScaledVector(t, R*Math.sin(a));
+      const hE = t.clone().multiplyScalar(Math.cos(a)).addScaledVector(n, side*Math.sin(a));
+      for(let J = 3; J < rp.length-4; J += 2){
+        const dO = rp[J].distanceTo(origin)/METRE; if(dO < 220) continue; if(dO > 2200) break;
+        const v = rp[J].clone().sub(E), vl = v.length(); if(vl < 30*METRE) continue; v.divideScalar(vl);
+        const hJ = rp[J+3].clone().sub(rp[J-3]).normalize();
+        const cost = Math.acos(Math.max(-1,Math.min(1,hE.dot(v)))) + Math.acos(Math.max(-1,Math.min(1,v.dot(hJ)))) + vl/METRE*0.0004 + Rm*0.0003;
+        if(!best || cost < best.cost) best = {cost, R, a, J};
+      }
+    }
+    if(!best) return null;
+    for(let k = 1; k <= 12; k++){ const a = best.a*k/12; pts.push(E0.clone().addScaledVector(n, B.side*best.R*(1-Math.cos(a))).addScaledVector(t, best.R*Math.sin(a))); }
+    for(let J = best.J; J < rp.length; J++) pts.push(rp[J]);
+    const c = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), len = c.getLength();
+    c.arcLengthDivisions = Math.max(1000, Math.ceil(len/TRACK_STEP));
+    return {pts: c.getSpacedPoints(Math.max(4, Math.ceil(len/TRACK_STEP))), len, stationLen: (this.EXIT-this.BUF)*METRE};
+  },
+};
+const _kd = new THREE.Vector3();
+
 function buildTrack(line){
   const guide = new THREE.CatmullRomCurve3(line.path.map(p=>{ const w=mapToWorld(p[0],p[1]); return new THREE.Vector3(w.x,0,w.z); }), false, 'centripetal');
-  const guideLen = guide.getLength();
+  let guideLen = guide.getLength();
   guide.arcLengthDivisions = Math.max(1000, Math.ceil(guideLen/TRACK_STEP));
   guide.updateArcLengths();
 
@@ -676,10 +750,15 @@ function buildTrack(line){
 
   // --- life-size track on the ground
   const N = Math.max(4, Math.ceil(guideLen/TRACK_STEP));
-  const rp = guide.getSpacedPoints(N), M = rp.length;
+  let rp = guide.getSpacedPoints(N);
+  const knapEdit = KNAP.edit(line.id, rp);                  // Knapford's branches start in their bays
+  if(knapEdit){ rp = knapEdit.pts; guideLen = knapEdit.len; }
+  const M = rp.length;
   const rx = new Float32Array(M), ry = new Float32Array(M), rz = new Float32Array(M), hg = new Float32Array(M);
   for(let j=0;j<M;j++){ rx[j]=rp[j].x; rz[j]=rp[j].z; const h = heightAt(rx[j], rz[j]); hg[j] = h<0 ? 2.5*METRE : h; }
-  const tun = tunnels.map(({i0,i1})=>[Math.round(i0/n*N), Math.round(i1/n*N)]);
+  const tun = knapEdit
+    ? tunnels.map(({t})=>{ let j0 = nearestSample(rp, t.wa), j1 = nearestSample(rp, t.wb); if(j0>j1) [j0,j1] = [j1,j0]; if(j1-j0<2) j1 = Math.min(M-1, j0+2); return [j0,j1]; })
+    : tunnels.map(({i0,i1})=>[Math.round(i0/n*N), Math.round(i1/n*N)]);
   const rIn = new Uint8Array(M);
   tun.forEach(([j0,j1])=>{ for(let j=j0+1;j<j1;j++) rIn[j]=1; });
   for(let j=0;j<M;j++){ let s=0,c=0; for(let k=-2;k<=2;k++){ const q=j+k; if(q>=0&&q<M){ s+=hg[q]; c++; } } ry[j] = Math.max(s/c, hg[j]) + 0.55*METRE; }
@@ -697,7 +776,17 @@ function buildTrack(line){
     }
     viaduct = Object.assign({j0: Math.round(jc-half/step), j1: Math.round(jc+half/step)}, V);
   }
+  // a Knapford branch lies level with the Main Line along its platform, then eases onto its own grade
+  if(knapEdit){
+    const step = guideLen/(M-1), sl = knapEdit.stationLen, blend = 70*METRE;
+    for(let j=0;j<M;j++){
+      const along = j*step; if(along > sl + blend) break;
+      const yS = KNAP.y(KNAP.BUF + Math.min(along, sl)/METRE), k = along <= sl ? 1 : 1 - (along-sl)/blend;
+      ry[j] = yS*k + ry[j]*(1-k);
+    }
+  }
   line.real = {x:rx, y:ry, z:rz, n:M, len:guideLen, tun: tun.map(([a,b])=>[a/(M-1), b/(M-1)]), viaduct};
+  if(line.id==='main') KNAP.init(line);
 
   const bed = BED_M[line.kind]*METRE/2, rep = (line.kind==='standard'?0.75:0.9)*METRE;
   const vp=[], vu=[], vn=[], ix=[];
@@ -707,7 +796,7 @@ function buildTrack(line){
     let prev = -1, along = 0;
     for(let j=0;j<M;j++){
       if(j>0) along += Math.hypot(rx[j]-rx[j-1], rz[j]-rz[j-1]);
-      if(rIn[j]){ prev = -1; continue; }
+      if(rIn[j] || (line.id==='main' && KNAP.inCut(j/(M-1)))){ prev = -1; continue; }     // Knapford draws its own roads
       const a = Math.max(0,j-1), b = Math.min(M-1,j+1);
       let dx = rx[b]-rx[a], dz = rz[b]-rz[a]; const dl = Math.hypot(dx,dz)||1; dx/=dl; dz/=dl;
       const base = vp.length/3;
@@ -1158,12 +1247,13 @@ updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
-<script src="characters.js?v=11"></script>
+<script src="characters.js?v=12"></script>
 <script src="duties.js?v=1"></script>
-<script src="nwr.js?v=4"></script>
+<script src="nwr.js?v=5"></script>
 <script src="cfr.js?v=3"></script>
-<script src="ops.js?v=1"></script>
-<script src="world.js?v=2"></script>
-<script src="life.js?v=1"></script>
+<script src="knapford.js?v=3"></script>
+<script src="ops.js?v=2"></script>
+<script src="world.js?v=3"></script>
+<script src="life.js?v=2"></script>
 </body>
 </html>
