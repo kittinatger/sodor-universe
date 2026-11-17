@@ -952,8 +952,8 @@ function lighthouse(g, tall, col = 0xf2f0ea){
     // working cranes along the quay
     const nCr = t.cls === 3 ? 3 : t.cls === 2 ? 2 : 0;
     for(let k = 0; k < nCr; k++){
-      const cr = S.portalCrane({color: [0x2f6a9a, 0xd8a020, 0x9a3a2a][k % 3], counter: 0x8a8d91, legH: 7, span: 6, jib: 18, jibUp: 0.7});
-      cr.position.set(-Lq / 2 + (k + 1) * Lq / (nCr + 1), 0, 2); g.add(cr);
+      const cr = S.portalCrane({color: [0x2f6a9a, 0xd8a020, 0x9a3a2a][k % 3], counter: 0x8a8d91, legH: 7, span: 6, jib: 18, jibUp: 0.7, animate: true});
+      cr.position.set(-Lq / 2 + (k + 1) * Lq / (nCr + 1), 0, 2); g.add(cr); window.SODOR_CRANES.push(cr);
     }
     if(!big){ const jc = new THREE.Group(); jc.position.set(Lq * 0.25, 0, 3); g.add(jc); cylY(jc, 0.3, 0.4, 5, mat(0x2a5a7a, 0.6), 0, 2.5, 0, 10); const jb = box(jc, 0.3, 0.3, 6, mat(0x2a5a7a, 0.6), 0, 5, 2.5); jb.rotation.x = -0.4; }
     // boats along the quay, a ship alongside in the bigger ports
@@ -969,8 +969,11 @@ function lighthouse(g, tall, col = 0xf2f0ea){
       tryPlace(t, 'warehouse', wp.x, wp.z, g.rotation.y, 0.9, r2);
     }
     clearAreaW(q.x, q.z, Lq * 0.6 * M);
+    // bake the quay and sheds, but keep each moored boat as its own small baked group so it can rock at anchor
+    boats.forEach(bg => g.remove(bg));
     S.bakeVC(g);
-    harbours.push({t, g, x: q.x, z: q.z, y: gy, dir, mouth: q.clone().addScaledVector(dir, 140 * M)});
+    boats.forEach(bg => { S.bakeVC(bg); g.add(bg); });
+    harbours.push({t, g, x: q.x, z: q.z, y: gy, dir, mouth: q.clone().addScaledVector(dir, 140 * M), boats});
   });
 })();
 // Lighthouses on the island's outermost headlands, looking out to sea.

@@ -25,8 +25,8 @@
 
   /* ---- HUD (top-left stats) ---- */
   #hud{top:14px;left:14px;padding:16px 18px;width:264px;}
-  #hud h1{font-size:15px;margin:0 0 2px;color:var(--ink);letter-spacing:.6px;font-weight:700;display:flex;align-items:center;gap:7px;}
-  #hud h1::before{content:'🚂';font-size:15px;filter:drop-shadow(0 0 6px rgba(127,212,255,.4));}
+  #hud h1{font-size:15px;margin:0 0 2px;color:var(--ink);letter-spacing:.6px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  #hud h1::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--accent);box-shadow:0 0 8px 1px var(--accent);flex-shrink:0;}
   #hud .sub{font-size:10.5px;color:var(--accent-dim);margin-bottom:12px;text-transform:uppercase;letter-spacing:.8px;font-weight:600;}
   .stat-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:6px 0;border-top:1px solid var(--edge);color:var(--muted);}
   .stat-row:first-of-type{border-top:none;padding-top:0;}
@@ -50,7 +50,7 @@
   .leg-swatch.dashed{background-image:repeating-linear-gradient(90deg,transparent 0 3px,rgba(6,13,19,.95) 3px 5px);}
 
   /* ---- roster / duties ---- */
-  #roster{top:255px;left:14px;padding:12px 14px;width:264px;max-height:calc(100vh - 340px);overflow:auto;font-size:12px;}
+  #roster{top:298px;left:14px;padding:12px 14px;width:264px;max-height:calc(100vh - 384px);overflow:auto;font-size:12px;}
   #roster:not(.collapsed) h2{margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid var(--edge);}
   #roster.collapsed #rosterBody{display:none;}
   #rosterTabs{display:flex;gap:4px;margin-bottom:8px;background:rgba(0,0,0,.22);padding:3px;border-radius:9px;}
@@ -103,6 +103,7 @@
 
   /* ---- info panel ---- */
   #panel{bottom:14px;left:14px;right:14px;max-width:540px;margin:0 auto;padding:18px 20px;display:none;box-shadow:0 16px 44px -10px rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.06) inset;border-color:var(--edge-hi);background:linear-gradient(175deg,rgba(18,32,43,.97),rgba(10,19,27,.97));z-index:20;opacity:0;transform:translateY(8px);transition:opacity .22s ease,transform .22s ease;}
+  #camctl,#speedctl{transition:opacity .2s ease,transform .2s ease;}
   #panel.show{display:block;animation:panelIn .22s ease forwards;}
   @keyframes panelIn{to{opacity:1;transform:translateY(0);}}
   #panel h3{margin:0 0 4px;font-size:18px;color:var(--gold);font-weight:700;letter-spacing:.2px;}
@@ -137,12 +138,14 @@
     .clk-note{display:none;}
     .duty-sub{display:none;}
     #legend{width:144px;padding:9px 10px;max-height:45vh;border-radius:11px;}
-    #roster{top:228px;width:154px;padding:9px 10px;max-height:calc(100vh - 362px);border-radius:11px;}
+    #roster{top:276px;width:154px;padding:9px 10px;max-height:calc(100vh - 432px);border-radius:11px;}
     .ros-sub{display:none;}
     #rosterTabs button{font-size:9.5px;padding:5px 0;}
     #credit{display:none;}
     #hint{bottom:auto;top:14px;left:auto;right:auto;transform:none;display:none;}
     #panel{left:10px;right:10px;bottom:10px;padding:14px 16px;}
+    /* the info panel spans the bottom here, so step the other bottom controls out of its way while it's open */
+    body.panel-open #camctl,body.panel-open #speedctl{display:none;}
   }
 </style>
 </head>
@@ -919,12 +922,13 @@ function openPanel(kind,title,desc,meta){
   document.getElementById('pMeta').textContent = meta || '';
   pActions.innerHTML = '';
   panel.classList.add('show');
+  document.body.classList.add('panel-open');
 }
 function addPanelButton(label, onClick){
   const b = document.createElement('button');
   b.textContent = label; b.onclick = onClick; pActions.appendChild(b); return b;
 }
-document.getElementById('closeBtn').onclick = ()=>panel.classList.remove('show');
+document.getElementById('closeBtn').onclick = ()=>{ panel.classList.remove('show'); document.body.classList.remove('panel-open'); };
 
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function pick(clientX, clientY){
@@ -1160,5 +1164,6 @@ animate();
 <script src="cfr.js?v=3"></script>
 <script src="ops.js?v=1"></script>
 <script src="world.js?v=2"></script>
+<script src="life.js?v=1"></script>
 </body>
 </html>

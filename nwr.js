@@ -9,6 +9,7 @@ const {mat, add, box, cylZ, cylX, cylY, domeCap, arcZ, roof, canvasTex, plateMat
 const M = METRE, HG = 0.7175;                        // half the standard gauge (rail centres)
 const BLACK = 0x18191b, IRON = 0x2b2c2e, BEAM = 0xb3201c, BRASS = 0xc9a23a, COPPER = 0xc07a3c, ROOFGREY = 0x55585c;
 const hex = c => '#' + c.toString(16).padStart(6, '0');
+window.SODOR_CRANES = [];           // working portal cranes (harbours, docks) with a g.userData.crane to slew; filled as they're built
 
 // ------------------------------------------------------------------ baking with vertex colours
 // Every plain-coloured part of a vehicle is merged into one mesh per surface type, so a whole
@@ -1185,7 +1186,14 @@ function portalCrane(o){
   box(top, 0.6, 0.6, 0.6, mat(0xc8201e, 0.5), 0, 0.5, 1.9 + o.jib * Math.cos(o.jibUp));
   if(o.name) letter(top, o.name, o.nameStyle, 0.4, 2.0, ty + 3.0, -0.6);
   if(o.stripes) hazard(g, o.span, 0.5, 0, o.legH + 0.5, 3.21);
-  bakeVC(g);
+  if(o.animate){
+    // keep the cab and jib as their own baked group (not merged into the rest) so it can slew at work
+    g.remove(top);
+    bakeVC(g);
+    bakeVC(top);
+    g.add(top);
+    g.userData.crane = top;
+  } else bakeVC(g);
   return g;
 }
 
@@ -2070,10 +2078,10 @@ function buildDocks(D){
   D.roads.forEach((ids, i) => K.yards.push({D, label: D.label, rail: 'nwr', units: units[i], ids, at: (s, out) => out.set(s, 0, -12).applyMatrix4(toWorld),
     yaw: yawRow, face: 1, sMin: -69, sMax: 69, shed: 0, origin: -40}));
   for(let k = 0; k < 3; k++) building(G, -50 + k * 30, -24, 20, 14, 9, [0x9a958c, 0x8a5a3e, 0xa39c8e][k], 0x4a4f58, Math.PI / 2);
-  const cranky = portalCrane({color: 0x6b7a2a, counter: 0x8a8d91, legH: 8, span: 7, jib: 22, jibUp: 0.75, face: {smile: -0.3, brow: 0.8, thick: true}, name: 'CRANKY', nameStyle: {fg: '#9be04a', line: '#2a3a10', font: 'bold 92px Arial'}});
-  cranky.position.set(-15, 0, 0.5); G.add(cranky); nonRail('cranky', G, cranky);
-  const carly = portalCrane({color: 0xf2d21a, rail: 0x2ab0b0, counter: 0x8a8d91, legH: 9, span: 7, tower: 6, jib: 20, jibUp: 0.6, knuckle: true, stripes: true, face: {smile: 0.85, lashes: true, look: 0.3}, name: 'CARLY', nameStyle: {fg: '#1a9a9a', line: null, font: 'bold 92px Arial'}});
-  carly.position.set(18, 0, 0.5); G.add(carly); nonRail('carly', G, carly);
+  const cranky = portalCrane({color: 0x6b7a2a, counter: 0x8a8d91, legH: 8, span: 7, jib: 22, jibUp: 0.75, face: {smile: -0.3, brow: 0.8, thick: true}, name: 'CRANKY', nameStyle: {fg: '#9be04a', line: '#2a3a10', font: 'bold 92px Arial'}, animate: true});
+  cranky.position.set(-15, 0, 0.5); G.add(cranky); nonRail('cranky', G, cranky); window.SODOR_CRANES.push(cranky);
+  const carly = portalCrane({color: 0xf2d21a, rail: 0x2ab0b0, counter: 0x8a8d91, legH: 9, span: 7, tower: 6, jib: 20, jibUp: 0.6, knuckle: true, stripes: true, face: {smile: 0.85, lashes: true, look: 0.3}, name: 'CARLY', nameStyle: {fg: '#1a9a9a', line: null, font: 'bold 92px Arial'}, animate: true});
+  carly.position.set(18, 0, 0.5); G.add(carly); nonRail('carly', G, carly); window.SODOR_CRANES.push(carly);
   const mickey = bigMickeyModel(); mickey.position.set(50, 0, -2); G.add(mickey); nonRail('bigmickey', G, mickey);
   const ship = new THREE.Group(); ship.position.set(5, -base / M, 22); G.add(ship);
   const hull = new THREE.Shape(); hull.moveTo(-40, -6); hull.lineTo(30, -6); hull.lineTo(42, 0); hull.lineTo(30, 6); hull.lineTo(-40, 6); hull.closePath();
