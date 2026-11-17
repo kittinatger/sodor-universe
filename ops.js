@@ -178,7 +178,7 @@ function scoreShed(D, g){
 }
 function placeShed(D){
   const R = D.R, G = GEO[D.gauge], lane = R.o.lane || 0;
-  const ends = R.runRound ? ['A', 'B'] : [R.side];
+  const ends = R.o.shedEnd ? [R.o.shedEnd] : R.runRound ? ['A', 'B'] : [R.side];
   const sides = lane ? [Math.sign(lane)] : [-R.sgn, R.sgn];      // double track: always on the outside
   let best = null;
   for(const T of ends) for(const gapX of [6, 30, 70]) for(const W of G.W) for(const side of sides){
@@ -390,7 +390,7 @@ function stepYards(dt){
       if(step <= 1e-5){ r.v = 0; if(working) r.target = r.s; return; }        // blocked by a neighbour: give up this move
       r.s += Math.sign(d) * step;
       placeRake(Y, r);
-      r.vehs.forEach(v => K.spin(v, Math.sign(d) * step * Y.face * M, M));
+      r.vehs.forEach(v => K.spin(v, Math.sign(d) * step * Y.face * M, Y.scale || M));
       if(r.rec.cat !== 'Diesel') smoke(r.vehs[0], true, dt, r);
     });
   });

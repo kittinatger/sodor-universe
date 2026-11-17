@@ -804,11 +804,11 @@ function arlesdale(){
      tender: {color: 0x2a5fb0, lining: 0xc8262b},
      from: 'Marthwaite', to: 'Arlesdale', consist: ['adSaloon', 'adSemi', 'adSaloon'], speed: 0.85, passenger: true},
     {...A, id: 'mike', name: 'Mike', no: '', wheels: '2-8-2+T', basis: 'Ravenglass and Eskdale Railway River Mite', livery: 'Red with yellow lining',
-     job: 'Takes turns with Bert on the valley trains', relief: 'bert',
+     job: 'The second valley train, crossing Bert at the loop at Arlesdale Green', pair: 'bert', consist: ['adSaloon', 'adSaloon', 'adSemi'], speed: 0.85, passenger: true,
      build: big({color: 0xb3262a, lining: 0xf2c419, face: {smile: 0.2, brow: 0.6}, plates: Object.assign(plate('Mike', '', '#b3262a', '#f2c419'), {number: null, nameW: 0.34}), axles: ax8}),
      tender: {color: 0xb3262a, lining: 0xf2c419}},
     {...A, id: 'jock', name: 'Jock', no: '', wheels: '2-6-2+T', basis: 'Ravenglass and Eskdale Railway Northern Rock', livery: 'Dark green with red and white lining',
-     job: 'Takes turns with Rex on the trains from Arlesburgh West', relief: 'rex',
+     job: 'The second train from Arlesburgh West, crossing Rex at the loop at Arlesburgh', pair: 'rex', consist: ['adSemi', 'adOpen', 'adOpen'], speed: 0.8, passenger: true,
      build: big({color: 0x1f4a32, lining: 0xc8262b, chimneyH: 0.46, face: {smile: 1.0, brow: -0.3}, plates: Object.assign(plate('Jock', '', '#1f4a32', '#f2f2f2'), {number: null, nameW: 0.34}), axles: ax6}),
      tender: {color: 0x1f4a32, lining: 0xc8262b}},
     {...A, id: 'frank', name: 'Frank', no: '', wheels: '4wDM', basis: 'Ravenglass and Eskdale Railway works diesel', livery: 'Maroon with yellow warning panels',
@@ -816,12 +816,12 @@ function arlesdale(){
      build: () => buildRusty({color: 0x7a2a22, face: {smile: 0.6, brow: 0.2}}),
      from: 'Ffarquhar Road', to: 'Marthwaite', consist: ['adHopper', 'adHopper', 'adHopper', 'adFlat'], speed: 0.6, diesel: true, inset: 45},
     {...A, id: 'sigrid', name: 'Sigrid of Arlesdale', no: '', wheels: '4wDH', basis: 'Ravenglass and Eskdale Railway Lady Wakefield', livery: 'Blue with yellow ends',
-     job: 'Takes turns with Frank and on quiet days covers for the steam engines', relief: 'frank', diesel: true,
+     job: 'A second ballast train, crossing Frank at the loop halfway along', pair: 'frank', consist: ['adFlat', 'adHopper', 'adHopper'], speed: 0.6, diesel: true,
      build: () => buildRusty({color: 0x2a6ab0, face: {smile: 0.8, brow: -0.4, lashes: true}})},
     {...A, id: 'blister1', name: 'Blister I', no: '', wheels: '4wDH', basis: 'Ravenglass and Eskdale Railway diesel-hydraulic', livery: 'Mustard yellow',
-     job: 'Covers for Rex and Jock', relief: 'rex', diesel: true, build: () => buildRusty({color: 0xc9a227, face: {smile: 0.4, brow: 0.2}})},
+     job: 'Shunting the hoppers in the siding at Arlesdale', yard: 'Arlesdale', consist: ['adHopper', 'adHopper', 'adHopper'], cat: 'Diesel', diesel: true, build: () => buildRusty({color: 0xc9a227, face: {smile: 0.4, brow: 0.2}})},
     {...A, id: 'blister2', name: 'Blister II', no: '', wheels: '4wDH', basis: 'Ravenglass and Eskdale Railway diesel-hydraulic', livery: 'Mustard yellow',
-     job: 'Covers for Bert and Mike', relief: 'bert', diesel: true, build: () => buildRusty({color: 0xc9a227, face: {smile: 0.2, brow: 0.5}})},
+     job: 'Shunting spare coaches in the siding at Arlesburgh West', yard: 'Arlesburgh West', consist: ['adSemi', 'adOpen'], cat: 'Diesel', diesel: true, build: () => buildRusty({color: 0xc9a227, face: {smile: 0.2, brow: 0.5}})},
   ];
 }
 
@@ -950,6 +950,33 @@ function spin(veh, dx, scale){
     veh.rods.forEach(r => { r.mesh.position.y = r.r + r.rc * Math.cos(ang + r.phase); r.mesh.position.z = r.mid + r.rc * Math.sin(ang + r.phase); });
   }
 }
+function passClear(R){
+  const P = R.pass.partner, la = R.pass.a;
+  if(Math.abs(P.a - la) < 0.5 * METRE) return true;       // the other train is in the loop too
+  return Math.sign(P.a - la) !== R.dir;                    // and otherwise must be on the other side
+}
+// a sleepers-and-rails ribbon through world points (sidings and the Arlesdale passing loops)
+function ribbon(line, pts, bedM){
+  const half = bedM * METRE / 2, vp = [], vu = [], vn = [], ix = [];
+  let along = 0;
+  pts.forEach((q, i) => {
+    const r = pts[Math.min(i + 1, pts.length - 1)], l = pts[Math.max(i - 1, 0)];
+    let tx = r.x - l.x, tz = r.z - l.z; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+    const nx = tz, nz = -tx;
+    if(i) along += Math.hypot(q.x - pts[i - 1].x, q.z - pts[i - 1].z);
+    const b = vp.length / 3;
+    vp.push(q.x + nx * half, q.y, q.z + nz * half, q.x - nx * half, q.y, q.z - nz * half);
+    vu.push(0, along / (0.9 * METRE), 1, along / (0.9 * METRE)); vn.push(0, 1, 0, 0, 1, 0);
+    if(i) ix.push(b - 2, b - 1, b, b - 1, b + 1, b);
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(vp, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(vu, 2));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(vn, 3));
+  g.setIndex(ix);
+  const m = new THREE.Mesh(g, line.realMesh.material); m.receiveShadow = true;
+  loopGroup.add(m);
+}
 // The passing loops are drawn as sleepers-and-rails strips like the main track.
 const loopGroup = new THREE.Group(); scene.add(loopGroup);
 function drawLoops(R){
@@ -1012,6 +1039,8 @@ function stepRunner(R, dt){
     carDx = unitDx = R.dir * step; moving = step > 0;
   } else if(R.phase === 'dwell'){
     R.timer -= dt;
+    // two trains on one stretch cross at the passing loop: wait there until the road ahead is clear
+    if(R.timer <= 0 && R.pass && R.next === 'run' && R.lastStop === R.pass.a && !passClear(R)) R.timer = 4;
     if(R.timer <= 0){
       if(R.next === 'rr'){
         const to = R.side === 'B' ? 'A' : 'B';
@@ -1078,15 +1107,15 @@ ENGINES.forEach(E => {
   const unit = [eng];
   if(E.tender) unit.push(buildTender(E.tender));
   const mini = line.kind === 'miniature', SC = mini ? MINI : NG;
-  if(E.relief){                       // takes turns on another engine's train (ops.js swaps it in)
-    unit.forEach(v => { v.group.scale.setScalar(SC); scene.add(v.group); allVehicles.push(v); });
-    E.unit = unit; E.engine = eng; tagPick(eng.group, () => showEngine(E));
-    return;
-  }
   const cars = E.consist.map(k => buildStock(k));
   [...unit, ...cars].forEach(v => { v.group.scale.setScalar(SC); scene.add(v.group); allVehicles.push(v); });
-  let uA = E.from ? lineU(line, E.from) : (E.fromU || 0), uB = E.to ? lineU(line, E.to) : (E.toU === undefined ? 1 : E.toU);
-  if(E.inset){ const d = E.inset * METRE / line.real.len * Math.sign(uB - uA); uA += d; uB -= d; }   // keep clear of a neighbour's terminus
+  if(E.yard){                         // shunts a siding (laid out below, worked by ops.js)
+    E.unit = unit; E.engine = eng; E.cars = cars; tagPick(eng.group, () => showEngine(E));
+    return;
+  }
+  const P = E.pair ? ENGINES.find(o => o.id === E.pair) : E;      // a second train on the same stretch
+  let uA = P.from ? lineU(line, P.from) : (P.fromU || 0), uB = P.to ? lineU(line, P.to) : (P.toU === undefined ? 1 : P.toU);
+  if(P.inset){ const d = P.inset * METRE / line.real.len * Math.sign(uB - uA); uA += d; uB -= d; }   // keep clear of a neighbour's terminus
   const R = makeRunner({line, uA, uB, unit, cars, scale: SC, gap: (mini ? 0.3 : 0.5) * METRE, vmax: 6.5 * METRE * E.speed,
     passenger: !!E.passenger, loopW: (mini ? 2.4 : 3.4) * METRE, bedM: mini ? 1.3 : 2.3, diesel: !!E.diesel});
   R.E = E; R.engine = eng;
@@ -1099,6 +1128,28 @@ ENGINES.forEach(E => {
   cars.forEach((v, i) => tagPick(v.group, () => {
     openPanel('Rolling stock', (E.cars && E.cars[i]) || v.label, `${v.label} in ${E.name}'s train on the ${line.name}.`, line.name);
   }));
+});
+
+// Arlesdale pairs: the first train keeps the main road and its shed at the A end; the second takes
+// the loop road through the crossing place and has its shed at the B end, so neither ever has to
+// wait overnight for the other (ops.js reads shedEnd).
+ENGINES.filter(E => E.pair && E.train).forEach(E => {
+  const P = ENGINES.find(o => o.id === E.pair), R1 = P.train, R2 = E.train;
+  if(!R1) return;
+  const mid = (R1.aA + R1.aB) / 2;
+  const la = R1.stops.length ? R1.stops.reduce((b, s) => Math.abs(s - mid) < Math.abs(b - mid) ? s : b) : mid;
+  [R1, R2].forEach(R => { if(!R.stops.includes(la)) R.stops.push(la); });
+  R1.pass = {a: la, partner: R2}; R2.pass = {a: la, partner: R1};
+  R1.o.shedEnd = 'A'; R2.o.shedEnd = 'B';
+  const k = 15 * METRE, lo = la - R2.Lc - R2.U - 2 * k, hi = la + R2.U + 2 * k, W = -2.4 * METRE * R2.sgn;
+  R2.o.latFn = x => W * smooth(lo, lo + k, x) * (1 - smooth(hi - k, hi, x));
+  const pts = [];
+  for(let x = lo; x <= hi + 1e-9; x += 3 * METRE){ trackFrame(R2, x); const nl = Math.hypot(_t.z, _t.x) || 1, L = R2.o.latFn(x);
+    const cx = _p.x + _t.z / nl * L, cz = _p.z - _t.x / nl * L; pts.push({x: cx, y: Math.max(_p.y, heightAt(cx, cz) + 0.5 * METRE), z: cz}); }
+  ribbon(R2.line, pts, 1.3);
+  // start them on opposite sides of the loop
+  R1.a = R1.aA + Math.random() * Math.max(0, la - R1.aA - 10 * METRE); R1.dir = 1; if(R1.runRound) R1.side = 'B';
+  R2.a = la + 10 * METRE + Math.random() * Math.max(0, R2.aB - la - 10 * METRE); R2.dir = -1; if(R2.runRound) R2.side = 'A';
 });
 
 // Rex (Arlesdale Railway, built in the main script) runs on the same model.
@@ -1523,4 +1574,17 @@ window.SODOR_KIT = {mat, add, box, cylZ, cylX, cylY, domeCap, arcZ, roof, bake, 
   glassMat, brassMat, bronzeMat, buildSteam, buildTender, wheelset, makeRunner, drawLoops, addMarker, RUNNERS, tagPick, lineU,
   placeVeh, spin, puff, trackFrame, swapUnit, loopLat, markerMat, _p, _t, yards: [], roundhouse: null,
   nearTrack, clearArea, inClearZone, clearZones, ground, rosterRow, NG, STD, BLACK, BEAM_RED, BRASS, sceneryNear, trees};
+// Arlesdale sidings: a short road beside the station, shunted by a Blister (ops.js YARDS).
+ENGINES.filter(E => E.yard && E.unit).forEach(E => {
+  const line = LINES[E.line], L = line.real.len, u0 = lineU(line, E.yard), sg = u0 > 0.5 ? -1 : 1;      // run back along the line
+  realDir(line, u0, _t); const nl = Math.hypot(_t.x, _t.z) || 1, nx = _t.z / nl, nz = -_t.x / nl, OFF = 6 * METRE, LEN = Math.round(60 * METRE / MINI);   // s runs in model units, like the vehicle lengths
+  const at = (s, out) => { const u = Math.max(0, Math.min(1, u0 + sg * (s + 3) * MINI / L)); realAt(line, u, out); out.x += nx * OFF; out.z += nz * OFF; out.y = Math.max(out.y, heightAt(out.x, out.z) + 0.5 * METRE); return out; };
+  const pts = []; for(let s = -2; s <= LEN + 2; s += 3) pts.push(at(s, new THREE.Vector3()));
+  ribbon(line, pts, 1.3);
+  const d = new THREE.Vector3().subVectors(pts[pts.length - 1], pts[0]).normalize();
+  let s0 = 4;                          // stand them at the start of the road (ops.js moves them from here)
+  [...E.unit, ...E.cars].forEach(v => { at(s0 + v.len / 2, v.group.position); v.group.rotation.set(0, Math.atan2(d.x, d.z), 0); s0 += v.len + 0.15; });
+  window.SODOR_KIT.yards.push({D: {label: E.yard + ' siding'}, label: E.yard + ' siding (Arlesdale Railway)', rail: 'ar', units: [E.unit, ...E.cars.map(c => [c])],
+    ids: [E.id, ...E.consist], recs: [E, ...E.cars.map(() => null)], at, yaw: Math.atan2(d.x, d.z), face: 1, sMin: 1, sMax: LEN, shed: 0, scale: MINI});
+});
 })();
