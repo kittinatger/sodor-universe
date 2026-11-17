@@ -831,7 +831,7 @@ function makeRunner(o){
 
   R.aB = span - MARGIN - (len0 + gap + U);
   R.aA = MARGIN + off[last] + lenN + gap + U;
-  R.runRound = R.aA < R.aB - 30 * METRE;
+  R.runRound = !o.noRunRound && R.aA < R.aB - 30 * METRE;     // railcars and trolleys just reverse
   if(!R.runRound){
     R.aA = MARGIN + off[last] + lenN;
     if(R.aA > R.aB) R.aA = R.aB = (R.aA + R.aB) / 2;
@@ -839,7 +839,9 @@ function makeRunner(o){
   R.stops = [];
   if(o.passenger && R.aB > R.aA){
     line.stops.forEach(k => {
-      const st = STATIONS[k], u = lineU(line, st.name), x = (u - o.uA) * sgn * L;
+      const st = STATIONS[k];
+      if(o.stopsAt && !o.stopsAt.includes(st.name)) return;     // expresses only call at the big stations
+      const u = lineU(line, st.name), x = (u - o.uA) * sgn * L;
       const a = x - len0 + Lc / 2;
       if(a > R.aA + 20 * METRE && a < R.aB - 20 * METRE) R.stops.push(a);
     });
@@ -879,8 +881,9 @@ function placeVeh(R, veh, x, lat){
   g.rotation.order = 'YXZ';
   g.rotation.set(-Math.asin(Math.max(-0.35, Math.min(0.35, _t.y))), Math.atan2(_t.x, _t.z), 0);
   const nx = _t.z, nz = -_t.x, nl = Math.hypot(nx, nz) || 1;
-  g.position.set(_p.x + nx / nl * lat, _p.y, _p.z + nz / nl * lat);
-  g.visible = R.line.userVisible && (lat > R.o.loopW * 0.5 || !inTunnel(R.line, u));
+  const L = lat + (R.o.lane || 0);       // lane: which road of a double-track line
+  g.position.set(_p.x + nx / nl * L, _p.y, _p.z + nz / nl * L);
+  g.visible = R.line.userVisible && (Math.abs(lat) > Math.abs(R.o.loopW) * 0.5 || !inTunnel(R.line, u));
 }
 function spin(veh, dx, scale){
   if(!veh.axles || !veh.axles.length || dx === 0) return;
@@ -900,7 +903,7 @@ function drawLoops(R){
     let along = 0, prev = null;
     for(let x = loop.lo; x <= loop.hi + 1e-9; x += 3 * METRE){
       trackFrame(R, x);
-      const lat = loopLat(R, loop, x), nl = Math.hypot(_t.z, _t.x) || 1, nx = _t.z / nl, nz = -_t.x / nl;
+      const lat = loopLat(R, loop, x) + (R.o.lane || 0), nl = Math.hypot(_t.z, _t.x) || 1, nx = _t.z / nl, nz = -_t.x / nl;
       const cx = _p.x + nx * lat, cz = _p.z + nz * lat, y = Math.max(_p.y, heightAt(cx, cz) + 0.5 * METRE);
       if(prev) along += Math.hypot(cx - prev[0], cz - prev[1]);
       const b = vp.length / 3;
@@ -1018,14 +1021,9 @@ ENGINES.forEach(E => {
   }));
 });
 
-// The NWR's own engines (built in the main script) run on the same model.
-const NWR_RUNS = {
-  Thomas: {passenger: true}, Percy: {line: 'kirkronan'}, Toby: {passenger: true}, Edward: {passenger: true},
-  James: {from: 'Tidmouth', to: 'Wellsworth', passenger: true}, Gordon: {from: 'Wellsworth', to: 'Kellsthorpe Road', vmax: 30},
-  Henry: {from: 'Kellsthorpe Road', to: 'Barrow-in-Furness', passenger: true}, Duck: {passenger: true},
-  Oliver: {line: 'callandale', passenger: true}, Culdee: {passenger: true}, Rex: {passenger: true},
-  Bill: {fromU: 0, toU: 0.5, cars: 1}, Ben: {fromU: 0.5, toU: 1, cars: 1},
-};
+// The other railways' engines built in the main script (Culdee, Rex) run on the same model.
+// The North Western Railway's fleet is in nwr.js.
+const NWR_RUNS = {Culdee: {passenger: true}, Rex: {passenger: true}};
 TRAINS.forEach(tr => {
   const run = NWR_RUNS[tr.name] || {};
   if(run.line && LINES[run.line]) tr.line = run.line;
@@ -1328,7 +1326,7 @@ const WALLS = [0xe8dcc0, 0xd9cfb4, 0x9a4a32, 0xa39c8e, 0xf0ece0, 0x8a5a3e], ROOF
     if(!line) return;
     const std = line.kind === 'standard', closed = st.kind === 'closed';
     const lenM = std ? (MAJOR.has(st.name) ? 140 : 90) : line.kind === 'miniature' ? 22 : line.kind === 'industrial' ? 20 : 40;
-    const wM = std ? 4 : 2.8, off = ((std ? 3.6 : 2.3) / 2 + 0.6 + wM / 2) * METRE;
+    const wM = std ? 4 : 2.8, off = ((std ? 3.6 : 2.3) / 2 + 0.6 + wM / 2 + (line.id === 'main' ? MAIN_LANE : 0)) * METRE;
     const segs = Math.ceil(lenM / 15), u0 = st.trackU;
     for(let k = 0; k < segs; k++){
       const du = ((k + 0.5) / segs - 0.5) * lenM * METRE / line.real.len;
@@ -1354,6 +1352,10 @@ const WALLS = [0xe8dcc0, 0xd9cfb4, 0x9a4a32, 0xa39c8e, 0xf0ece0, 0x8a5a3e], ROOF
   bake(plat);
   sceneryNear.add(plat);
 })();
+
+let clearHouses = () => {};
+const clearZones = [];          // ground kept free of houses and trees
+function clearArea(x, z, r){ clearZones.push({x, z, r2: r * r}); clearHouses(x, z, r); }
 
 // Houses round each town, laid out square to the railway.
 (function(){
@@ -1388,6 +1390,12 @@ const WALLS = [0xe8dcc0, 0xd9cfb4, 0x9a4a32, 0xa39c8e, 0xf0ece0, 0x8a5a3e], ROOF
     m4.compose(up.set(s.x, s.y + s.h + 0.31 * 0.9 * s.d, s.z), q, sc.set(s.d * 0.93, s.d * 0.9, s.w * 1.04)); roofs.setMatrixAt(i, m4); roofs.setColorAt(i, c.setHex(s.roof));
   });
   [walls, roofs].forEach(m => { m.castShadow = true; m.receiveShadow = true; sceneryNear.add(m); });
+  // Depots, docks and works built later (nwr.js) clear the houses off their ground.
+  clearHouses = (x, z, r) => {
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    spots.forEach((s, i) => { const rr = r + Math.max(s.w, s.d) * 0.6; if((s.x - x) ** 2 + (s.z - z) ** 2 < rr * rr){ walls.setMatrixAt(i, zero); roofs.setMatrixAt(i, zero); } });
+    walls.instanceMatrix.needsUpdate = roofs.instanceMatrix.needsUpdate = true;
+  };
 })();
 
 // Trees, regenerated around the camera target as you move: patchy woodland, none on the line.
@@ -1397,7 +1405,8 @@ const trees = (function(){
   const cone = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({roughness: 0.85}), CAP);
   const ball = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({roughness: 0.85}), CAP);
   const g = new THREE.Group(); g.add(trunk, cone, ball); scene.add(g);
-  [cone, ball].forEach(m => { m.castShadow = true; });
+  // create the per-tree colours now, so the shader is built with them even if the first fill has no trees of a kind
+  [cone, ball].forEach(m => { m.castShadow = true; m.setColorAt(0, new THREE.Color(0x3f6b2e)); });
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), c = new THREE.Color();
   const greens = [0x3f6b2e, 0x4c7a34, 0x2f5a2a, 0x5a8a3c, 0x3a5f30];
   let last = null;
@@ -1414,6 +1423,7 @@ const trees = (function(){
       const h = heightAt(x, z);
       if(h < 2 * METRE || nearTrack(x, z, 8 * METRE)) continue;
       if(STATIONS.some(st => (st.x - x) ** 2 + (st.z - z) ** 2 < (MAJOR.has(st.name) ? 0.09 : 0.0016))) continue;
+      if(clearZones.some(c => (c.x - x) ** 2 + (c.z - z) ** 2 < c.r2)) continue;
       const th = (8 + hash2(gi * 3, gk) * 9) * METRE, conifer = hash2(gk * 5, gi) < 0.45;
       m4.compose(v.set(x, h - 0.3 * METRE, z), q.identity(), s.set(th * 0.06, th * 0.45, th * 0.06)); trunk.setMatrixAt(nt, m4);
       c.setHex(greens[Math.floor(hash2(gi, gk * 3) * greens.length)]);
@@ -1461,4 +1471,8 @@ if(innerWidth < 760){ roster.classList.add('collapsed'); document.getElementById
 
 document.getElementById('statTrains').textContent = TRAINS.length + SR_TRAINS.length;
 window.SODOR_SR = {ENGINES, SR_TRAINS, RUNNERS, statics, STOCK};
+// The model kit and train runner, shared with nwr.js.
+window.SODOR_KIT = {mat, add, box, cylZ, cylX, cylY, domeCap, arcZ, roof, bake, canvasTex, faceMat, plateMat, sidePlates, sidePlatesTex,
+  glassMat, brassMat, bronzeMat, buildSteam, buildTender, wheelset, makeRunner, drawLoops, addMarker, RUNNERS, tagPick, lineU,
+  nearTrack, clearArea, ground, rosterRow, NG, STD, BLACK, BEAM_RED, BRASS};
 })();

@@ -26,7 +26,12 @@
   #roster{top:250px;left:12px;padding:10px 12px;width:250px;max-height:calc(100vh - 330px);overflow:auto;font-size:12px;}
   #roster h2{font-size:12px;margin:0 0 6px;color:var(--accent);cursor:pointer;user-select:none;display:flex;justify-content:space-between;}
   #roster.collapsed h2{margin:0;}
-  #roster.collapsed #rosterList{display:none;}
+  #roster.collapsed #rosterBody{display:none;}
+  #rosterTabs{display:flex;gap:4px;margin-bottom:6px;}
+  #rosterTabs button{flex:1;padding:5px 0;background:#15313f;border:1px solid #3a6a80;color:var(--muted);border-radius:6px;cursor:pointer;font-size:11px;}
+  #rosterTabs button.on{background:#1e4559;color:var(--gold);border-color:#5a8aa0;}
+  #rosterSearch{width:100%;box-sizing:border-box;margin-bottom:4px;padding:5px 8px;background:#0e222d;border:1px solid #2a4a5c;border-radius:6px;color:var(--ink);font-size:12px;}
+  .ros-item.hide,.leg-group.hide{display:none;}
   .ros-item{display:flex;align-items:center;gap:8px;padding:5px 4px;border-radius:6px;cursor:pointer;}
   .ros-item:hover{background:rgba(255,255,255,.06);}
   .ros-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0;border:1px solid rgba(255,255,255,.35);}
@@ -103,8 +108,13 @@
 </div>
 
 <div id="roster" class="box">
-  <h2 id="rosterHead"><span>SKARLOEY RAILWAY</span><span id="rosterArrow">▾</span></h2>
-  <div id="rosterList"></div>
+  <h2 id="rosterHead"><span>ROSTER</span><span id="rosterArrow">▾</span></h2>
+  <div id="rosterBody">
+    <div id="rosterTabs"><button data-tab="nwrList" class="on">North Western</button><button data-tab="rosterList">Skarloey</button></div>
+    <input id="rosterSearch" type="search" placeholder="Find an engine, coach or crane" autocomplete="off">
+    <div id="nwrList"></div>
+    <div id="rosterList" style="display:none"></div>
+  </div>
 </div>
 
 <div id="speedctl" class="box">
@@ -172,22 +182,16 @@ const KIND_STYLE = {
   closed:    {width:0.7,  group:"Closed"},
 };
 const LINES = {};
+// Bill, Ben, Timothy and Marion are standard-gauge engines, so the China Clay line is too.
+RAIL.lines.forEach(l=>{ if(l.id==="chinaclay") l.kind = "standard"; });
+// The Main Line is double track: up and down roads 3.5 m apart (centres at ±1.75 m).
+const MAIN_LANE = 1.75;
 RAIL.lines.forEach(l=>{ LINES[l.id] = Object.assign(l, {colorHex: parseInt(l.color,16), width: KIND_STYLE[l.kind].width * (l.id==="main"?1.5:1)}); });
 
+// The North Western Railway's own fleet is built in nwr.js; these two belong to other railways.
 const TRAINS = [
-  {name:"Thomas",   line:"ffarquhar", color:0x2f5fd0, speed:0.050, t:0.10, coaches:2, coach:0xb5651d, desc:"No.1 — a cheeky blue tank engine who runs the branch line to Ffarquhar with his coaches Annie and Clarabel."},
-  {name:"Percy",    line:"ffarquhar", color:0x2a8a3a, speed:0.045, t:1.30, coaches:1, coach:0x5a4a3a, desc:"No.6 — a small green engine who works goods trains, the mail and shunting duties."},
-  {name:"Toby",     line:"toby",      color:0x6a4a2a, speed:0.030, t:0.40, coaches:1, coach:0x7a6a50, desc:"No.7 — an old tram engine with cowcatchers and side plates who works the Sodor Tramway with his coach Henrietta."},
-  {name:"Edward",   line:"brendam",   color:0x2a4fa0, speed:0.035, t:0.30, coaches:2, coach:0x8a3a2a, desc:"No.2 — the kindest engine on Sodor, who runs his own branch line from Wellsworth to Brendam."},
-  {name:"Henry",    line:"main",      color:0x1f6a3a, speed:0.026, t:0.55, coaches:3, coach:0x8a3a2a, desc:"No.3 — a big green engine who pulls the Flying Kipper and express trains. Henry's Tunnel is named after him."},
-  {name:"Gordon",   line:"main",      color:0x1a3f8a, speed:0.034, t:1.25, coaches:4, coach:0x8a3a2a, desc:"No.4 — the big blue express engine, proud of pulling the fastest trains on the Main Line."},
-  {name:"James",    line:"main",      color:0xb01818, speed:0.030, t:0.00, coaches:3, coach:0x8a3a2a, desc:"No.5 — a red mixed-traffic engine who loves his splendid paintwork."},
-  {name:"Duck",     line:"littlewest",color:0x1f6a2a, speed:0.040, t:0.20, coaches:2, coach:0x8a4a2a, desc:"No.8 — the Great Western pannier tank who runs his own branch line to Arlesburgh."},
-  {name:"Oliver",   line:"littlewest",color:0x2f7a3a, speed:0.032, t:1.30, coaches:1, coach:0x8a4a2a, desc:"No.11 — another Great Western engine, who works Duck's branch line with him."},
   {name:"Culdee",   line:"culdeefell",color:0x5a2a7a, speed:0.040, t:0.40, coaches:1, coach:0x6a3a8a, desc:"No.4 of the Culdee Fell Railway, a rack engine who climbs to the summit."},
   {name:"Rex",      line:"arlesdale", color:0x2f7a3a, speed:0.045, t:0.50, coaches:2, coach:0x8a7a5a, desc:"One of the small engines of the Arlesdale Railway."},
-  {name:"Bill",     line:"chinaclay", color:0xd9b600, speed:0.040, t:0.20, coaches:2, coach:0xd8d0c0, desc:"One of the twin tank engines who work the china clay trains near Brendam."},
-  {name:"Ben",      line:"chinaclay", color:0xd9b600, speed:0.040, t:1.10, coaches:2, coach:0xd8d0c0, desc:"Bill's twin, who shares the china clay work near Brendam."},
 ];
 
 // ===================== TERRAIN =====================
@@ -226,7 +230,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e1d28);
 scene.fog = new THREE.Fog(0x0e1d28, 650, 1400);
 
-const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.0003, 3000);
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight || 1, 0.0003, 3000);
 const renderer = new THREE.WebGLRenderer({antialias:true, logarithmicDepthBuffer:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth, innerHeight);
@@ -463,18 +467,22 @@ function buildTrack(line){
 
   const bed = BED_M[line.kind]*METRE/2, rep = (line.kind==='standard'?0.75:0.9)*METRE;
   const vp=[], vu=[], vn=[], ix=[];
-  let prev = -1, along = 0;
-  for(let j=0;j<M;j++){
-    if(j>0) along += Math.hypot(rx[j]-rx[j-1], rz[j]-rz[j-1]);
-    if(rIn[j]){ prev = -1; continue; }
-    const a = Math.max(0,j-1), b = Math.min(M-1,j+1);
-    let dx = rx[b]-rx[a], dz = rz[b]-rz[a]; const dl = Math.hypot(dx,dz)||1; dx/=dl; dz/=dl;
-    const base = vp.length/3;
-    vp.push(rx[j]+dz*bed, ry[j], rz[j]-dx*bed,  rx[j]-dz*bed, ry[j], rz[j]+dx*bed);
-    vu.push(0, along/rep, 1, along/rep); vn.push(0,1,0, 0,1,0);
-    if(prev>=0) ix.push(prev, prev+1, base, prev+1, base+1, base);
-    prev = base;
-  }
+  const lanes = line.id==='main' ? [-MAIN_LANE, MAIN_LANE] : [0];
+  lanes.forEach(lane=>{
+    const lo = lane*METRE;
+    let prev = -1, along = 0;
+    for(let j=0;j<M;j++){
+      if(j>0) along += Math.hypot(rx[j]-rx[j-1], rz[j]-rz[j-1]);
+      if(rIn[j]){ prev = -1; continue; }
+      const a = Math.max(0,j-1), b = Math.min(M-1,j+1);
+      let dx = rx[b]-rx[a], dz = rz[b]-rz[a]; const dl = Math.hypot(dx,dz)||1; dx/=dl; dz/=dl;
+      const base = vp.length/3;
+      vp.push(rx[j]+dz*(lo+bed), ry[j], rz[j]-dx*(lo+bed),  rx[j]+dz*(lo-bed), ry[j], rz[j]-dx*(lo-bed));
+      vu.push(0, along/rep, 1, along/rep); vn.push(0,1,0, 0,1,0);
+      if(prev>=0) ix.push(prev, prev+1, base, prev+1, base+1, base);
+      prev = base;
+    }
+  });
   const rg = new THREE.BufferGeometry();
   rg.setAttribute('position', new THREE.Float32BufferAttribute(vp,3));
   rg.setAttribute('uv', new THREE.Float32BufferAttribute(vu,2));
@@ -493,7 +501,7 @@ function buildTrack(line){
     const at = j=>new THREE.Vector3(rx[j], ry[j]-0.55*METRE, rz[j]);
     const info = {type:'tunnel', name:t.name, line:line.id,
       between:[before&&STATIONS[before.k].name, after&&STATIONS[after.k].name], pos:at(Math.round((j0+j1)/2))};
-    const wM = line.kind==='standard' ? 5.5 : 3.8;
+    const wM = line.id==='main' ? 9.5 : line.kind==='standard' ? 5.5 : 3.8;
     makePortal(at(j0), _a.subVectors(at(Math.min(j0+1,M-1)), at(j0)), wM, info);
     makePortal(at(j1), _b.subVectors(at(Math.max(j1-1,0)), at(j1)), wM, info);
     return [i0/n, i1/n];
@@ -720,13 +728,14 @@ function pick(clientX, clientY){
 // ===================== CAMERA =====================
 // Distance at which the whole map width fits the screen (portrait phones need to sit further back).
 function fitDist(){
-  const halfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov/2)) * Math.min(camera.aspect, 1.35);
+  const halfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov/2)) * Math.min(camera.aspect || 1, 1.35);
   return Math.max(240, 0.98*(MAP_W/2)/halfTan);
 }
 let camTheta = 0, camPhi = 0.92, camDist = fitDist();
 const camCenter = new THREE.Vector3(0,0,8);
 let flight = null, followTrain = null, lastInteraction = 0, autoOrbit = true;
 function clampCam(){
+  if(!isFinite(camDist)) camDist = fitDist();        // a page opened at zero size (hidden tab) must not stick at NaN
   camPhi = Math.max(0.05, Math.min(1.42, camPhi));
   camDist = Math.max(0.012, Math.min(640, camDist));
   camCenter.x = Math.max(-MAP_W/2, Math.min(MAP_W/2, camCenter.x));
@@ -883,7 +892,7 @@ function animate(){
 }
 
 addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight;
+  camera.aspect = innerWidth/innerHeight || 1;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
@@ -891,6 +900,7 @@ updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
-<script src="characters.js?v=7"></script>
+<script src="characters.js?v=8"></script>
+<script src="nwr.js?v=1"></script>
 </body>
 </html>
