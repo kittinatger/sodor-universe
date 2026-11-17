@@ -1,6 +1,7 @@
 """Build terrain.js from reference/sodor-outline.png.
 
-Requires numpy, pillow, scipy. Run from the repo root:
+Tunnels listed in railways.js get a ridge raised over them, so run
+tools/build_railways.py first. Requires numpy, pillow, scipy. Run from the repo root:
     python tools/build_terrain.py
 """
 import base64
@@ -57,6 +58,25 @@ def fractal_noise(shape, rng, octaves=5, base=6):
     return out / total
 
 
+def tunnel_ridges(xx, yy):
+    """A ridge over each tunnel: zero at both portals, highest midway."""
+    out = np.zeros_like(xx)
+    rail = ROOT / "railways.js"
+    if not rail.exists():
+        return out
+    data = json.loads(rail.read_text(encoding="utf-8").split("=", 1)[1].strip().rstrip(";"))
+    for t in data.get("tunnels", []):
+        (ax, ay), (bx, by) = t["a"], t["b"]
+        vx, vy = bx - ax, by - ay
+        L2 = vx * vx + vy * vy or 1.0
+        u = ((xx - ax) * vx + (yy - ay) * vy) / L2
+        along = np.where((u > 0) & (u < 1), np.sin(np.pi * np.clip(u, 0, 1)), 0.0)
+        cx, cy = ax + np.clip(u, 0, 1) * vx, ay + np.clip(u, 0, 1) * vy
+        across = np.exp(-((xx - cx) ** 2 + (yy - cy) ** 2) / (2 * 17.0 ** 2))
+        out = np.maximum(out, (2.3 + 0.05 * np.sqrt(L2)) * np.sqrt(along) * across)
+    return out
+
+
 def main():
     rgb = np.asarray(Image.open(SRC).convert("RGB"))
     H, W = rgb.shape[:2]
@@ -98,7 +118,7 @@ def main():
     d = np.maximum(sdf, 0)
     rise = 1 - np.exp(-d / 35)
     inland = 1 - np.exp(-d / 25)
-    sodor_h = 0.25 + 2.2 * rise + peaks * inland + 0.9 * noise * inland
+    sodor_h = 0.25 + 2.2 * rise + peaks * inland + 0.9 * noise * inland + tunnel_ridges(xx, yy)
     other_h = 0.25 + 1.6 * rise + 0.8 * noise * inland
     land_h = np.where(region == 1, sodor_h, other_h)
     land_h = np.maximum(land_h, 0.12)

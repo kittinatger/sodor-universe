@@ -72,7 +72,7 @@
   <div class="sub">North Western Railway — Live Operations</div>
   <div class="stat-row"><span>Engines running</span><b id="statTrains">-</b></div>
   <div class="stat-row"><span>Stations</span><b id="statStations">-</b></div>
-  <div class="stat-row"><span>Halts</span><b id="statHalts">-</b></div>
+  <div class="stat-row"><span>Tunnels</span><b id="statTunnels">-</b></div>
   <div class="stat-row"><span>Lines</span><b id="statLines">-</b></div>
   <div class="stat-row"><span>Time of day</span><b id="statTime">06:00</b></div>
 </div>
@@ -109,8 +109,8 @@
 <div id="credit">Coastline: CC BY-SA 2.5 Island of Sodor outline map</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="terrain.js"></script>
-<script src="railways.js"></script>
+<script src="terrain.js?v=5"></script>
+<script src="railways.js?v=5"></script>
 <script>
 // ===================== DATA =====================
 // Network (stations + track paths, in outline-map pixels) comes from railways.js,
@@ -119,53 +119,61 @@ const RAIL = window.SODOR_RAIL;
 const LORE = {
   "Tidmouth": "It is the headquarters of the North Western Railway and home to Tidmouth Sheds, where Thomas, Edward, Henry, Gordon, James, Percy, Toby and the others rest between duties.",
   "Knapford": "It stands beside Knapford Harbour on Sodor's west coast.",
-  "Wellsworth": "It is a market town. East of here is Gordon's Hill, the steep bank where Edward once had to push Gordon's train to the top.",
+  "Wellsworth": "It is a market town and Edward's station. East of here is Gordon's Hill, the steep bank where Edward once had to push Gordon's train to the top.",
   "Suddery": "It is the capital of Sodor.",
   "Brendam Docks": "It is a busy harbour where goods move between trains and ships.",
+  "China Clay Works": "Bill and Ben, the twin tank engines, work the china clay trains here.",
   "Ffarquhar": "It is the end of Thomas's branch line, with a quarry nearby supplying stone traffic.",
-  "Crovan's Gate": "Here the narrow-gauge Skarloey Railway meets the Main Line, and the Skarloey Railway has its workshops.",
-  "Vicarstown": "The Vicarstown rolling bridge carries the line across to the English mainland.",
+  "Crovan's Gate": "Here the narrow-gauge Skarloey Railway meets the Main Line, and engines are mended at the works.",
+  "Vicarstown": "The Vicarstown rolling bridge carries the line across to the English mainland. Henry's Tunnel is just to the west.",
   "Barrow-in-Furness": "It is on the English mainland, where the NWR joins the national network.",
   "Skarloey": "The line is worked by Skarloey, Rheneas, Sir Handel, Peter Sam, Rusty and Duncan.",
   "Rheneas": "It shares its name with the engine famous for keeping the Skarloey Railway open by refusing to stop.",
+  "Blue Mountain Quarry": "Slate from the quarry is brought down by the narrow-gauge engines.",
   "Culdee Fell Summit": "It is the top of Culdee Fell, Sodor's highest mountain, reached by rack engines such as Culdee, Ernest and Wilfred.",
   "Kirk Machan": "The Culdee Fell mountain railway starts its climb here.",
-  "Arlesburgh Harbour": "Here Duck's Little Western meets the 15-inch Arlesdale Railway.",
+  "Arlesburgh": "Here Duck's branch line meets the 15-inch Arlesdale Railway.",
   "Arlesdale": "The Arlesdale Railway is worked by small engines including Rex, Bert, Mike and Frank.",
-  "Peel Godred": "It is a town beneath the fells.",
+  "Peel Godred": "It is a town beneath the fells, with aluminium works and a power station.",
   "Kirk Ronan": "It is a small port on the Kirk Ronan inlet.",
-  "Killdane": "From here the Peel Godred Branch climbs north into the high fells.",
-  "Norramby": "It is a seaside town on the east coast.",
-  "Ballamoodey": "The old Mid Sodor Railway closed long ago; the Arlesdale Railway partly follows its route.",
+  "Killdane": "From here the Peel Godred Branch Line climbs north into the high fells.",
+  "Norramby": "It is the seaside station on the east coast.",
+  "Ulfstead Castle": "It stands on the Earl's estate, at the western end of the Skarloey Railway.",
+  "Sodor Ironworks": "The smelters' yard and steelworks sit beside Vicarstown.",
+  "Arlesdale Old Station": "The Duke's old railway closed long ago; the Arlesdale Railway partly follows its route.",
 };
 const MAJOR = new Set(["Tidmouth","Knapford","Wellsworth","Maron","Killdane","Kellsthorpe Road","Crovan's Gate",
-  "Vicarstown","Barrow-in-Furness","Suddery","Brendam Docks","Ffarquhar","Elsbridge","Arlesburgh Harbour",
+  "Vicarstown","Barrow-in-Furness","Suddery","Brendam Docks","Ffarquhar","Elsbridge","Arlesburgh","Harwick",
   "Peel Godred","Kirk Machan","Culdee Fell Summit","Skarloey","Rheneas","Great Waterton","Norramby","Ballahoo",
-  "Kirk Ronan","Rolf's Castle","Ulfstead","Cronk","Arlesdale","Glennock","Cabalnoo","Bluff's Cove"]);
+  "Kirk Ronan","Rolf's Castle","Ulfstead","Cronk","Arlesdale","Glennock","Blue Mountain Quarry","Ulfstead Castle",
+  "Mountain Village","Bluebell Valley","China Clay Works"]);
 const KIND_STYLE = {
-  standard: {width:1.35, group:"Standard gauge"},
-  narrow:   {width:1.0,  group:"Narrow gauge"},
-  rack:     {width:0.95, group:"Mountain and miniature"},
-  miniature:{width:0.8,  group:"Mountain and miniature"},
-  closed:   {width:0.7,  group:"Closed"},
+  standard:  {width:1.35, group:"Standard gauge"},
+  narrow:    {width:1.0,  group:"Narrow gauge"},
+  rack:      {width:0.95, group:"Mountain, miniature and industrial"},
+  miniature: {width:0.8,  group:"Mountain, miniature and industrial"},
+  industrial:{width:0.85, group:"Mountain, miniature and industrial"},
+  closed:    {width:0.7,  group:"Closed"},
 };
 const LINES = {};
 RAIL.lines.forEach(l=>{ LINES[l.id] = Object.assign(l, {colorHex: parseInt(l.color,16), width: KIND_STYLE[l.kind].width * (l.id==="main"?1.5:1)}); });
 
 const TRAINS = [
   {name:"Thomas",   line:"ffarquhar", color:0x2f5fd0, speed:0.050, t:0.10, coaches:2, coach:0xb5651d, desc:"No.1 — a cheeky blue tank engine who runs the branch line to Ffarquhar with his coaches Annie and Clarabel."},
-  {name:"Toby",     line:"ffarquhar", color:0x6a4a2a, speed:0.030, t:1.40, coaches:1, coach:0x7a6a50, desc:"No.7 — an old tram engine with cowcatchers and side plates who works Thomas's branch and the quarry line."},
-  {name:"Percy",    line:"ulfstead",  color:0x2a8a3a, speed:0.045, t:0.70, coaches:1, coach:0x5a4a3a, desc:"No.6 — a small green engine who works goods trains and shunting duties."},
+  {name:"Percy",    line:"ffarquhar", color:0x2a8a3a, speed:0.045, t:1.30, coaches:1, coach:0x5a4a3a, desc:"No.6 — a small green engine who works goods trains, the mail and shunting duties."},
+  {name:"Toby",     line:"toby",      color:0x6a4a2a, speed:0.030, t:0.40, coaches:1, coach:0x7a6a50, desc:"No.7 — an old tram engine with cowcatchers and side plates who works the Sodor Tramway with his coach Henrietta."},
   {name:"Edward",   line:"brendam",   color:0x2a4fa0, speed:0.035, t:0.30, coaches:2, coach:0x8a3a2a, desc:"No.2 — the kindest engine on Sodor, who runs his own branch line from Wellsworth to Brendam."},
-  {name:"Henry",    line:"main",      color:0x1f6a3a, speed:0.026, t:0.55, coaches:3, coach:0x8a3a2a, desc:"No.3 — a big green engine who pulls the Flying Kipper and express trains."},
+  {name:"Henry",    line:"main",      color:0x1f6a3a, speed:0.026, t:0.55, coaches:3, coach:0x8a3a2a, desc:"No.3 — a big green engine who pulls the Flying Kipper and express trains. Henry's Tunnel is named after him."},
   {name:"Gordon",   line:"main",      color:0x1a3f8a, speed:0.034, t:1.25, coaches:4, coach:0x8a3a2a, desc:"No.4 — the big blue express engine, proud of pulling the fastest trains on the Main Line."},
   {name:"James",    line:"main",      color:0xb01818, speed:0.030, t:0.00, coaches:3, coach:0x8a3a2a, desc:"No.5 — a red mixed-traffic engine who loves his splendid paintwork."},
-  {name:"Duck",     line:"littlewest",color:0x1f6a2a, speed:0.040, t:0.20, coaches:2, coach:0x8a4a2a, desc:"No.8 — the Great Western pannier tank who runs the Little Western to Arlesburgh."},
-  {name:"Oliver",   line:"littlewest",color:0x2f7a3a, speed:0.032, t:1.30, coaches:1, coach:0x8a4a2a, desc:"No.11 — another Great Western engine, who works the Little Western with Duck."},
+  {name:"Duck",     line:"littlewest",color:0x1f6a2a, speed:0.040, t:0.20, coaches:2, coach:0x8a4a2a, desc:"No.8 — the Great Western pannier tank who runs his own branch line to Arlesburgh."},
+  {name:"Oliver",   line:"littlewest",color:0x2f7a3a, speed:0.032, t:1.30, coaches:1, coach:0x8a4a2a, desc:"No.11 — another Great Western engine, who works Duck's branch line with him."},
   {name:"Skarloey", line:"skarloey",  color:0xb52a1a, speed:0.030, t:0.15, coaches:2, coach:0xa0522d, desc:"No.1 of the Skarloey Railway — one of the oldest narrow-gauge engines on the island."},
   {name:"Rheneas",  line:"skarloey",  color:0xa8321f, speed:0.028, t:1.20, coaches:2, coach:0xa0522d, desc:"No.2 of the Skarloey Railway, famous for keeping the line open by refusing to stop."},
   {name:"Culdee",   line:"culdeefell",color:0x5a2a7a, speed:0.040, t:0.40, coaches:1, coach:0x6a3a8a, desc:"No.4 of the Culdee Fell Railway, a rack engine who climbs to the summit."},
   {name:"Rex",      line:"arlesdale", color:0x2f7a3a, speed:0.045, t:0.50, coaches:2, coach:0x8a7a5a, desc:"One of the small engines of the Arlesdale Railway."},
+  {name:"Bill",     line:"chinaclay", color:0xd9b600, speed:0.040, t:0.20, coaches:2, coach:0xd8d0c0, desc:"One of the twin tank engines who work the china clay trains near Brendam."},
+  {name:"Ben",      line:"chinaclay", color:0xd9b600, speed:0.040, t:1.10, coaches:2, coach:0xd8d0c0, desc:"Bill's twin, who shares the china clay work near Brendam."},
 ];
 
 // ===================== TERRAIN =====================
@@ -318,22 +326,108 @@ const STATIONS = RAIL.stations.map((s,i)=>{
 });
 RAIL.lines.forEach(l=>l.stops.forEach(k=>{ if(!STATIONS[k].lines.includes(l.id)) STATIONS[k].lines.push(l.id); }));
 
-function drapedCurve(path){
-  const guide = new THREE.CatmullRomCurve3(path.map(p=>{ const w=mapToWorld(p[0],p[1]); return new THREE.Vector3(w.x,0,w.z); }), false, 'centripetal');
-  const samples = Math.max(8, Math.round(guide.getLength()*1.6));
-  const pts = guide.getSpacedPoints(samples).map(p=>new THREE.Vector3(p.x, Math.max(heightAt(p.x,p.z),0)+0.3, p.z));
-  return {curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal'), samples};
+// Track profile: sample the route, follow the ground at railway-like grades, bore straight
+// through between the tunnel portals the map marks, and stand on piers across valleys.
+const TUNNELS = RAIL.tunnels.map(t=>Object.assign(t, {wa:mapToWorld(t.a[0],t.a[1]), wb:mapToWorld(t.b[0],t.b[1])}));
+const portalGroup = new THREE.Group(); scene.add(portalGroup);
+const piers = [];
+const stoneMat = new THREE.MeshStandardMaterial({color:0x8a8174, roughness:0.9});
+const boreMat = new THREE.MeshBasicMaterial({color:0x050505});
+const portalFaceGeo = new THREE.BoxGeometry(3.0, 2.3, 0.7), portalBoreGeo = new THREE.BoxGeometry(1.6, 1.55, 0.74);
+
+function nearestSample(pts, w){
+  let bi=0, bd=Infinity;
+  for(let i=0;i<pts.length;i++){ const d=(pts[i].x-w.x)**2+(pts[i].z-w.z)**2; if(d<bd){ bd=d; bi=i; } }
+  return bi;
 }
-RAIL.lines.forEach(line=>{
-  const {curve, samples} = drapedCurve(line.path);
+function makePortal(pos, into, scale, info){
+  const g = new THREE.Group();
+  const face = new THREE.Mesh(portalFaceGeo, stoneMat); face.position.y = 1.15; face.castShadow = true;
+  const bore = new THREE.Mesh(portalBoreGeo, boreMat); bore.position.y = 0.78;
+  g.add(face, bore);
+  g.scale.setScalar(scale);
+  g.position.copy(pos).setY(pos.y-0.3);
+  g.rotation.y = Math.atan2(into.x, into.z);
+  [face, bore].forEach(m=>{ m.userData = info; clickable.push(m); });
+  portalGroup.add(g);
+}
+function buildTrack(line){
+  const guide = new THREE.CatmullRomCurve3(line.path.map(p=>{ const w=mapToWorld(p[0],p[1]); return new THREE.Vector3(w.x,0,w.z); }), false, 'centripetal');
+  const n = Math.max(8, Math.round(guide.getLength()*1.6));
+  const pts = guide.getSpacedPoints(n);
+  const ground = pts.map(p=>Math.max(heightAt(p.x,p.z),0));
+  const tunnels = TUNNELS.filter(t=>t.line===line.id).map(t=>{
+    let i0 = nearestSample(pts, t.wa), i1 = nearestSample(pts, t.wb);
+    if(i0>i1) [i0,i1] = [i1,i0];
+    if(i1-i0<2) i1 = Math.min(pts.length-1, i0+2);
+    return {t, i0, i1};
+  });
+  const inTunnel = new Uint8Array(pts.length);
+  tunnels.forEach(({i0,i1})=>{ for(let i=i0+1;i<i1;i++) inTunnel[i]=1; });
+
+  const W = line.kind==='rack' ? 2 : line.kind==='standard' ? 10 : 6;
+  const raw = ground.map(h=>h+0.3);
+  tunnels.forEach(({i0,i1})=>{ for(let i=i0+1;i<i1;i++) raw[i] = raw[i0]+(raw[i1]-raw[i0])*(i-i0)/(i1-i0); });
+  const y = raw.map((_,i)=>{ let s=0,c=0; for(let k=-W;k<=W;k++){ const j=i+k; if(j>=0 && j<raw.length){ s+=raw[j]; c++; } } return s/c; })
+               .map((v,i)=>Math.max(v, ground[i]+0.25));
+  tunnels.forEach(({i0,i1})=>{ for(let i=i0;i<=i1;i++){ const f=(i-i0)/(i1-i0); y[i] = y[i0]+(y[i1]-y[i0])*f; } });
+  const p3 = pts.map((p,i)=>new THREE.Vector3(p.x, y[i], p.z));
+
   const closed = line.kind==='closed';
-  const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, samples*2, 0.16*line.width, 6, false),
-    new THREE.MeshStandardMaterial({color: line.colorHex, roughness:0.5, emissive: line.colorHex, emissiveIntensity: closed?0.05:0.25,
-      transparent: closed, opacity: closed?0.55:1}));
-  mesh.castShadow = !closed;
-  scene.add(mesh);
-  line.mesh = mesh; line.curve = curve; line.length = curve.getLength();
+  const mat = new THREE.MeshStandardMaterial({color: line.colorHex, roughness:0.5, emissive: line.colorHex,
+    emissiveIntensity: closed?0.05:0.25, transparent: closed, opacity: closed?0.55:1});
+  const group = new THREE.Group();
+  let run = [];
+  const flush = ()=>{
+    if(run.length>=2){
+      const c = new THREE.CatmullRomCurve3(run, false, 'centripetal');
+      const m = new THREE.Mesh(new THREE.TubeGeometry(c, Math.max(4, run.length*2), 0.16*line.width, 6, false), mat);
+      m.castShadow = !closed; group.add(m);
+    }
+    run = [];
+  };
+  p3.forEach((p,i)=>{ if(inTunnel[i]) { flush(); } else run.push(p); });
+  flush();
+  scene.add(group);
+
+  for(let i=0;i<p3.length;i+=3){
+    const lift = y[i]-ground[i]-0.3;
+    if(!inTunnel[i] && lift>0.6 && !closed) piers.push([p3[i].x, ground[i], p3[i].z, lift+0.2, line.width]);
+  }
+
+  const cum = [0];
+  for(let i=1;i<p3.length;i++) cum.push(cum[i-1]+p3[i].distanceTo(p3[i-1]));
+  const total = cum[cum.length-1] || 1;
+  const stopIdx = line.stops.map(k=>({k, i:nearestSample(pts, STATIONS[k])}));
+  line.tunnelU = tunnels.map(({t,i0,i1})=>{
+    const before = stopIdx.filter(s=>s.i<=i0).pop(), after = stopIdx.find(s=>s.i>=i1);
+    const info = {type:'tunnel', name:t.name, line:line.id,
+      between:[before&&STATIONS[before.k].name, after&&STATIONS[after.k].name], pos:p3[Math.round((i0+i1)/2)]};
+    const scale = line.kind==='standard' ? 1 : 0.75;
+    makePortal(p3[i0], new THREE.Vector3().subVectors(p3[Math.min(i0+1,p3.length-1)], p3[i0]), scale, info);
+    makePortal(p3[i1], new THREE.Vector3().subVectors(p3[Math.max(i1-1,0)], p3[i1]), scale, info);
+    return [cum[i0]/total, cum[i1]/total];
+  });
+  line.mesh = group;
+  line.curve = new THREE.CatmullRomCurve3(p3, false, 'centripetal');
+  line.length = line.curve.getLength();
+  line.samples = p3;
+}
+const clickable = [];
+RAIL.lines.forEach(buildTrack);
+STATIONS.forEach(st=>{
+  let best = Infinity;
+  st.lines.forEach(id=>{ const p = LINES[id].samples[nearestSample(LINES[id].samples, st)];
+    const d = (p.x-st.x)**2+(p.z-st.z)**2; if(d<best){ best=d; st.y = Math.max(st.y, p.y-0.3); } });
 });
+if(piers.length){
+  const pierMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), stoneMat, piers.length);
+  const m4 = new THREE.Matrix4();
+  piers.forEach(([x,g,z,h,w],i)=>{ m4.makeScale(0.35*w, h, 0.35*w).setPosition(x, g+h/2-0.1, z); pierMesh.setMatrixAt(i, m4); });
+  pierMesh.castShadow = true;
+  scene.add(pierMesh);
+}
+function inTunnel(line, u){ return line.tunnelU.some(([a,b])=>u>a && u<b); }
 
 // Legend: one entry per line name (the Mid Sodor has two pieces), grouped by gauge.
 const legendList = document.getElementById('legendList');
@@ -363,7 +457,7 @@ function neighbourName(line, idx, dir){
 function describe(st){
   const lines = st.lines.map(id=>LINES[id]);
   const names = [...new Set(lines.map(l=>l.name))];
-  const who = st.name || 'This halt';
+  const who = st.name;
   let s;
   if(names.length>1){
     s = `${who} is a junction of the ${names.slice(0,-1).join(', ')} and ${names[names.length-1]}.`;
@@ -377,12 +471,11 @@ function describe(st){
   return st.name && LORE[st.name] ? s+' '+LORE[st.name] : s;
 }
 function stationKind(st){
-  if(st.lines.every(id=>LINES[id].kind==='closed')) return 'Closed station';
-  return st.name ? 'Station' : 'Halt';
+  return st.kind==='closed' ? 'Closed station' : 'Station';
 }
 
 // ===================== STATION MARKERS =====================
-const clickable = [], labels = [];
+const labels = [];
 function makeLabelSprite(text){
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -404,13 +497,12 @@ function makeLabelSprite(text){
 }
 const MARKERS = {
   station: {geo:new THREE.CylinderGeometry(0.62,0.62,0.5,18), mat:new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffcc66, emissiveIntensity:0.45})},
-  halt:    {geo:new THREE.CylinderGeometry(0.36,0.36,0.4,12), mat:new THREE.MeshStandardMaterial({color:0x2a2f33, emissive:0x111111})},
   closed:  {geo:new THREE.CylinderGeometry(0.36,0.36,0.4,12), mat:new THREE.MeshStandardMaterial({color:0xd8d8d8, transparent:true, opacity:0.7})},
 };
 const pickGeo = new THREE.SphereGeometry(1.3, 8, 6);                // generous invisible tap target
 const pickMat = new THREE.MeshBasicMaterial({visible:false});
 STATIONS.forEach(st=>{
-  const k = stationKind(st), style = MARKERS[k==='Station'?'station':k==='Halt'?'halt':'closed'];
+  const style = MARKERS[st.kind==='closed' ? 'closed' : 'station'];
   const m = new THREE.Mesh(style.geo, style.mat);
   m.position.set(st.x, st.y+0.4, st.z);
   m.castShadow = true;
@@ -498,16 +590,23 @@ const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function pick(clientX, clientY){
   ndc.set((clientX/innerWidth)*2-1, -(clientY/innerHeight)*2+1);
   raycaster.setFromCamera(ndc, camera);
-  const hit = raycaster.intersectObjects(clickable, false).find(h=>h.object.visible || !h.object.isSprite);
+  const shown = o=>{ for(let p=o; p; p=p.parent) if(!p.visible && !(p.isMesh && p.material===pickMat)) return false; return true; };
+  const hit = raycaster.intersectObjects(clickable, false).find(h=>shown(h.object));
   if(!hit) return;
   const o = hit.object;
   if(o.userData.type==='station'){
     const st = STATIONS[o.userData.id];
     const served = [...new Set(st.lines.map(id=>LINES[id].name))].join(' · ');
-    openPanel(stationKind(st), st.name || 'Unnamed halt', describe(st), served);
+    openPanel(stationKind(st), st.name, describe(st), served);
     followTrain = null;
     flyTo(st.x, st.y, st.z, 40, undefined, 0.85);
     addPanelButton('Fly closer', ()=>flyTo(st.x, st.y, st.z, 18, undefined, 1.0));
+  } else if(o.userData.type==='tunnel'){
+    const t = o.userData, L = LINES[t.line];
+    const [a, b] = t.between;
+    openPanel('Tunnel', t.name, `${t.name} carries the ${L.name}${a&&b?` between ${a} and ${b}`:''}.`, L.name);
+    followTrain = null;
+    flyTo(t.pos.x, t.pos.y, t.pos.z, 26, undefined, 0.95);
   } else if(o.userData.train){
     const tr = o.userData.train;
     openPanel('Engine', tr.name, tr.desc, `Line: ${LINES[tr.line].name}`);
@@ -606,8 +705,8 @@ el.addEventListener('wheel', e=>{
 
 // ===================== HUD =====================
 document.getElementById('statTrains').textContent = TRAINS.length;
-document.getElementById('statStations').textContent = STATIONS.filter(s=>s.name).length;
-document.getElementById('statHalts').textContent = STATIONS.filter(s=>!s.name).length;
+document.getElementById('statStations').textContent = STATIONS.length;
+document.getElementById('statTunnels').textContent = new Set(TUNNELS.map(t=>t.name)).size;
 document.getElementById('statLines').textContent = byName.size;
 let simSpeed = 1;
 const speedSlider = document.getElementById('speedSlider');
@@ -635,10 +734,13 @@ function animate(){
     tr.t += dt*tr.speed*simSpeed * (60/Math.max(line.length,30));
     const tt = tr.t % 2, back = tt>1, u = back ? 2-tt : tt;
     placeOnCurve(tr.mesh, line.curve, u, back);
+    const shown = line.mesh.visible;
+    tr.mesh.visible = shown && !inTunnel(line, u);
     const gap = 2.6/line.length;
     tr.cars.forEach((car,k)=>{
-      car.visible = tr.mesh.visible;
-      placeOnCurve(car, line.curve, back ? u+gap*(k+1) : u-gap*(k+1), back);
+      const cu = back ? u+gap*(k+1) : u-gap*(k+1);
+      car.visible = shown && !inTunnel(line, cu);
+      placeOnCurve(car, line.curve, cu, back);
     });
   });
 
