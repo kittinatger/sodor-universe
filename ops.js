@@ -179,7 +179,7 @@ function scoreShed(D, g){
 function placeShed(D){
   const R = D.R, G = GEO[D.gauge], lane = R.o.lane || 0;
   const ends = R.o.shedEnd ? [R.o.shedEnd] : R.runRound ? ['A', 'B'] : [R.side];
-  const sides = lane ? [Math.sign(lane)] : [-R.sgn, R.sgn];      // double track: always on the outside
+  const sides = lane ? [Math.sign(lane)] : R.o.shedSide ? [R.o.shedSide] : [-R.sgn, R.sgn];      // double track: always on the outside
   let best = null;
   for(const T of ends) for(const gapX of [6, 30, 70]) for(const W of G.W) for(const side of sides){
     const g = shedGeom(D, T, gapX, W, side), sc = scoreShed(D, g);

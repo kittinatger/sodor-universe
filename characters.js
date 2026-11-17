@@ -784,44 +784,57 @@ const ENGINES = [
   // ---- the Arlesdale Railway: 15-inch gauge, Arlesburgh West to Arlesdale (built smaller, see MINI)
   ...arlesdale(),
 ];
-// Rex, Bert and Mike are tender engines after the Ravenglass and Eskdale's River Irt, River Esk and
-// River Mite; Jock is the new engine; the diesels take turns on the trains and the ballast workings.
+// The Arlesdale Railway, after the Thomas wiki (Railway Series): Bert (0-8-2, after River Irt), Rex and
+// Mike (2-8-2, River Esk and River Mite) came from a closed line in 1967; Jock (2-6-2, like Northern Rock)
+// was built at Arlesburgh Works in 1976. The steam engines work the passenger trains (Mike prefers the
+// ballast); Sigrid runs the staff train from Arlesdale; Frank does empty-carriage work at Arlesburgh;
+// the Blisters shunt the ballast chute and work for the platelaying gangs.
 function arlesdale(){
   const big = (o) => () => buildSteam(Object.assign({len: 2.5, tank: 'well', cab: 'closed', chimneyH: 0.42, capColor: null, dome: true, domeAt: 0.45,
-    bunkerLen: 0, cabLen: 0.55}, o));
-  const ax8 = [{z: 0.95, r: 0.15}, {z: 0.5, r: 0.21, coupled: true}, {z: 0.08, r: 0.21, coupled: true}, {z: -0.34, r: 0.21, coupled: true}, {z: -0.76, r: 0.21, coupled: true}, {z: -1.08, r: 0.15}];
-  const ax6 = [{z: 0.95, r: 0.15}, {z: 0.45, r: 0.23, coupled: true}, {z: -0.03, r: 0.23, coupled: true}, {z: -0.51, r: 0.23, coupled: true}, {z: -1.0, r: 0.15}];
-  const A = {rail: 'ar', line: 'arlesdale'};
+    domeColor: BRASS, bunkerLen: 0, cabLen: 0.55}, o));
+  const ax282 = [{z: 0.95, r: 0.15}, {z: 0.5, r: 0.21, coupled: true}, {z: 0.08, r: 0.21, coupled: true}, {z: -0.34, r: 0.21, coupled: true}, {z: -0.76, r: 0.21, coupled: true}, {z: -1.08, r: 0.15}];
+  const ax082 = ax282.slice(1);
+  const ax262 = [{z: 0.95, r: 0.15}, {z: 0.45, r: 0.23, coupled: true}, {z: -0.03, r: 0.23, coupled: true}, {z: -0.51, r: 0.23, coupled: true}, {z: -1.0, r: 0.15}];
+  const nm = (n, bg, fg) => Object.assign(plate(n, '', bg, fg), {number: null, nameW: 0.34});
+  const A = {rail: 'ar', line: 'arlesdale', from: 'Arlesburgh West', to: 'Arlesdale', block: true};
   return [
-    {...A, id: 'rex', name: 'Rex', no: '', wheels: '0-8-2+T', basis: 'Ravenglass and Eskdale Railway River Irt', livery: 'Green with yellow lining and red bufferbeams',
-     job: 'Passenger trains from Arlesburgh West with the open-topped coaches',
-     build: big({color: 0x2f7a3a, lining: 0xf2c419, face: {smile: 0.7, brow: -0.2}, plates: Object.assign(plate('Rex', '', '#2f7a3a', '#f2c419'), {number: null, nameW: 0.34}), axles: ax8.slice(1)}),
-     tender: {color: 0x2f7a3a, lining: 0xf2c419},
-     from: 'Arlesburgh West', to: 'Ffarquhar Road', consist: ['adOpen', 'adOpen', 'adSemi', 'adOpen'], speed: 0.85, passenger: true},
-    {...A, id: 'bert', name: 'Bert', no: '', wheels: '2-8-2+T', basis: 'Ravenglass and Eskdale Railway River Esk', livery: 'Blue with red lining',
-     job: 'Passenger trains up the valley to Arlesdale with the saloons',
-     build: big({color: 0x2a5fb0, lining: 0xc8262b, face: {smile: 0.9, brow: 0.1}, plates: Object.assign(plate('Bert', '', '#2a5fb0', '#f2f2f2'), {number: null, nameW: 0.34}), axles: ax8}),
-     tender: {color: 0x2a5fb0, lining: 0xc8262b},
-     from: 'Marthwaite', to: 'Arlesdale', consist: ['adSaloon', 'adSemi', 'adSaloon'], speed: 0.85, passenger: true},
-    {...A, id: 'mike', name: 'Mike', no: '', wheels: '2-8-2+T', basis: 'Ravenglass and Eskdale Railway River Mite', livery: 'Red with yellow lining',
-     job: 'The second valley train, crossing Bert at the loop at Arlesdale Green', pair: 'bert', consist: ['adSaloon', 'adSaloon', 'adSemi'], speed: 0.85, passenger: true,
-     build: big({color: 0xb3262a, lining: 0xf2c419, face: {smile: 0.2, brow: 0.6}, plates: Object.assign(plate('Mike', '', '#b3262a', '#f2c419'), {number: null, nameW: 0.34}), axles: ax8}),
-     tender: {color: 0xb3262a, lining: 0xf2c419}},
-    {...A, id: 'jock', name: 'Jock', no: '', wheels: '2-6-2+T', basis: 'Ravenglass and Eskdale Railway Northern Rock', livery: 'Dark green with red and white lining',
-     job: 'The second train from Arlesburgh West, crossing Rex at the loop at Arlesburgh', pair: 'rex', consist: ['adSemi', 'adOpen', 'adOpen'], speed: 0.8, passenger: true,
-     build: big({color: 0x1f4a32, lining: 0xc8262b, chimneyH: 0.46, face: {smile: 1.0, brow: -0.3}, plates: Object.assign(plate('Jock', '', '#1f4a32', '#f2f2f2'), {number: null, nameW: 0.34}), axles: ax6}),
-     tender: {color: 0x1f4a32, lining: 0xc8262b}},
-    {...A, id: 'frank', name: 'Frank', no: '', wheels: '4wDM', basis: 'Ravenglass and Eskdale Railway works diesel', livery: 'Maroon with yellow warning panels',
-     job: 'Ballast trains of hoppers and bogie flatbeds between Ffarquhar Road and Marthwaite',
-     build: () => buildRusty({color: 0x7a2a22, face: {smile: 0.6, brow: 0.2}}),
-     from: 'Ffarquhar Road', to: 'Marthwaite', consist: ['adHopper', 'adHopper', 'adHopper', 'adFlat'], speed: 0.6, diesel: true, inset: 45},
-    {...A, id: 'sigrid', name: 'Sigrid of Arlesdale', no: '', wheels: '4wDH', basis: 'Ravenglass and Eskdale Railway Lady Wakefield', livery: 'Blue with yellow ends',
-     job: 'A second ballast train, crossing Frank at the loop halfway along', pair: 'frank', consist: ['adFlat', 'adHopper', 'adHopper'], speed: 0.6, diesel: true,
-     build: () => buildRusty({color: 0x2a6ab0, face: {smile: 0.8, brow: -0.4, lashes: true}})},
-    {...A, id: 'blister1', name: 'Blister I', no: '', wheels: '4wDH', basis: 'Ravenglass and Eskdale Railway diesel-hydraulic', livery: 'Mustard yellow',
-     job: 'Shunting the hoppers in the siding at Arlesdale', yard: 'Arlesdale', consist: ['adHopper', 'adHopper', 'adHopper'], cat: 'Diesel', diesel: true, build: () => buildRusty({color: 0xc9a227, face: {smile: 0.4, brow: 0.2}})},
-    {...A, id: 'blister2', name: 'Blister II', no: '', wheels: '4wDH', basis: 'Ravenglass and Eskdale Railway diesel-hydraulic', livery: 'Mustard yellow',
-     job: 'Shunting spare coaches in the siding at Arlesburgh West', yard: 'Arlesburgh West', consist: ['adSemi', 'adOpen'], cat: 'Diesel', diesel: true, build: () => buildRusty({color: 0xc9a227, face: {smile: 0.2, brow: 0.5}})},
+    {...A, id: 'rex', name: 'Rex', no: '', wheels: '2-8-2+T', basis: 'Ravenglass and Eskdale Railway No. 7 River Esk (Davey Paxman, 1923)',
+     livery: 'North Western green with red and yellow lining, red bufferbeams, brass dome, ARLESDALE on the tender',
+     job: 'Passenger trains up the valley with the open coaches, always popular in fine weather',
+     build: big({color: 0x2e7d3c, lining: 0xf2c419, face: {smile: 0.7, brow: -0.2}, plates: nm('Rex', '#b3201c', '#d4af37'), axles: ax282}),
+     tender: {color: 0x2e7d3c, lining: 0xf2c419}, consist: ['adOpen', 'adOpen', 'adOpen', 'adOpen'], speed: 0.85, passenger: true, shedEnd: 'A'},
+    {...A, id: 'bert', name: 'Bert', no: '', wheels: '0-8-2+T', basis: 'Ravenglass and Eskdale Railway No. 3 River Irt (rebuilt Heywood 0-8-0)',
+     livery: 'North Western blue with red and yellow lining, red bufferbeams, brass dome, ARLESDALE on the tender',
+     job: 'Passenger trains up the valley with the saloon coaches built at Arlesburgh Works',
+     build: big({color: 0x2a5fb0, lining: 0xc8262b, chimneyH: 0.52, face: {smile: 0.9, brow: 0.1}, plates: nm('Bert', '#b3201c', '#d4af37'), axles: ax082}),
+     tender: {color: 0x2a5fb0, lining: 0xc8262b}, consist: ['adSaloon', 'adSaloon', 'adSaloon'], speed: 0.85, passenger: true, shedEnd: 'A'},
+    {...A, id: 'mike', name: 'Mike', no: '', wheels: '2-8-2+T', basis: 'Ravenglass and Eskdale Railway No. 9 River Mite (Clarkson, 1966)',
+     livery: 'Red with blue lining and yellow cab window frames, red bufferbeams, brass dome, ARLESDALE on the tender',
+     job: 'Ballast trains of mine spoil from Arlesdale down to the chute at Arlesburgh West (he prefers goods to passengers)',
+     build: big({color: 0xb3262a, lining: 0x2a5fb0, face: {smile: 0.2, brow: 0.6}, plates: nm('Mike', '#b3201c', '#d4af37'), axles: ax282}),
+     tender: {color: 0xb3262a, lining: 0x2a5fb0}, consist: ['adHopper', 'adHopper', 'adHopper', 'adHopper', 'adHopper'], speed: 0.7, shedEnd: 'A'},
+    {...A, id: 'jock', name: 'Jock', no: '', wheels: '2-6-2+T', basis: 'Ravenglass and Eskdale Railway No. 10 Northern Rock (built at Arlesburgh Works, 1976)',
+     livery: 'Highland Railway chartreuse yellow with red lining, red bufferbeams, brass dome, red and gold nameplates',
+     job: 'Relief and extra passenger trains, stabled at Arlesdale',
+     build: big({color: 0xc9cf3a, lining: 0xc8262b, chimneyH: 0.52, face: {smile: 1.0, brow: -0.3}, plates: nm('Jock', '#b3201c', '#d4af37'), axles: ax262}),
+     tender: {color: 0xc9cf3a, lining: 0xc8262b}, consist: ['adSaloon', 'adOpen', 'adOpen'], speed: 0.85, passenger: true, shedEnd: 'B'},
+    {...A, id: 'sigrid', name: 'Sigrid of Arlesdale', no: '', wheels: '4-6-4DH', basis: 'Ravenglass and Eskdale Railway Shelagh of Eskdale (Severn-Lamb, 1969)',
+     livery: 'Two-tone blue, the lighter centre band sweeping down to a point at each end',
+     job: 'The staff train, taking railway employees from Arlesdale to work in the morning and home in the evening',
+     build: () => buildRusty({color: 0x2a5a9a, face: {smile: 0.8, brow: -0.4, lashes: true}}),
+     consist: ['adSaloon'], speed: 0.8, passenger: true, diesel: true, shedEnd: 'B'},
+    {...A, id: 'frank', name: 'Frank', no: '', wheels: '0-4-4DM', basis: 'Ravenglass and Eskdale Railway ICL4 Perkins (built at Arlesburgh Works, c.1967)', block: false,
+     livery: 'Light grey with a red stripe, red bufferbeams, red and gold nameplates',
+     job: 'Shunting and empty-carriage workings at Arlesburgh West', yard: 'Arlesburgh West', yardOff: -17, consist: ['adSaloon', 'adSaloon', 'adOpen'], cat: 'Diesel', diesel: true,
+     build: () => buildRusty({color: 0xb8bcc0, face: {smile: 0.3, brow: 0.6}})},
+    {...A, id: 'blister1', name: 'Blister I', no: '', wheels: '4wDM', basis: 'Ravenglass and Eskdale Railway Cyril (Lister, c.1932)', block: false,
+     livery: 'Black with black and yellow warning panels front and rear',
+     job: 'Shunting the hoppers at the ballast chute at Arlesburgh West', yard: 'Arlesburgh West', yardOff: -21, consist: ['adHopper', 'adHopper', 'adHopper'], cat: 'Diesel', diesel: true,
+     build: () => buildRusty({color: 0x1c1c1e, face: {smile: 0.4, brow: 0.2}})},
+    {...A, id: 'blister2', name: 'Blister II', no: '', wheels: '4wDM', basis: 'Ravenglass and Eskdale Railway Cyril (Lister, c.1932)', block: false,
+     livery: 'Black with black and yellow warning panels front and rear',
+     job: 'Works trains for the platelaying gangs, from the siding at Marthwaite', yard: 'Marthwaite', yardOff: -7, consist: ['adFlat', 'adFlat'], cat: 'Diesel', diesel: true,
+     build: () => buildRusty({color: 0x1c1c1e, face: {smile: 0.2, brow: 0.5}})},
   ];
 }
 
@@ -950,11 +963,6 @@ function spin(veh, dx, scale){
     veh.rods.forEach(r => { r.mesh.position.y = r.r + r.rc * Math.cos(ang + r.phase); r.mesh.position.z = r.mid + r.rc * Math.sin(ang + r.phase); });
   }
 }
-function passClear(R){
-  const P = R.pass.partner, la = R.pass.a;
-  if(Math.abs(P.a - la) < 0.5 * METRE) return true;       // the other train is in the loop too
-  return Math.sign(P.a - la) !== R.dir;                    // and otherwise must be on the other side
-}
 // a sleepers-and-rails ribbon through world points (sidings and the Arlesdale passing loops)
 function ribbon(line, pts, bedM){
   const half = bedM * METRE / 2, vp = [], vu = [], vn = [], ix = [];
@@ -1035,12 +1043,13 @@ function stepRunner(R, dt){
       step = d; R.a = target; R.v = 0;
       if(target === term){ R.lastStop = null; R.phase = 'dwell'; R.timer = 90; R.next = R.runRound ? 'rr' : 'turn'; }
       else { R.lastStop = target; R.phase = 'dwell'; R.timer = 35; R.next = 'run'; }
+      if(R.blockSys) R.blockSys.arrive(R, target, target === term);
     } else R.a += R.dir * step;
     carDx = unitDx = R.dir * step; moving = step > 0;
   } else if(R.phase === 'dwell'){
     R.timer -= dt;
     // two trains on one stretch cross at the passing loop: wait there until the road ahead is clear
-    if(R.timer <= 0 && R.pass && R.next === 'run' && R.lastStop === R.pass.a && !passClear(R)) R.timer = 4;
+    if(R.timer <= 0 && R.blockSys && R.next === 'run' && !R.blockSys.depart(R)) R.timer = 4;
     if(R.timer <= 0){
       if(R.next === 'rr'){
         const to = R.side === 'B' ? 'A' : 'B';
@@ -1098,7 +1107,7 @@ function addMarker(R, color, onPick, trainRef){
 
 const ENGINE_COLORS = {skarloey: 0x9b1730, rheneas: 0xd23a26, sirhandel: 0x1f4fbf, petersam: 0x2e8b6e, rusty: 0xff6a13, duncan: 0xe2a91f,
   freddie: 0xc4c8cc, duke: 0x9a5426, bertram: 0x4f2f1c, mightymac: 0x2b2f86, luke: 0x6aa84f,
-  rex: 0x2f7a3a, bert: 0x2a5fb0, mike: 0xb3262a, jock: 0x1f4a32, frank: 0x7a2a22, sigrid: 0x2a6ab0, blister1: 0xc9a227, blister2: 0xb08a1a};
+  rex: 0x2e7d3c, bert: 0x2a5fb0, mike: 0xb3262a, jock: 0xc9cf3a, frank: 0xb8bcc0, sigrid: 0x2a5a9a, blister1: 0x3a3a3e, blister2: 0x5a5a5e};
 const RUNNERS = [], SR_TRAINS = [];
 ENGINES.forEach(E => {
   const line = LINES[E.line];
@@ -1113,11 +1122,9 @@ ENGINES.forEach(E => {
     E.unit = unit; E.engine = eng; E.cars = cars; tagPick(eng.group, () => showEngine(E));
     return;
   }
-  const P = E.pair ? ENGINES.find(o => o.id === E.pair) : E;      // a second train on the same stretch
-  let uA = P.from ? lineU(line, P.from) : (P.fromU || 0), uB = P.to ? lineU(line, P.to) : (P.toU === undefined ? 1 : P.toU);
-  if(P.inset){ const d = P.inset * METRE / line.real.len * Math.sign(uB - uA); uA += d; uB -= d; }   // keep clear of a neighbour's terminus
+  const uA = E.from ? lineU(line, E.from) : (E.fromU || 0), uB = E.to ? lineU(line, E.to) : (E.toU === undefined ? 1 : E.toU);
   const R = makeRunner({line, uA, uB, unit, cars, scale: SC, gap: (mini ? 0.3 : 0.5) * METRE, vmax: 6.5 * METRE * E.speed,
-    passenger: !!E.passenger, loopW: (mini ? 2.4 : 3.4) * METRE, bedM: mini ? 1.3 : 2.3, diesel: !!E.diesel});
+    passenger: !!E.passenger, loopW: (mini ? -2.4 : 3.4) * METRE, bedM: mini ? 1.3 : 2.3, diesel: !!E.diesel, shedEnd: E.shedEnd, shedSide: mini ? 1 : 0});
   R.E = E; R.engine = eng;
   E.train = R;
   drawLoops(R);
@@ -1130,27 +1137,83 @@ ENGINES.forEach(E => {
   }));
 });
 
-// Arlesdale pairs: the first train keeps the main road and its shed at the A end; the second takes
-// the loop road through the crossing place and has its shed at the B end, so neither ever has to
-// wait overnight for the other (ops.js reads shedEnd).
-ENGINES.filter(E => E.pair && E.train).forEach(E => {
-  const P = ENGINES.find(o => o.id === E.pair), R1 = P.train, R2 = E.train;
-  if(!R1) return;
-  const mid = (R1.aA + R1.aB) / 2;
-  const la = R1.stops.length ? R1.stops.reduce((b, s) => Math.abs(s - mid) < Math.abs(b - mid) ? s : b) : mid;
-  [R1, R2].forEach(R => { if(!R.stops.includes(la)) R.stops.push(la); });
-  R1.pass = {a: la, partner: R2}; R2.pass = {a: la, partner: R1};
-  R1.o.shedEnd = 'A'; R2.o.shedEnd = 'B';
-  const k = 15 * METRE, lo = la - R2.Lc - R2.U - 2 * k, hi = la + R2.U + 2 * k, W = -2.4 * METRE * R2.sgn;
-  R2.o.latFn = x => W * smooth(lo, lo + k, x) * (1 - smooth(hi - k, hi, x));
-  const pts = [];
-  for(let x = lo; x <= hi + 1e-9; x += 3 * METRE){ trackFrame(R2, x); const nl = Math.hypot(_t.z, _t.x) || 1, L = R2.o.latFn(x);
-    const cx = _p.x + _t.z / nl * L, cz = _p.z - _t.x / nl * L; pts.push({x: cx, y: Math.max(_p.y, heightAt(cx, cz) + 0.5 * METRE), z: cz}); }
-  ribbon(R2.line, pts, 1.3);
-  // start them on opposite sides of the loop
-  R1.a = R1.aA + Math.random() * Math.max(0, la - R1.aA - 10 * METRE); R1.dir = 1; if(R1.runRound) R1.side = 'B';
-  R2.a = la + 10 * METRE + Math.random() * Math.max(0, R2.aB - la - 10 * METRE); R2.dir = -1; if(R2.runRound) R2.side = 'A';
-});
+// ---- Arlesdale Railway: single line worked in sections between passing loops (after the wiki: a loop
+// at Ffarquhar Road with a warning disc before it, one in the woods on the approach to Arlesdale Green,
+// and one at Marthwaite in the middle of the valley). A train may only leave a loop or terminus when the
+// section ahead is empty and there is room for it at the far end: in each loop the up train keeps the
+// main road and the down train takes the loop road; each terminus has three roads (Arlesdale's three
+// roads to the turntable; Arlesburgh West's platforms and yard).
+const BLOCK = (() => {
+  const trains = ENGINES.filter(E => E.block && E.train).map(E => E.train);
+  if(!trains.length) return null;
+  const line = trains[0].line, L = line.real.len, R0 = trains[0], u0 = R0.o.uA, CAP = 3, RS = -4.8 * METRE, WL = -2.4 * METRE, K = 15 * METRE;
+  const xOf = u => (u - u0) * R0.sgn * L;
+  const loopsX = [xOf(lineU(line, 'Ffarquhar Road')), xOf(lineU(line, 'Marthwaite')), xOf(lineU(line, 'Arlesdale Green')) - 260 * METRE];
+  const N = loopsX.length + 2;                    // node 0: Arlesburgh West; N-1: Arlesdale
+  const half = Math.max(...trains.map(R => R.Lc / 2 + R.U)) + 6 * METRE;
+  const bump = (x, c) => smooth(c - half - K, c - half, x) * (1 - smooth(c + half, c + half + K, x));
+  const zW = Math.max(...trains.map(R => R.aA + R.U + R.cars[0].len)) + 10 * METRE;
+  const zA = Math.min(...trains.map(R => R.aB - R.Lc - R.U)) - 10 * METRE;
+  const fadeW = x => 1 - smooth(zW, zW + 30 * METRE, x), fadeA = x => smooth(zA - 30 * METRE, zA, x);
+  trains.forEach((R, i) => {
+    R.block = {nodeA: loopsX.map(x => x - R.cars[0].len / 2 + R.Lc / 2)};
+    R.block.nodeA.forEach(a => { if(!R.stops.some(s => Math.abs(s - a) < 0.5 * METRE)) R.stops.push(a); });
+    R.roads = {};
+    R.o.latFn = x => {
+      let l = 0;
+      if(R.roads[0]) l += R.roads[0] * RS * fadeW(x);
+      if(R.roads[N - 1]) l += R.roads[N - 1] * RS * fadeA(x);
+      if(R.dir < 0) loopsX.forEach(c => { l += WL * bump(x, c); });
+      return l;
+    };
+    // start the day standing at a terminus, as if just arrived: those shedded at Arlesburgh West there
+    const atA = R.o.shedEnd !== 'B', node = atA ? 0 : N - 1;
+    R.roads[node] = trains.filter(T => T !== R && T.at === node).length;
+    R.at = node; R.res = null;
+    R.a = atA ? R.aA : R.aB; R.dir = atA ? -1 : 1; R.side = atA ? 'A' : 'B';
+    R.phase = 'dwell'; R.next = 'rr'; R.timer = 30 + i * 240;
+  });
+  const others = R => trains.filter(T => T !== R);
+  function depart(R){
+    if(R.at === null || R.at === undefined) return true;          // a station call inside a section
+    const n2 = R.at + R.dir;
+    if(n2 < 0 || n2 >= N) return true;
+    const sec = Math.min(R.at, n2), O = others(R);
+    if(O.some(T => T.res && T.res.sec === sec)) return false;
+    const bound = T => T.at === n2 || (T.res && T.res.node === n2);
+    if(n2 === 0 || n2 === N - 1){
+      const there = O.filter(bound);
+      if(there.length >= CAP) return false;
+      const used = new Set(there.map(T => T.roads[n2] || 0));
+      let k = 0; while(used.has(k)) k++;
+      R.roads[n2] = k;
+    } else if(O.some(T => bound(T) && T.dir === R.dir)) return false;
+    R.res = {sec, node: n2}; R.at = null;
+    return true;
+  }
+  function arrive(R, a, term){
+    if(term){ R.at = R.dir > 0 ? N - 1 : 0; R.res = null; return; }
+    const l = R.block.nodeA.findIndex(x => Math.abs(x - a) < 0.5 * METRE);
+    if(l >= 0){ R.at = l + 1; R.res = null; }
+  }
+  // the extra rails: loop roads, and the second and third roads at each terminus with their run-round loops
+  const Rl = trains.reduce((b, R) => R.Lc + R.U > b.Lc + b.U ? R : b);
+  const lay = (x0, x1, latF) => { const pts = []; for(let x = x0; x <= x1 + 1e-9; x += 3 * METRE){ trackFrame(Rl, x); const nl = Math.hypot(_t.z, _t.x) || 1, lt = latF(x);
+    const cx = _p.x + _t.z / nl * lt, cz = _p.z - _t.x / nl * lt; pts.push({x: cx, y: Math.max(_p.y, heightAt(cx, cz) + 0.5 * METRE), z: cz}); } if(pts.length > 1) ribbon(line, pts, 1.3); };
+  const saved = Rl.o.latFn; Rl.o.latFn = null;
+  loopsX.forEach(c => lay(c - half - K, c + half + K, x => WL * bump(x, c)));
+  for(let k = 1; k < CAP; k++){
+    lay(2 * METRE, zW + 30 * METRE, x => k * RS * fadeW(x));
+    lay(zA - 30 * METRE, Rl.span - 2 * METRE, x => k * RS * fadeA(x));
+    const [lB, lA] = Rl.loops;
+    lay(lA.lo, lA.hi, x => k * RS + loopLat(Rl, lA, x));
+    lay(lB.lo, lB.hi, x => k * RS + loopLat(Rl, lB, x));
+  }
+  Rl.o.latFn = saved;
+  // the warning disc before the Ffarquhar Road loop, for features.js
+  return {trains, depart, arrive, loopsX, nodes: N, line, frame: (x, lat, out) => { trackFrame(Rl, x); const nl = Math.hypot(_t.z, _t.x) || 1; return out.set(_p.x + _t.z / nl * lat, _p.y, _p.z - _t.x / nl * lat); }};
+})();
+if(BLOCK) BLOCK.trains.forEach(R => R.blockSys = BLOCK);
 
 // Rex (Arlesdale Railway, built in the main script) runs on the same model.
 // The North Western Railway's fleet is in nwr.js, the Culdee Fell Railway's in cfr.js.
@@ -1470,7 +1533,7 @@ const WALLS = [0xe8dcc0, 0xd9cfb4, 0x9a4a32, 0xa39c8e, 0xf0ece0, 0x8a5a3e], ROOF
       b.rotation.y = Math.atan2(_d.x, _d.z);
       if(!closed){ const e = box(plat, 0.3 * METRE, 0.06 * METRE, (lenM / segs + 0.3) * METRE, EDGE, cx - nx / nl * (wM / 2 - 0.15) * METRE, _a.y + 0.48 * METRE, cz - nz / nl * (wM / 2 - 0.15) * METRE); e.rotation.y = b.rotation.y; }
     }
-    if(closed) return;
+    if(closed || line.id === 'arlesdale') return;
     realAt(line, u0, _a); realDir(line, u0, _d);
     const nx = _d.z, nz = -_d.x, nl = Math.hypot(nx, nz) || 1, bo = off + (wM / 2 + 4.5) * METRE;
     const bx = _a.x + nx / nl * bo, bz = _a.z + nz / nl * bo, by = heightAt(bx, bz);
@@ -1568,16 +1631,16 @@ document.getElementById('rosterHead').onclick = () => {
 if(innerWidth < 760){ roster.classList.add('collapsed'); document.getElementById('rosterArrow').textContent = '▸'; }
 
 document.getElementById('statTrains').textContent = TRAINS.length + SR_TRAINS.length;
-window.SODOR_SR = {ENGINES, SR_TRAINS, RUNNERS, statics, STOCK, COLORS: ENGINE_COLORS, show: showEngine};
+window.SODOR_SR = {ENGINES, SR_TRAINS, RUNNERS, statics, STOCK, COLORS: ENGINE_COLORS, show: showEngine, BLOCK};
 // The model kit and train runner, shared with nwr.js.
 window.SODOR_KIT = {mat, add, box, cylZ, cylX, cylY, domeCap, arcZ, roof, bake, canvasTex, faceMat, plateMat, sidePlates, sidePlatesTex,
   glassMat, brassMat, bronzeMat, buildSteam, buildTender, wheelset, makeRunner, drawLoops, addMarker, RUNNERS, tagPick, lineU,
   placeVeh, spin, puff, trackFrame, swapUnit, loopLat, markerMat, _p, _t, yards: [], roundhouse: null,
-  nearTrack, clearArea, inClearZone, clearZones, ground, rosterRow, NG, STD, BLACK, BEAM_RED, BRASS, sceneryNear, trees};
+  nearTrack, clearArea, inClearZone, clearZones, ground, rosterRow, NG, STD, BLACK, BEAM_RED, BRASS, sceneryNear, trees, ribbon, MINI};
 // Arlesdale sidings: a short road beside the station, shunted by a Blister (ops.js YARDS).
 ENGINES.filter(E => E.yard && E.unit).forEach(E => {
   const line = LINES[E.line], L = line.real.len, u0 = lineU(line, E.yard), sg = u0 > 0.5 ? -1 : 1;      // run back along the line
-  realDir(line, u0, _t); const nl = Math.hypot(_t.x, _t.z) || 1, nx = _t.z / nl, nz = -_t.x / nl, OFF = 6 * METRE, LEN = Math.round(60 * METRE / MINI);   // s runs in model units, like the vehicle lengths
+  realDir(line, u0, _t); const nl = Math.hypot(_t.x, _t.z) || 1, nx = _t.z / nl, nz = -_t.x / nl, OFF = (E.yardOff || 6) * METRE, LEN = Math.round((E.yardLen || 60) * METRE / MINI);   // s runs in model units, like the vehicle lengths
   const at = (s, out) => { const u = Math.max(0, Math.min(1, u0 + sg * (s + 3) * MINI / L)); realAt(line, u, out); out.x += nx * OFF; out.z += nz * OFF; out.y = Math.max(out.y, heightAt(out.x, out.z) + 0.5 * METRE); return out; };
   const pts = []; for(let s = -2; s <= LEN + 2; s += 3) pts.push(at(s, new THREE.Vector3()));
   ribbon(line, pts, 1.3);
