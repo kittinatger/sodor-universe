@@ -466,16 +466,24 @@ lap('crossingModels');
 // ------------------------------------------------------------------ buildings: facade atlas and archetypes
 // One painted atlas for every wall and roof; instance colours tint it (brick, render, stone, slate, tile).
 const ATLAS = 1024, CELL = 256;
-const atlasTex = canvasTex(ATLAS, ATLAS, (g) => {
-  g.fillStyle = '#e6e3dc'; g.fillRect(0, 0, ATLAS, ATLAS);
+// The same layout is painted twice: the facades by day, and a night map where only the window panes
+// glow (some rooms lit, some dark), used as the emissive map once the sun goes down.
+function paintAtlas(g, lit){
+  g.fillStyle = lit ? '#000000' : '#e6e3dc'; g.fillRect(0, 0, ATLAS, ATLAS);
   let s = 11; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  for(let k = 0; k < 26000; k++){ const v = 205 + rnd() * 40 | 0; g.fillStyle = `rgba(${v},${v - 3},${v - 8},0.55)`; g.fillRect(rnd() * ATLAS, rnd() * ATLAS, 2 + rnd() * 3, 1); }
-  for(let y = 0; y < ATLAS * 0.75; y += 5) { g.fillStyle = 'rgba(0,0,0,0.035)'; g.fillRect(0, y, ATLAS, 1); }
+  let ls = 5; const lrnd = () => (ls = (ls * 48271) % 2147483647) / 2147483647;
+  if(!lit){
+    for(let k = 0; k < 26000; k++){ const v = 205 + rnd() * 40 | 0; g.fillStyle = `rgba(${v},${v - 3},${v - 8},0.55)`; g.fillRect(rnd() * ATLAS, rnd() * ATLAS, 2 + rnd() * 3, 1); }
+    for(let y = 0; y < ATLAS * 0.75; y += 5) { g.fillStyle = 'rgba(0,0,0,0.035)'; g.fillRect(0, y, ATLAS, 1); }
+  }
   const cell = (cx, cy, cw, ch, W, Hm, draw) => { g.save(); g.translate(cx * CELL, cy * CELL); g.scale(cw * CELL / W, ch * CELL / Hm); draw(Hm); g.restore(); };
-  const win = (x, y, w, h) => { g.fillStyle = '#f4f4f0'; g.fillRect(x - 0.12, y - 0.15, w + 0.24, h + 0.27); g.fillStyle = '#26323b'; g.fillRect(x, y, w, h);
+  const glow = () => { const r = lrnd(); if(r < 0.38) return '#0a0806'; const k = 0.65 + lrnd() * 0.35; return `rgb(${255 * k | 0},${(200 + lrnd() * 40) * k | 0},${(120 + lrnd() * 50) * k | 0})`; };
+  const win = (x, y, w, h) => {
+    if(lit){ g.fillStyle = glow(); g.fillRect(x, y, w, h); g.fillStyle = '#000'; g.fillRect(x + w / 2 - 0.05, y, 0.1, h); g.fillRect(x, y + h / 2 - 0.05, w, 0.1); return; }
+    g.fillStyle = '#f4f4f0'; g.fillRect(x - 0.12, y - 0.15, w + 0.24, h + 0.27); g.fillStyle = '#26323b'; g.fillRect(x, y, w, h);
     g.fillStyle = '#f4f4f0'; g.fillRect(x + w / 2 - 0.04, y, 0.08, h); g.fillRect(x, y + h / 2 - 0.04, w, 0.08); g.fillStyle = 'rgba(160,200,220,0.25)'; g.fillRect(x + 0.08, y + 0.08, w * 0.3, h * 0.3);
     g.fillStyle = '#cfcac0'; g.fillRect(x - 0.18, y + h, w + 0.36, 0.14); };
-  const door = (x, y, w, h, col) => { g.fillStyle = '#efefea'; g.fillRect(x - 0.12, y - 0.12, w + 0.24, h + 0.12); g.fillStyle = col; g.fillRect(x, y, w, h); g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(x + 0.1, y + 0.15, w - 0.2, 0.35); };
+  const door = (x, y, w, h, col) => { if(lit) return; g.fillStyle = '#efefea'; g.fillRect(x - 0.12, y - 0.12, w + 0.24, h + 0.12); g.fillStyle = col; g.fillRect(x, y, w, h); g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(x + 0.1, y + 0.15, w - 0.2, 0.35); };
   const Y = (Hm, y) => Hm - y;                              // metres up from the ground to canvas y
   // row 0: terrace front, terrace back, house front, house back
   cell(0, 0, 1, 1, 5.4, 6.2, Hm => { door(0.6, Y(Hm, 2.2), 0.95, 2.2, '#2f3d52'); win(2.4, Y(Hm, 2.4), 2.2, 1.5); win(0.8, Y(Hm, 5.3), 1.1, 1.4); win(3.0, Y(Hm, 5.3), 1.4, 1.4); });
@@ -485,38 +493,58 @@ const atlasTex = canvasTex(ATLAS, ATLAS, (g) => {
   // row 1: cottage front, shop front, villa front, side wall
   cell(0, 1, 1, 1, 7.0, 3.6, Hm => { door(3.0, Y(Hm, 2.0), 0.95, 2.0, '#2f5a3a'); win(1.0, Y(Hm, 2.0), 1.3, 1.1); win(4.7, Y(Hm, 2.0), 1.3, 1.1); });
   cell(1, 1, 1, 1, 5.4, 9.0, Hm => {
-    g.fillStyle = '#2a3a2e'; g.fillRect(0, Y(Hm, 3.5), 5.4, 0.65);
-    g.fillStyle = '#e8d9a8'; g.font = 'bold 0.36px Georgia'; g.fillText('SHOP', 1.7, Y(Hm, 3.08));
-    g.fillStyle = '#f2f0ea'; g.fillRect(0.25, Y(Hm, 2.85), 3.9, 2.6); g.fillStyle = '#1f2a33'; g.fillRect(0.4, Y(Hm, 2.75), 3.6, 2.2);
-    g.fillStyle = '#f2f0ea'; g.fillRect(1.6, Y(Hm, 2.75), 0.06, 2.2); g.fillRect(2.8, Y(Hm, 2.75), 0.06, 2.2);
+    if(lit){ g.fillStyle = '#ffd890'; g.fillRect(0.4, Y(Hm, 2.75), 3.6, 2.2); g.fillStyle = '#000'; g.fillRect(1.6, Y(Hm, 2.75), 0.06, 2.2); g.fillRect(2.8, Y(Hm, 2.75), 0.06, 2.2); }
+    else {
+      g.fillStyle = '#2a3a2e'; g.fillRect(0, Y(Hm, 3.5), 5.4, 0.65);
+      g.fillStyle = '#e8d9a8'; g.font = 'bold 0.36px Georgia'; g.fillText('SHOP', 1.7, Y(Hm, 3.08));
+      g.fillStyle = '#f2f0ea'; g.fillRect(0.25, Y(Hm, 2.85), 3.9, 2.6); g.fillStyle = '#1f2a33'; g.fillRect(0.4, Y(Hm, 2.75), 3.6, 2.2);
+      g.fillStyle = '#f2f0ea'; g.fillRect(1.6, Y(Hm, 2.75), 0.06, 2.2); g.fillRect(2.8, Y(Hm, 2.75), 0.06, 2.2);
+    }
     door(4.4, Y(Hm, 2.4), 0.8, 2.4, '#2a3a2e');
     for(const y of [5.9, 8.4]) { win(0.8, Y(Hm, y), 1.2, 1.5); win(3.2, Y(Hm, y), 1.2, 1.5); }
   });
-  cell(2, 1, 1, 1, 9.5, 5.8, Hm => { g.fillStyle = '#d8d4cc'; g.fillRect(3.9, Y(Hm, 2.8), 1.7, 0.2); door(4.25, Y(Hm, 2.3), 1.0, 2.3, '#1f3a5a');
+  cell(2, 1, 1, 1, 9.5, 5.8, Hm => { if(!lit){ g.fillStyle = '#d8d4cc'; g.fillRect(3.9, Y(Hm, 2.8), 1.7, 0.2); } door(4.25, Y(Hm, 2.3), 1.0, 2.3, '#1f3a5a');
     for(const x of [0.8, 2.3, 6.2, 7.7]) win(x, Y(Hm, 2.4), 1.0, 1.6); for(const x of [0.8, 2.3, 4.3, 6.2, 7.7]) win(x, Y(Hm, 5.1), 1.0, 1.4); });
   cell(3, 1, 1, 1, 9.0, 9.2, Hm => { win(3.9, Y(Hm, 5.0), 0.9, 1.0); });
   // row 2: warehouse front (two cells wide), barn front, civic front
   cell(0, 2, 2, 1, 20, 8, Hm => {
-    g.fillStyle = 'rgba(0,0,0,0.08)'; for(let x = 0; x <= 20; x += 4) g.fillRect(x - 0.2, 0, 0.4, Hm);
-    g.fillStyle = '#5a4a3a'; g.fillRect(7.5, Y(Hm, 5.2), 5, 5.2); g.fillStyle = 'rgba(0,0,0,0.25)'; for(let x = 7.5; x < 12.5; x += 0.5) g.fillRect(x, Y(Hm, 5.2), 0.05, 5.2);
+    if(!lit){
+      g.fillStyle = 'rgba(0,0,0,0.08)'; for(let x = 0; x <= 20; x += 4) g.fillRect(x - 0.2, 0, 0.4, Hm);
+      g.fillStyle = '#5a4a3a'; g.fillRect(7.5, Y(Hm, 5.2), 5, 5.2); g.fillStyle = 'rgba(0,0,0,0.25)'; for(let x = 7.5; x < 12.5; x += 0.5) g.fillRect(x, Y(Hm, 5.2), 0.05, 5.2);
+    }
     for(let x = 1; x < 20; x += 2.4) if(x < 7 || x > 12.6) win(x, Y(Hm, 7.2), 1.1, 1.2);
     for(let x = 1; x < 7; x += 2.4) win(x, Y(Hm, 3.6), 1.1, 1.8); for(let x = 13.4; x < 19.5; x += 2.4) win(x, Y(Hm, 3.6), 1.1, 1.8);
   });
-  cell(2, 2, 1, 1, 14, 5.5, Hm => { g.fillStyle = 'rgba(0,0,0,0.2)'; for(let x = 0; x < 14; x += 0.4) g.fillRect(x, 0, 0.04, Hm);
+  if(!lit) cell(2, 2, 1, 1, 14, 5.5, Hm => { g.fillStyle = 'rgba(0,0,0,0.2)'; for(let x = 0; x < 14; x += 0.4) g.fillRect(x, 0, 0.04, Hm);
     g.fillStyle = '#4a3a2a'; g.fillRect(5, Y(Hm, 4.2), 4, 4.2); g.fillStyle = '#e8e4d8'; g.fillRect(5, Y(Hm, 4.2), 0.15, 4.2); g.fillRect(8.85, Y(Hm, 4.2), 0.15, 4.2);
     g.beginPath(); g.moveTo(5, Y(Hm, 4.2)); g.lineTo(9, Y(Hm, 0)); g.moveTo(9, Y(Hm, 4.2)); g.lineTo(5, Y(Hm, 0)); g.strokeStyle = '#e8e4d8'; g.lineWidth = 0.12; g.stroke(); });
   cell(3, 2, 1, 1, 18, 9, Hm => { door(8.2, Y(Hm, 3.2), 1.6, 3.2, '#3a2a1a');
-    for(const x of [1.2, 4.2, 12.2, 15.2]){ g.fillStyle = '#f4f4f0'; g.beginPath(); g.arc(x + 0.8, Y(Hm, 6.4), 0.95, Math.PI, 0); g.fill(); g.fillRect(x - 0.15, Y(Hm, 6.4), 1.9, 4.6);
-      g.fillStyle = '#26323b'; g.beginPath(); g.arc(x + 0.8, Y(Hm, 6.4), 0.8, Math.PI, 0); g.fill(); g.fillRect(x, Y(Hm, 6.4), 1.6, 4.4); }
+    for(const x of [1.2, 4.2, 12.2, 15.2]){
+      if(!lit){ g.fillStyle = '#f4f4f0'; g.beginPath(); g.arc(x + 0.8, Y(Hm, 6.4), 0.95, Math.PI, 0); g.fill(); g.fillRect(x - 0.15, Y(Hm, 6.4), 1.9, 4.6); }
+      g.fillStyle = lit ? glow() : '#26323b'; g.beginPath(); g.arc(x + 0.8, Y(Hm, 6.4), 0.8, Math.PI, 0); g.fill(); g.fillRect(x, Y(Hm, 6.4), 1.6, 4.4); }
     win(7.6, Y(Hm, 7.4), 2.8, 1.6); });
+  if(lit) return;
   // row 3: roof tiles (two cells), plain stone, corrugated metal
   cell(0, 3, 2, 1, 10, 5, Hm => { g.fillStyle = '#d8d8d4'; g.fillRect(0, 0, 10, 5);
     for(let y = 0; y < 5; y += 0.32){ g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(0, y, 10, 0.05); for(let x = (y * 3.1) % 0.5; x < 10; x += 0.5) g.fillRect(x, y, 0.03, 0.32); } });
   cell(2, 3, 1, 1, 6, 6, Hm => { g.fillStyle = '#d6d2c8'; g.fillRect(0, 0, 6, 6); for(let y = 0; y < 6; y += 0.45) for(let x = (y * 1.7) % 0.9; x < 6; x += 0.9){ g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 0.04; g.strokeRect(x, y, 0.9, 0.45); } });
   cell(3, 3, 1, 1, 6, 6, Hm => { g.fillStyle = '#dcdcd8'; g.fillRect(0, 0, 6, 6); for(let x = 0; x < 6; x += 0.3){ g.fillStyle = 'rgba(0,0,0,0.16)'; g.fillRect(x, 0, 0.1, 6); } });
-});
+}
+const atlasTex = canvasTex(ATLAS, ATLAS, g => paintAtlas(g, false)), litTex = canvasTex(ATLAS, ATLAS, g => paintAtlas(g, true));
 atlasTex.anisotropy = 8;
-const atlasMat = new THREE.MeshStandardMaterial({map: atlasTex, roughness: 0.9});
+// Lit windows come on at dusk; a hash of each building's position keeps some houses dark all night.
+const winU = {value: 0};
+const atlasMat = new THREE.MeshStandardMaterial({map: atlasTex, roughness: 0.9, emissive: 0xffc27a, emissiveMap: litTex, emissiveIntensity: 1});
+atlasMat.onBeforeCompile = sh => {
+  sh.uniforms.uWin = winU;
+  sh.vertexShader = 'varying float vLit;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  #ifdef USE_INSTANCING
+    vLit = step(0.22, fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453));
+  #else
+    vLit = 1.0;
+  #endif`);
+  sh.fragmentShader = 'uniform float uWin; varying float vLit;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= uWin * vLit;');
+};
 const UVC = (cx, cy, cw = 1, ch = 1) => [cx / 4, 1 - (cy + ch) / 4, (cx + cw) / 4, 1 - cy / 4];
 const CELLS = {terraceF: UVC(0, 0), terraceB: UVC(1, 0), houseF: UVC(2, 0), houseB: UVC(3, 0), cottageF: UVC(0, 1), shopF: UVC(1, 1), villaF: UVC(2, 1), side: UVC(3, 1),
   wareF: UVC(0, 2, 2, 1), barnF: UVC(2, 2), civicF: UVC(3, 2), roof: UVC(0, 3, 2, 1), stone: UVC(2, 3), metal: UVC(3, 3)};
@@ -1047,7 +1075,7 @@ towns.forEach(t => {
       list.push({x, y: Math.max(rd.ys ? rd.ys[i] : 0, H(x, z)) - 0.1 * M, z, yaw: Math.atan2(-nx, -nz)});
     }
   });
-  if(list.length) t.lamps = instanced(lampGeo, mat(0x2a3a32, 0.5, 0.4), list, false);
+  if(list.length){ t.lamps = instanced(lampGeo, mat(0x2a3a32, 0.5, 0.4), list, false); t.lampList = list; }
 });
 
 lap('props');
@@ -1182,6 +1210,76 @@ window.SODOR_LAND = {
 };
 
 lap('landMap');
+// ------------------------------------------------------------------ lights after dark
+// From afar each town is a scatter of lit windows along its streets; closer in, the street lamps and
+// station lamps glow, and the lighthouses sweep their beams over the sea.
+const NIGHT = typeof NIGHT_U !== 'undefined' ? NIGHT_U : {value: 0};
+const glowOK = typeof makeGlow === 'function';
+const lights = {};
+if(glowOK){
+  const WINDOW = new THREE.Color(0xffb35a), SODIUM = new THREE.Color(0xffa24a), LAMP = new THREE.Color(0xffd28a), BEACON = new THREE.Color(0xfff0c0);
+  lights.town = makeGlow(12000, {minPx: 1.6, maxPx: 16, floor: 0.45});
+  towns.forEach(t => {
+    const r = rng(t.seed + 91), share = t.cls === 3 ? 1 : t.cls === 2 ? 0.7 : 0.4;
+    t.roads.forEach(rd => {
+      for(let i = 1; i < rd.pts.length - 1; i++){
+        if(r() > share) continue;
+        const p = rd.pts[i], q = rd.pts[i + 1], tx = q.x - p.x, tz = q.z - p.z, tl = Math.hypot(tx, tz) || 1, side = r() < 0.5 ? 1 : -1;
+        const o = rd.hw + (6 + r() * 10) * M, x = p.x + tz / tl * o * side, z = p.z - tx / tl * o * side;
+        if(Math.hypot(x - t.x, z - t.z) > t.R * 1.05 || wet(x, z)) continue;
+        lights.town.add(x, H(x, z) + 4 * M, z, WINDOW, (14 + r() * 16) * M);
+      }
+    });
+  });
+  lights.town.flush();
+  lights.lamps = makeGlow(9000, {minPx: 1.2, maxPx: 26});
+  towns.forEach(t => (t.lampList || []).forEach(p => lights.lamps.add(p.x + Math.sin(p.yaw) * 0.9 * M, p.y + 4.7 * M, p.z + Math.cos(p.yaw) * 0.9 * M, SODIUM, 9 * M)));
+  // platform lamps at every open station
+  const _a = new V3(), _d = new V3();
+  STATIONS.forEach(st => {
+    const line = LINES[st.lines[0]]; if(!line || st.kind === 'closed') return;
+    const std = line.kind === 'standard', lenM = std ? (MAJOR.has(st.name) ? 140 : 90) : line.kind === 'miniature' ? 22 : 40;
+    const wM = std ? 4 : 2.8, off = ((std ? 3.6 : 2.3) / 2 + 0.6 + wM - 0.4 + (line.id === 'main' ? MAIN_LANE : 0)) * M;
+    for(let s = -lenM / 2 + 6; s <= lenM / 2 - 6; s += 18){
+      const u = st.trackU + s * M / line.real.len; if(u <= 0 || u >= 1) continue;
+      realAt(line, u, _a); realDir(line, u, _d);
+      const nl = Math.hypot(_d.x, _d.z) || 1;
+      lights.lamps.add(_a.x + _d.z / nl * off, _a.y + 4.2 * M, _a.z - _d.x / nl * off, LAMP, 8 * M);
+    }
+  });
+  // lamps along each quay
+  harbours.forEach(h => {
+    h.g.updateMatrixWorld(true);
+    const Lq = h.t.cls === 3 ? 200 : h.t.cls === 2 ? 130 : 55;
+    for(let x = -Lq / 2 + 5; x < Lq / 2; x += 14){ const p = new V3(x, 5, 3.5).applyMatrix4(h.g.matrixWorld); lights.lamps.add(p.x, p.y, p.z, LAMP, 9 * M); }
+  });
+  lights.lamps.flush();
+  // lighthouses: a bright lantern and two beams turning
+  lights.beacons = makeGlow(64, {minPx: 2.5, maxPx: 34, floor: 0.8});
+  const beamGeo = (() => {
+    const L = 1800 * M, r = 70 * M, seg = 12, pos = [0, 0, 0], col = [1, 0.95, 0.8], idx = [];
+    for(let k = 0; k <= seg; k++){ const a = k / seg * TAU; pos.push(L, Math.cos(a) * r * 0.45, Math.sin(a) * r); col.push(0, 0, 0); }
+    for(let k = 1; k <= seg; k++) idx.push(0, k, k + 1);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx); return g;
+  })();
+  lights.beamMat = new THREE.MeshBasicMaterial({vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false});
+  lights.beams = [];
+  headlands.forEach((h, k) => {
+    const y = h.g.position.y + 26.3 * M;
+    lights.beacons.add(h.x, y, h.z, BEACON, 160 * M);
+    const rot = new THREE.Group(); rot.position.set(h.x, y, h.z); rot.rotation.y = k * 1.3;
+    for(const s of [0, Math.PI]){ const b = new THREE.Mesh(beamGeo, lights.beamMat); b.rotation.y = s; b.renderOrder = 7; rot.add(b); }
+    relief.add(rot); lights.beams.push(rot);
+  });
+  // the harbour light at the end of each breakwater (see the harbour builder: arm turned -0.5, light 3 m from its end)
+  harbours.forEach(h => {
+    const big = h.t.cls >= 2, Lq = h.t.cls === 3 ? 200 : h.t.cls === 2 ? 130 : 55, al = Lq * (big ? 0.7 : 0.9), d = al - 3;
+    const p = new V3(Lq / 2 + d * Math.sin(-0.5), 1 + (big ? 14 : 9) * 1.09, 6 + d * Math.cos(0.5)).applyMatrix4(h.g.matrixWorld);
+    lights.beacons.add(p.x, p.y, p.z, new THREE.Color(0xff6a4a), 50 * M);
+  });
+  lights.beacons.flush();
+}
+
 // ------------------------------------------------------------------ level of detail and the moving parts
 const owners = [...towns, ...countryside.values(), ...extraSites.map(s => s.owner)];
 const harbourGroup = new THREE.Group(); scene.add(harbourGroup);
@@ -1199,6 +1297,16 @@ frameHooks.push(dt => {
     if(o.group) o.group.visible = close;
   });
   propChunks.forEach(p => { p.m.visible = camDist < 2.6 && (p.all || Math.hypot(cp.x - p.x, cp.z - p.z) < p.r); });
+  // after dark: windows, lamps and lighthouses
+  winU.value = NIGHT.value * 1.15;
+  if(glowOK){
+    const on = NIGHT.value > 0.01;
+    lights.town.pts.visible = on && camDist > 1.6; lights.town.u.uFade.value = smooth(1.6, 4.5, camDist);
+    lights.lamps.pts.visible = on && camDist < 9; lights.lamps.u.uFade.value = 1 - smooth(6, 9, camDist);
+    lights.beacons.pts.visible = on;
+    lights.beamMat.opacity = NIGHT.value * 0.2;
+    lights.beams.forEach(b => { b.visible = on && camDist < 60; b.rotation.y += dt * 0.55; });
+  }
   // crossing gates swing shut across the road when a train is near
   if(camDist < 3){
     gates.forEach(gt => {
@@ -1224,7 +1332,7 @@ frameHooks.push(dt => {
 let nb = 0; owners.forEach(o => Object.values(o.inst).forEach(l => nb += l.length));
 const statTowns = document.getElementById('statTowns');
 if(statTowns) statTowns.textContent = `${towns.length} · ${crossings.filter(c => c.kind === 'level').length}`;
-window.SODOR_WORLD = {towns, roads, crossings, harbours, headlands, sailing, extraSites, vicarstownBridge, buildings: nb, timing, ensureTown,
+window.SODOR_WORLD = {towns, roads, crossings, harbours, headlands, sailing, extraSites, vicarstownBridge, buildings: nb, timing, ensureTown, lights, atlasMat,
   buildAll: () => towns.forEach(ensureTown), count: () => { let n = 0; owners.forEach(o => Object.values(o.inst).forEach(l => n += l.length)); return n; }};
 console.log(`World: ${towns.length} towns, ${roads.length} roads, ${crossings.length} crossings (${crossings.filter(c => c.kind === 'level').length} level), ${nb} buildings, ${harbours.length} harbours, ${headlands.length} lighthouses, ${sailing.length} ships — ${Math.round(performance.now() - t0)} ms`);
 })();

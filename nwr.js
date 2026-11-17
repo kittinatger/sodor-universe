@@ -1800,6 +1800,11 @@ Object.keys(RUNS).forEach(id => {
   unit.forEach(v => allNWR.push({v, parked: false}));
   cars.forEach(v => { if(v.key){ tagStock(v, {rec, run}); allNWR.push({v, parked: false}); } });
 });
+// Relief engines take turns on a duty (duties.js) and live in that duty's own engine shed (ops.js),
+// so they leave the depot lists below.
+const RELIEF = new Set();
+Object.values((window.SODOR_DUTIES || {}).nwr || {}).forEach(d => (d.rota || []).slice(1).forEach(id => { if(byId[id] && !byId[id].runner) RELIEF.add(id); }));
+RELIEF.forEach(id => { const rec = byId[id]; rec.relief = true; engineUnit(rec).forEach(v => allNWR.push({v, parked: true})); tagEngine(rec); });
 
 // ------------------------------------------------------------------ depots, works and docks
 const depotGroup = new THREE.Group(); scene.add(depotGroup);
@@ -1940,6 +1945,9 @@ function buildDepot(D){
     const b = 3 + i * SITE_STEP;
     kit.road(0, b, len, b);
     kit.row(units.flat(), 3, b, 1, 0);
+    // recorded so ops.js can shunt the engines up and down this road and put them away at night
+    K.yards.push({D, label: D.label, rail: 'nwr', units, ids: D.roads[i], at: (s, out) => out.copy(kit.pt(s, b)), yaw: kit.yaw + Math.PI, face: -1,
+      sMin: 1, sMax: len - 1, shed: shedLen ? len - shedLen : 0});
   });
   parkAll(roads);
   const G = kit.G, lx = kit.lx, rw = roads.length * SITE_STEP;
@@ -2014,6 +2022,11 @@ function buildRoundhouse(D){
   parkAll(units);
   building(G, lx(4), 6, 7, 10, 5, 0x8a4a32, 0x3a3f46);
   finishSite(D, kit);
+  const allIds = ids.concat((D.stock || []).flat());
+  K.roundhouse = {D, kit, ca, cb, R0, R1, bridge, sx: kit.sx, stalls: units.map((u, k) => {
+    const phi = (-80 + 160 * (k + 0.5) / n) * Math.PI / 180;
+    return {phi, vehs: u, id: allIds[k], rec: byId[allIds[k]] || null};
+  })};
 }
 
 // Brendam Docks: a quay with Cranky, Carly and Big Mickey, a ship alongside and a siding.
@@ -2046,13 +2059,16 @@ function buildDocks(D){
   const units = D.roads.map(ids => vehiclesFor(ids, D));
   let x = -40;
   const yawRow = G.rotation.y + Math.PI / 2;
+  const toWorld = new THREE.Matrix4().compose(G.position, new THREE.Quaternion().setFromEuler(G.rotation), new THREE.Vector3(M, M, M));
   units.flat(2).forEach(v => {
     x += v.len / 2;
-    const p = new THREE.Vector3(x, 0, -12).applyMatrix4(new THREE.Matrix4().compose(G.position, new THREE.Quaternion().setFromEuler(G.rotation), new THREE.Vector3(M, M, M)));
+    const p = new THREE.Vector3(x, 0, -12).applyMatrix4(toWorld);
     v.group.position.copy(p); v.group.rotation.set(0, yawRow, 0);
     x += v.len / 2 + 0.15;
   });
   parkAll(units);
+  D.roads.forEach((ids, i) => K.yards.push({D, label: D.label, rail: 'nwr', units: units[i], ids, at: (s, out) => out.set(s, 0, -12).applyMatrix4(toWorld),
+    yaw: yawRow, face: 1, sMin: -69, sMax: 69, shed: 0, origin: -40}));
   for(let k = 0; k < 3; k++) building(G, -50 + k * 30, -24, 20, 14, 9, [0x9a958c, 0x8a5a3e, 0xa39c8e][k], 0x4a4f58, Math.PI / 2);
   const cranky = portalCrane({color: 0x6b7a2a, counter: 0x8a8d91, legH: 8, span: 7, jib: 22, jibUp: 0.75, face: {smile: -0.3, brow: 0.8, thick: true}, name: 'CRANKY', nameStyle: {fg: '#9be04a', line: '#2a3a10', font: 'bold 92px Arial'}});
   cranky.position.set(-15, 0, 0.5); G.add(cranky); nonRail('cranky', G, cranky);
@@ -2115,6 +2131,8 @@ function nonRail(id, G, obj){
 }
 
 DEPOTS.forEach(D => {
+  if(D.engines) D.engines = D.engines.filter(id => !RELIEF.has(id));
+  if(D.roads) D.roads = D.roads.map(r => r.filter(id => !RELIEF.has(id))).filter(r => r.length);
   try { buildDepot(D); } catch(e){ console.warn('depot', D.key, e); }
 });
 
@@ -2122,6 +2140,8 @@ DEPOTS.forEach(D => {
 const CAT_LABEL = {Steam: 'Steam engine', Diesel: 'Diesel engine', Other: 'Engine', Former: 'Former engine'};
 function worldPos(obj){ return obj.getWorldPosition(new THREE.Vector3()); }
 function status(rec){
+  const live = window.SODOR_OPS && rec.veh && window.SODOR_OPS.statusOf(rec.veh.group);
+  if(live) return live;
   if(rec.runner){
     const ln = LINES[rec.run.line].name, the = /^The |'s /.test(ln) ? '' : 'the ';
     return `On duty: ${rec.run.job}, on ${the}${ln}${rec.run.from ? ` between ${rec.run.from} and ${rec.run.to}` : ''}.`;
@@ -2141,7 +2161,7 @@ function showEngine(rec){
   openPanel(`North Western Railway · ${CAT_LABEL[rec.cat] || 'Engine'}`, rec.name, engineText(rec),
     `${rec.wheels}${rec.no ? ' · No. ' + rec.no : ''}${R ? ' · ' + LINES[rec.run.line].name : rec.home ? ' · ' + rec.home.label : ''}`);
   fly(rec.veh.group, rec.veh.len > 12 ? 0.075 : 0.055);
-  if(R){ const b = addPanelButton('Follow engine', () => { followTrain = {mesh: rec.veh.group, dist: rec.veh.len > 12 ? 0.075 : 0.055}; b.classList.add('active'); }); }
+  if(R || rec.relief || rec.yard){ const b = addPanelButton('Follow engine', () => { followTrain = {mesh: rec.veh.group, dist: rec.veh.len > 12 ? 0.075 : 0.055}; b.classList.add('active'); }); }
 }
 function showStock(key, veh, ctx){
   const info = STOCK_INFO.find(s => s.key === (STOCK_ALIAS[key] || key));
@@ -2175,12 +2195,17 @@ function row(name, sub, color, onClick, list = nwrList){
   d.querySelector('.ros-name').textContent = name; d.querySelector('.ros-sub').textContent = sub;
   d.onclick = onClick; list.appendChild(d); rosterRows.push({row: d, text: (name + ' ' + sub).toLowerCase()});
 }
-const shown = rec => rec.veh && (rec.runner || rec.home);
+const shown = rec => rec.veh && (rec.runner || rec.home || rec.relief);
+const subOf = r => {
+  if(r.runner) return LINES[r.run.line].name.replace(/ (Branch )?Line$/, '');
+  if(r.relief){ const d = Object.entries(window.SODOR_DUTIES.nwr).find(([, d]) => (d.rota || []).includes(r.id)); return d ? 'relief for ' + byId[d[0]].name : 'relief'; }
+  return r.home ? r.home.label.replace(/ \(.*\)/, '') : '';
+};
 [['Steam', 'Steam engines'], ['Diesel', 'Diesel engines'], ['Other', 'Other engines'], ['Former', 'Former engines']].forEach(([cat, title]) => {
   const list = FLEET.filter(r => r.cat === cat && shown(r));
   if(!list.length) return;
   group(title);
-  list.forEach(r => row(r.name, r.runner ? 'running' : (r.home ? r.home.label.replace(/ \(.*\)/, '') : ''), r.dot, () => showEngine(r)));
+  list.forEach(r => row(r.name, subOf(r), r.dot, () => showEngine(r)));
 });
 [['Passenger', 'Passenger coaches'], ['Goods', 'Goods wagons'], ['Other stock', 'Breakdown and other stock']].forEach(([cat, title]) => {
   const list = STOCK_INFO.filter(s => s.cat === cat && stockSeen[s.key]);
@@ -2209,7 +2234,8 @@ document.querySelectorAll('#rosterTabs button').forEach(b => b.onclick = () => {
     x.classList.toggle('on', x === b);
     document.getElementById(x.dataset.tab).style.display = x === b ? '' : 'none';
   });
-  search.style.display = b.dataset.tab === 'rosterList' ? 'none' : '';      // the Skarloey list is short; the others search
+  search.style.display = b.dataset.tab === 'rosterList' || b.dataset.tab === 'dutyList' ? 'none' : '';      // the Skarloey list and the duties board are short; the others search
+  if(b.dataset.tab === 'dutyList' && window.SODOR_OPS) window.SODOR_OPS.updateBoard();
 });
 const stat = document.getElementById('statTrains');
 stat.textContent = (parseInt(stat.textContent, 10) || 0) + NWR_RUNNERS.length;
@@ -2251,7 +2277,7 @@ frameHooks.push(() => {
   depotLabels.forEach(s => { s.visible = camDist < 4 && camDist > 0.12 && cp.distanceTo(s.position) < 3.2; });
 });
 
-window.SODOR_NWR = {FLEET, RUNS, DEPOTS, NWR_RUNNERS, STOCK_STD, byId};
+window.SODOR_NWR = {FLEET, RUNS, DEPOTS, NWR_RUNNERS, STOCK_STD, byId, show: x => pickHandler(x), RELIEF};
 // The standard-gauge kit, depot builders and roster, shared with cfr.js.
 window.SODOR_STD = {bakeVC, faceMat, faceOn, letter, nameplate, lining, hazard, wheelS, rodsS, addWheels, finish, chimneyS, halfDrumX, gable, lamp, buffers,
   findSite, siteKit, shedOver, building, heap, label, bakeSite, depotGroup, depotLabels, allNWR, taken, roadMat, frameOnLine, rosterGroup: group, rosterRow: row, STYLES, rrect,

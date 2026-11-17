@@ -798,7 +798,8 @@ function tagPick(group, info){
 }
 function engineDesc(E){
   const train = E.consist.map((k, i) => (E.cars && E.cars[i] ? E.cars[i] + ' (' + STOCK[k].label.toLowerCase() + ')' : STOCK[k].label)).join(', ');
-  return `${E.name}${E.no ? ' (No. ' + E.no + ')' : ''} is a ${E.wheels} engine based on ${E.basis}. Livery: ${E.livery}. Job here: ${E.job}. Train: ${train}.`;
+  const now = window.SODOR_OPS ? window.SODOR_OPS.statusOf(E.train && E.train.engine && E.train.engine.group) : '';
+  return `${E.name}${E.no ? ' (No. ' + E.no + ')' : ''} is a ${E.wheels} engine based on ${E.basis}. Livery: ${E.livery}. Job here: ${E.job}. Train: ${train}.${now ? ' ' + now : ''}`;
 }
 function showEngine(E){
   openPanel('Skarloey Railway engine', E.name, engineDesc(E), `${E.wheels}${E.no ? ' · No. ' + E.no : ''} · ${LINES[E.line].name}`);
@@ -853,10 +854,10 @@ function makeRunner(o){
   R.side = R.runRound ? (R.dir > 0 ? 'B' : 'A') : (o.side || 'B');
 
   // Unit (engine + tender) centres for a given anchor and side; the engine always faces B.
-  R.unitX = (a, side) => {
-    const Bend = a + len0, Aend = a - off[last] - lenN, xs = [];
-    if(side === 'B'){ let x = Bend + gap + U; unit.forEach(m => { xs.push(x - m.len / 2); x -= m.len + gap; }); }
-    else { let x = Aend - gap; unit.forEach(m => { xs.push(x - m.len / 2); x -= m.len + gap; }); }
+  R.unitX = (a, side, un = R.unit) => {
+    const Bend = a + len0, Aend = a - off[last] - lenN, xs = [], UU = un.reduce((s, m, i) => s + m.len + (i ? gap : 0), 0);
+    if(side === 'B'){ let x = Bend + gap + UU; un.forEach(m => { xs.push(x - m.len / 2); x -= m.len + gap; }); }
+    else { let x = Aend - gap; un.forEach(m => { xs.push(x - m.len / 2); x -= m.len + gap; }); }
     return xs;
   };
   // Passing loop at each terminus: zero offset exactly where the engine leaves and rejoins.
@@ -872,8 +873,12 @@ function loopLat(R, loop, x){
   return R.o.loopW * smooth(loop.lo, loop.lo + loop.k, x) * (1 - smooth(loop.hi - loop.k, loop.hi, x));
 }
 function trackFrame(R, x){
-  const u = Math.max(0, Math.min(1, R.o.uA + R.sgn * x / R.L));
+  const uRaw = R.o.uA + R.sgn * x / R.L, u = Math.max(0, Math.min(1, uRaw));
   realAt(R.line, u, _p); realDir(R.line, u, _t);
+  if(uRaw !== u){                                   // past the end of the line (engine sheds there): carry straight on
+    const over = (uRaw - u) * R.L;
+    _p.x += _t.x * over; _p.z += _t.z * over;
+  }
   if(R.sgn < 0) _t.negate();
   return u;
 }
@@ -924,8 +929,23 @@ function drawLoops(R){
   });
 }
 
+// Swap the engine (and tender) working a train: used by the duty rosters in ops.js.
+function swapUnit(R, vehicles){
+  R.unit = vehicles.map(v => ({v, len: v.len * R.o.scale}));
+  R.U = R.unit.reduce((s, m, i) => s + m.len + (i ? R.gap : 0), 0);
+  R.engine = vehicles[0];
+  if(R.runRound) R.loops = [R.aB, R.aA].map(a => {
+    const xB = R.unitX(a, 'B')[0], xA = R.unitX(a, 'A')[0], lo = Math.min(xA, xB), hi = Math.max(xA, xB);
+    return {lo, hi, k: Math.min(15 * METRE, (hi - lo) / 4)};
+  });
+}
 function stepRunner(R, dt){
   let carDx = 0, unitDx = 0, moving = false;
+  if(R.hold){                                       // stabled for the night: the train stands, the engine may be away
+    R.cars.forEach((c, k) => placeVeh(R, c.v, R.a - R.off[k], 0));
+    if(R.attached !== false){ const xs = R.unitX(R.a, R.side); R.unit.forEach((m, i) => placeVeh(R, m.v, xs[i], 0)); }
+    return;
+  }
   if(R.phase === 'run'){
     const term = R.dir > 0 ? R.aB : R.aA;
     let target = term;
@@ -1046,12 +1066,14 @@ TRAINS.forEach(tr => {
 });
 
 frameHooks.push(dt => {
-  const d = dt * timeScale;
+  // long frames (time-lapse) are cut into short steps, with the timetable (ops.js) checked before each,
+  // so a train never skips through a stop or misses the end of its turn
+  const d = dt * timeScale, n = Math.max(1, Math.ceil(d / 20)), ops = window.SODOR_OPS;
+  for(let k = 0; k < n; k++){ if(ops) ops.step(d / n); RUNNERS.forEach(R => stepRunner(R, d / n)); }
   RUNNERS.forEach(R => {
-    stepRunner(R, d);
     const m = R.marker, eg = R.engine.group;
     m.position.copy(eg.position);
-    m.visible = R.line.userVisible && camera.position.distanceTo(eg.position) > 0.35;
+    m.visible = !R.hideMarker && R.line.userVisible && camera.position.distanceTo(eg.position) > 0.35;
   });
   loopGroup.visible = camDist < 9;
   puffs.forEach(p => {
@@ -1435,9 +1457,10 @@ document.getElementById('rosterHead').onclick = () => {
 if(innerWidth < 760){ roster.classList.add('collapsed'); document.getElementById('rosterArrow').textContent = '▸'; }
 
 document.getElementById('statTrains').textContent = TRAINS.length + SR_TRAINS.length;
-window.SODOR_SR = {ENGINES, SR_TRAINS, RUNNERS, statics, STOCK};
+window.SODOR_SR = {ENGINES, SR_TRAINS, RUNNERS, statics, STOCK, COLORS: ENGINE_COLORS, show: showEngine};
 // The model kit and train runner, shared with nwr.js.
 window.SODOR_KIT = {mat, add, box, cylZ, cylX, cylY, domeCap, arcZ, roof, bake, canvasTex, faceMat, plateMat, sidePlates, sidePlatesTex,
   glassMat, brassMat, bronzeMat, buildSteam, buildTender, wheelset, makeRunner, drawLoops, addMarker, RUNNERS, tagPick, lineU,
+  placeVeh, spin, puff, trackFrame, swapUnit, loopLat, markerMat, _p, _t, yards: [], roundhouse: null,
   nearTrack, clearArea, inClearZone, clearZones, ground, rosterRow, NG, STD, BLACK, BEAM_RED, BRASS, sceneryNear, trees};
 })();

@@ -45,9 +45,23 @@
   .btn{width:100%;padding:6px 0;background:#15313f;border:1px solid #3a6a80;color:var(--ink);border-radius:6px;cursor:pointer;font-size:11px;}
   .btn:hover{background:#1e4559;}
   #camctl .row{display:flex;gap:6px;margin-top:6px;}
-  #speedctl{bottom:12px;right:12px;padding:10px 14px;font-size:11px;width:170px;}
-  #speedctl label{display:block;margin-bottom:6px;color:var(--accent);}
-  #speedctl input{width:100%;}
+  #speedctl{bottom:12px;right:12px;padding:10px 12px;font-size:11px;width:184px;}
+  .clk{display:flex;align-items:baseline;justify-content:space-between;color:var(--accent);}
+  .clk b{font-size:22px;color:var(--gold);font-variant-numeric:tabular-nums;letter-spacing:.5px;}
+  .clk-phase{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.8px;margin:1px 0 4px;}
+  .row.seg{display:flex;gap:4px;margin-top:5px;}
+  .row.seg .btn{padding:5px 0;font-size:11px;}
+  .btn.on{background:var(--gold);color:#0b1a24;border-color:var(--gold);}
+  .clk-note{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.35;}
+  .duty-head{font-size:11px;color:var(--muted);margin-bottom:4px;line-height:1.4;}
+  .duty-head b{display:block;color:var(--gold);font-size:12px;}
+  .duty-row{align-items:flex-start;}
+  .duty-row .ros-dot{margin-top:2px;}
+  .duty-txt{min-width:0;}
+  .duty-main{color:var(--ink);}
+  .duty-sub{color:var(--muted);font-size:10px;line-height:1.35;}
+  .duty-row[data-state=shed] .duty-main{color:var(--muted);}
+  .duty-row[data-state=off] .duty-main{color:#ffb27a;}
   #panel{bottom:12px;left:12px;right:12px;max-width:520px;margin:0 auto;padding:16px 18px;display:none;box-shadow:0 8px 30px rgba(0,0,0,.5);border-color:#3a6a80;background:rgba(10,20,28,.94);z-index:20;}
   #panel.show{display:block;}
   #panel h3{margin:0 0 4px;font-size:17px;color:var(--gold);}
@@ -70,9 +84,13 @@
     #hud .sub{font-size:10px;margin-bottom:6px;}
     .stat-row{font-size:11px;}
     #camctl{top:auto;bottom:12px;right:auto;left:12px;width:140px;padding:8px 10px;}
-    #speedctl{width:130px;padding:8px 10px;}
+    #speedctl{width:150px;padding:7px 9px;}
+    .clk b{font-size:18px;}
+    .row.seg .btn{font-size:10px;padding:4px 0;}
+    .clk-note{display:none;}
+    .duty-sub{display:none;}
     #legend{width:140px;padding:8px 10px;max-height:45vh;}
-    #roster{top:196px;width:150px;padding:8px 10px;max-height:40vh;}
+    #roster{top:222px;width:150px;padding:8px 10px;max-height:calc(100vh - 360px);}
     .ros-sub{display:none;}
     #rosterTabs button{font-size:10px;padding:4px 0;}
     #credit{display:none;}
@@ -87,7 +105,7 @@
 <div id="hud" class="box">
   <h1>ISLAND OF SODOR</h1>
   <div class="sub">North Western Railway — Live Operations</div>
-  <div class="stat-row"><span>Engines running</span><b id="statTrains">-</b></div>
+  <div class="stat-row"><span>Trains working</span><b id="statTrains">-</b></div>
   <div class="stat-row"><span>Stations</span><b id="statStations">-</b></div>
   <div class="stat-row"><span>Towns · level crossings</span><b id="statTowns">-</b></div>
   <div class="stat-row"><span>Tunnels</span><b id="statTunnels">-</b></div>
@@ -112,17 +130,21 @@
 <div id="roster" class="box">
   <h2 id="rosterHead"><span>ROSTER</span><span id="rosterArrow">▾</span></h2>
   <div id="rosterBody">
-    <div id="rosterTabs"><button data-tab="nwrList" class="on">NWR</button><button data-tab="rosterList">Skarloey</button><button data-tab="cfrList">Culdee Fell</button></div>
-    <input id="rosterSearch" type="search" placeholder="Find an engine, coach or crane" autocomplete="off">
-    <div id="nwrList"></div>
+    <div id="rosterTabs"><button data-tab="dutyList" class="on">Duties</button><button data-tab="nwrList">NWR</button><button data-tab="rosterList">Skarloey</button><button data-tab="cfrList">Culdee Fell</button></div>
+    <input id="rosterSearch" type="search" placeholder="Find an engine, coach or crane" autocomplete="off" style="display:none">
+    <div id="dutyList"></div>
+    <div id="nwrList" style="display:none"></div>
     <div id="rosterList" style="display:none"></div>
     <div id="cfrList" style="display:none"></div>
   </div>
 </div>
 
 <div id="speedctl" class="box">
-  <label>Speed multiplier: <span id="speedVal">1.0x</span></label>
-  <input type="range" id="speedSlider" min="0" max="5" step="0.1" value="1">
+  <div class="clk"><span id="clkDay">Monday</span><b id="clkTime">07:00</b></div>
+  <div class="clk-phase" id="clkPhase">Morning</div>
+  <div class="row seg" id="speedBtns"><button class="btn" data-s="0" title="Pause">❚❚</button><button class="btn on" data-s="1">1×</button><button class="btn" data-s="10">10×</button><button class="btn" data-s="60">60×</button></div>
+  <div class="row seg" id="jumpBtns"><button class="btn" data-t="06:15">Dawn</button><button class="btn" data-t="12:30">Noon</button><button class="btn" data-t="19:50">Dusk</button><button class="btn" data-t="23:30">Night</button></div>
+  <div class="clk-note" id="clkNote">Time runs faster as you zoom out</div>
 </div>
 
 <div id="panel" class="box">
@@ -256,7 +278,8 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 wrap.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xd8ecff, 0x2a3a22, 0.62));
+const hemi = new THREE.HemisphereLight(0xd8ecff, 0x2a3a22, 0.62);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1d6, 1.05);
 sun.position.set(-90, 140, 70);
 sun.castShadow = true;
@@ -267,6 +290,123 @@ sun.shadow.normalBias = 0.9;
 scene.add(sun);
 scene.add(sun.target);
 const SUN_DIR = sun.position.clone().normalize();
+
+// ===================== DAY AND NIGHT =====================
+// The clock moves the sun and moon, colours the sky (seen when you are down near the ground) and puts
+// out the stars; SKY.night runs from 0 by day to 1 in full darkness and switches the lamps on.
+const SKY = {night: 0, day: 1, dusk: 0, sunE: 0.5};
+const NIGHT_U = {value: 0};
+const sstep = (a, b, x)=>{ const t = Math.max(0, Math.min(1, (x-a)/(b-a))); return t*t*(3-2*t); };
+const skyU = {uSun:{value:new THREE.Vector3(0,1,0)}, uMoon:{value:new THREE.Vector3(0,1,0)}, uZen:{value:new THREE.Color()}, uHor:{value:new THREE.Color()},
+  uBg:{value:new THREE.Color()}, uMix:{value:0}, uNight:NIGHT_U, uDusk:{value:0}};
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.ShaderMaterial({
+  uniforms: skyU, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
+  vertexShader: `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform vec3 uSun, uMoon, uZen, uHor, uBg; uniform float uMix, uNight, uDusk; varying vec3 vDir;
+    float h3(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+    void main(){
+      vec3 d = normalize(vDir); float e = d.y;
+      vec3 col = mix(uHor, uZen, pow(clamp(e, 0.0, 1.0), 0.55));
+      col = mix(col, uHor * 0.7, clamp(-e * 5.0, 0.0, 1.0));
+      float sd = max(dot(d, uSun), 0.0), md = max(dot(d, uMoon), 0.0);
+      col += vec3(1.0, 0.72, 0.42) * pow(sd, 7.0) * 0.45 * uDusk;
+      col += vec3(1.0, 0.96, 0.86) * smoothstep(0.99935, 0.9997, sd) * (1.0 - 0.9 * uNight);
+      col += vec3(0.86, 0.9, 1.0) * smoothstep(0.99965, 0.99985, md) * uNight + vec3(0.45, 0.55, 0.9) * pow(md, 40.0) * 0.12 * uNight;
+      vec3 p = d * 230.0; vec3 c = floor(p); float r = h3(c);
+      if(r > 0.986 && e > 0.0){
+        vec3 f = fract(p) - 0.5 - (vec3(h3(c + 1.3), h3(c + 2.7), h3(c + 4.1)) - 0.5) * 0.6;
+        col += vec3(0.9, 0.93, 1.0) * smoothstep(0.13, 0.0, length(f)) * (r - 0.986) / 0.014 * uNight * smoothstep(0.0, 0.18, e);
+      }
+      gl_FragColor = vec4(mix(uBg, col, uMix), 1.0);
+    }`
+}));
+skyDome.renderOrder = -100; skyDome.frustumCulled = false; skyDome.scale.setScalar(1000);
+scene.add(skyDome);
+
+// Soft glowing points for lamps, windows seen from afar and lighthouses, shown from dusk to dawn.
+// Sizes are in world units; a glow never shrinks below minPx pixels (it fades instead) or grows past maxPx.
+const GLOW_SCALE = {value: 800};
+const glowVS = `attribute float size; attribute vec3 color; uniform float uNight, uScale, uMin, uMax, uFade, uFloor; varying vec3 vC; varying float vA;
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  void main(){
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    float px = size * uScale / max(-mv.z, 1e-6);
+    gl_PointSize = clamp(px, uMin, uMax);
+    vA = uNight * uFade * max(uFloor, clamp(px / uMin, 0.0, 1.0));
+    vC = color;
+    gl_Position = projectionMatrix * mv;
+    #include <logdepthbuf_vertex>
+  }`;
+const glowFS = `varying vec3 vC; varying float vA;
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  void main(){
+    #include <logdepthbuf_fragment>
+    vec2 c = gl_PointCoord * 2.0 - 1.0; float d2 = dot(c, c);
+    if(d2 > 1.0) discard;
+    gl_FragColor = vec4(vC * (exp(-d2 * 6.0) + 0.7 * exp(-d2 * 45.0)) * vA, 1.0);
+  }`;
+function makeGlow(cap, o = {}){
+  const geo = new THREE.BufferGeometry(), pos = new Float32Array(cap*3), col = new Float32Array(cap*3), size = new Float32Array(cap);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('size', new THREE.BufferAttribute(size, 1));
+  geo.setDrawRange(0, 0);
+  const u = {uNight: o.always ? {value: 1} : NIGHT_U, uScale: GLOW_SCALE, uMin: {value: o.minPx || 1.5}, uMax: {value: o.maxPx || 40}, uFade: {value: 1}, uFloor: {value: o.floor || 0}};
+  const pts = new THREE.Points(geo, new THREE.ShaderMaterial({uniforms: u, vertexShader: glowVS, fragmentShader: glowFS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending}));
+  // in the relief group, so the lights rise with the ground when the overview stretches it
+  pts.frustumCulled = false; pts.renderOrder = 6; relief.add(pts);
+  let n = 0;
+  return {pts, u,
+    add(x, y, z, c, s){ if(n >= cap) return -1; pos[n*3] = x; pos[n*3+1] = y; pos[n*3+2] = z; col[n*3] = c.r; col[n*3+1] = c.g; col[n*3+2] = c.b; size[n] = s; return n++; },
+    flush(){ geo.setDrawRange(0, n); geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; geo.attributes.size.needsUpdate = true; },
+    clear(){ n = 0; },
+    get count(){ return n; }};
+}
+
+const C = (h)=>new THREE.Color(h);
+const DAYSKY = {zen: C(0x3d7cc4), hor: C(0xbcd8ea)}, DUSKSKY = {zen: C(0x2b3766), hor: C(0xf09a62)}, NIGHTSKY = {zen: C(0x040914), hor: C(0x0f1a2e)};
+const DAY_BG = C(0x0e1d28), NIGHT_BG = C(0x04080e), DUSK_BG = C(0x1a1826);
+const HEMI_DAY = [C(0xd8ecff), C(0x2a3a22)], HEMI_NIGHT = [C(0x34467a), C(0x0e121a)], HEMI_DUSK = C(0xffb48a);
+const SUN_DAY = C(0xfff1d6), SUN_LOW = C(0xff9a55), MOON_C = C(0x9fb6ff);
+const WATER_DAY = C(0x2f86c0), WATER_NIGHT = C(0x0f2a40), WATER_DUSK = C(0x6a5a78);
+const sunV = new THREE.Vector3(), moonV = new THREE.Vector3(), _col = new THREE.Color();
+function updateDaylight(){
+  const tod = (((simTime % 1440) + 1440) % 1440) / 60;
+  const th = 2*Math.PI*(tod - 13)/24;                      // noon at 13:00 (summer time); sunrise ~06:00, sunset ~20:00
+  const sinE = 0.626*Math.cos(th) + 0.162, cosE = Math.sqrt(1 - sinE*sinE);
+  const hx = -Math.sin(th), hz = Math.cos(th);              // east at dawn, south at noon, west at dusk
+  sunV.set(hx*cosE, sinE, hz*cosE);
+  const mE = Math.max(0.3, 0.2 - sinE*0.9), mc = Math.sqrt(1 - mE*mE);
+  moonV.set(-hx*mc, mE, -hz*mc);
+  const day = sstep(-0.06, 0.22, sinE), dusk = Math.exp(-(((sinE - 0.03)/0.11)**2)), night = 1 - sstep(-0.16, 0.03, sinE);
+  SKY.sunE = sinE; SKY.day = day; SKY.dusk = dusk; SKY.night = night; NIGHT_U.value = night;
+  // one directional light: the sun while it is up, then the moon
+  const up = sinE > -0.03;
+  SUN_DIR.copy(up ? sunV : moonV);
+  sun.intensity = up ? 1.05*sstep(-0.03, 0.12, sinE) : 0.3*sstep(-0.03, -0.15, sinE);
+  sun.color.copy(up ? _col.copy(SUN_LOW).lerp(SUN_DAY, sstep(0.0, 0.35, sinE)) : MOON_C);
+  hemi.intensity = 0.40 + 0.22*day;
+  hemi.color.copy(HEMI_NIGHT[0]).lerp(HEMI_DAY[0], day).lerp(HEMI_DUSK, dusk*0.35);
+  hemi.groundColor.copy(HEMI_NIGHT[1]).lerp(HEMI_DAY[1], day);
+  // the dashboard backdrop darkens at night; from near the ground you see the sky instead
+  const bg = scene.background.copy(NIGHT_BG).lerp(DAY_BG, day).lerp(DUSK_BG, dusk*0.5);
+  skyU.uBg.value.copy(bg);
+  skyU.uZen.value.copy(NIGHTSKY.zen).lerp(DAYSKY.zen, day).lerp(DUSKSKY.zen, dusk*0.55);
+  skyU.uHor.value.copy(NIGHTSKY.hor).lerp(DAYSKY.hor, day).lerp(DUSKSKY.hor, dusk*0.8);
+  skyU.uSun.value.copy(sunV); skyU.uMoon.value.copy(moonV); skyU.uDusk.value = dusk;
+  skyU.uMix.value = 1 - sstep(4, 30, camDist);
+  skyDome.position.copy(camera.position);
+  scene.fog.color.copy(bg).lerp(skyU.uHor.value, skyU.uMix.value);
+  water.material.color.copy(WATER_NIGHT).lerp(WATER_DAY, day).lerp(WATER_DUSK, dusk*0.3);
+  GLOW_SCALE.value = renderer.domElement.height / (2*Math.tan(camera.fov*Math.PI/360));
+}
+// Sim time: starts on a Monday at 07:00. The 1×/10×/60× buttons multiply the zoom-dependent speed;
+// Dawn/Noon/Dusk/Night run the clock fast (everything keeps moving) until that time comes round.
+let lapseTo = null;
+const PHASES = [[5,'Night'],[7.5,'Dawn'],[12,'Morning'],[17,'Afternoon'],[19.5,'Evening'],[21,'Dusk'],[24,'Night']];
+const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 // Everything that lies on the ground as seen from afar (terrain, route lines, station discs) is in
 // this group, stretched vertically by VK; everything seen close up uses true heights (VK = 1 there).
 const relief = new THREE.Group(); scene.add(relief);
@@ -863,15 +1003,21 @@ document.getElementById('statStations').textContent = STATIONS.length;
 document.getElementById('statTunnels').textContent = new Set(TUNNELS.map(t=>t.name)).size;
 document.getElementById('statLines').textContent = byName.size;
 let simSpeed = 1;
-const speedSlider = document.getElementById('speedSlider');
-speedSlider.oninput = ()=>{ simSpeed = parseFloat(speedSlider.value); document.getElementById('speedVal').textContent = simSpeed.toFixed(1)+'x'; };
+const speedBtns = [...document.querySelectorAll('#speedBtns button')], jumpBtns = [...document.querySelectorAll('#jumpBtns button')];
+const markBtns = ()=>{ speedBtns.forEach(b=>b.classList.toggle('on', !lapseTo && +b.dataset.s === simSpeed)); jumpBtns.forEach(b=>b.classList.toggle('on', !!lapseTo && b.dataset.t === lapseTo.label)); };
+speedBtns.forEach(b=>b.onclick = ()=>{ simSpeed = +b.dataset.s; lapseTo = null; markBtns(); });
+jumpBtns.forEach(b=>b.onclick = ()=>{
+  const [h, m] = b.dataset.t.split(':').map(Number), tod = h*60 + m, now = ((simTime % 1440) + 1440) % 1440;
+  lapseTo = {t: simTime + ((((tod - now) % 1440) + 1440) % 1440 || 1440), label: b.dataset.t};
+  markBtns();
+});
 const legend = document.getElementById('legend');
 document.getElementById('legendHead').onclick = ()=>{
   legend.classList.toggle('collapsed');
   document.getElementById('legendArrow').textContent = legend.classList.contains('collapsed') ? '▸' : '▾';
 };
 if(innerWidth < 760){ legend.classList.add('collapsed'); document.getElementById('legendArrow').textContent='▸'; }
-let simTime = 6*60;
+let simTime = 7*60;
 const fmtTime = m=>{ m=((m%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(Math.floor(m%60)).padStart(2,'0'); };
 setTimeout(()=>{ document.getElementById('hint').style.opacity = 0; }, 7000);
 
@@ -880,7 +1026,8 @@ const frameHooks = [];                 // per-frame updates registered by charac
 const clock = new THREE.Clock();
 // Time runs near real speed when you're down at the lineside and faster as you zoom out,
 // so close-ups look real and the whole island still looks busy from above.
-let timeScale = 1;
+let timeScale = 1, frameN = 0;
+const clkDay = document.getElementById('clkDay'), clkTime = document.getElementById('clkTime'), clkPhase = document.getElementById('clkPhase');
 // Detail by zoom: map overlays from afar, life-size track, platforms and scenery up close.
 function applyLOD(){
   const d = camDist;
@@ -898,7 +1045,7 @@ function updateShadows(){
     Object.assign(sc, {left:-ext, right:ext, top:ext, bottom:-ext, near:0.0005, far:ext*14 + 3});
     sun.shadow.bias = -0.0004; sun.shadow.normalBias = ext*0.003;
   } else {
-    sun.target.position.set(0,0,0); sun.position.set(-90,140,70);
+    sun.target.position.set(0,0,0); sun.position.copy(SUN_DIR).multiplyScalar(180);
     Object.assign(sc, {left:-120, right:120, top:100, bottom:-100, near:10, far:420});
     sun.shadow.bias = -0.0015; sun.shadow.normalBias = 0.9;
   }
@@ -907,9 +1054,23 @@ function updateShadows(){
 function animate(){
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.1);
-  timeScale = simSpeed * Math.min(150, Math.max(1, camDist*25));
+  timeScale = Math.min(4800, simSpeed * Math.min(150, Math.max(1, camDist*25)));
+  if(lapseTo){
+    // run the clock fast until the chosen time; slow down for the last few minutes so it lands softly
+    const left = (lapseTo.t - simTime)*60;
+    timeScale = Math.max(60, Math.min(4800, left/1.2));
+    if(left <= dt*timeScale){ timeScale = Math.max(0, left/Math.max(dt, 1e-3)); lapseTo = null; if(!simSpeed) simSpeed = 1; markBtns(); }
+  }
   simTime += dt*timeScale/60;
-  document.getElementById('statTime').textContent = `${fmtTime(simTime)} · ×${timeScale<10 ? timeScale.toFixed(1) : Math.round(timeScale)}`;
+  updateDaylight();
+  { const h = (((simTime % 1440) + 1440) % 1440)/60, day = DAY_NAMES[Math.floor(simTime/1440) % 7];
+    const xs = `×${timeScale<10 ? timeScale.toFixed(1) : Math.round(timeScale)}`;
+    if(frameN++ % 6 === 0){
+      document.getElementById('statTime').textContent = `${day.slice(0,3)} ${fmtTime(simTime)} · ${xs}`;
+      clkDay.textContent = day; clkTime.textContent = fmtTime(simTime);
+      clkPhase.textContent = `${PHASES.find(p=>h < p[0])[1]} · ${xs}${lapseTo ? ' · running on to ' + lapseTo.label : ''}`;
+    }
+  }
 
   frameHooks.forEach(f=>f(dt));        // all trains are driven by the runner in characters.js
 
@@ -945,9 +1106,11 @@ updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
-<script src="characters.js?v=10"></script>
-<script src="nwr.js?v=3"></script>
-<script src="cfr.js?v=2"></script>
-<script src="world.js?v=1"></script>
+<script src="characters.js?v=11"></script>
+<script src="duties.js?v=1"></script>
+<script src="nwr.js?v=4"></script>
+<script src="cfr.js?v=3"></script>
+<script src="ops.js?v=1"></script>
+<script src="world.js?v=2"></script>
 </body>
 </html>

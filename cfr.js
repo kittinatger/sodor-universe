@@ -288,6 +288,9 @@ const sheds = (function(){
       v.group.position.y += 0.5 * M;
     } else kit.row(vehicles, 3, b, 1, 0);
     vehicles.forEach(v => { allNWR.push({v, parked: true}); parked.push(v); });
+    // engines and coaches on these roads are shunted and put away by ops.js
+    if(r.ids || r.coaches) K.yards.push({label: 'Kirk Machan sheds', rail: 'cfr', units: vehicles.map(v => [v]), ids: r.ids || r.coaches.map(() => 'coach'),
+      recs: r.ids ? r.ids.map(id => byId[id]) : null, at: (s, out) => out.copy(kit.pt(s, b)), yaw: kit.yaw + Math.PI, face: -1, sMin: 1, sMax: len - 1, shed: len - shedLen});
   });
   shedOver(kit, 4, len - shedLen, len, 6.5, 0x8a7a6a, 0x3a3f46);
   building(G, lx(3 + 5 * 5 + 4), 13, 9, 16, 6, 0x9a8a78, 0x4a4f58);                // workshops beside Godred's road
@@ -449,11 +452,12 @@ function showEngine(e){
   const what = diesel
     ? `${e.name} is one of the Culdee Fell Railway's diesel mountain engines, bought from the Hunslet Engine Company of Leeds to the design used for the Snowdon Mountain Railway's diesels (Ninian, Yeti, Peris and George). The books do not give their names, numbers or livery, so they are shown here numbered 9 and 10 in the railway's purple.`
     : `${e.name} (CFR No. ${e.no}) is ${e.about} A 0-4-2 rack tank built by the Swiss Locomotive and Machine Works, based on ${e.basis}. Livery: Culdee Fell Railway purple with orange lining, his number in yellow on the cab sides and back, and a red nameplate with his name in gold on his tanks.`;
-  const now = R ? `On duty: ${e.run.job}, between ${e.run.from} and ${e.run.to}.` : e.home ? `Now: at ${e.home}.` : '';
+  const live = window.SODOR_OPS && e.veh && window.SODOR_OPS.statusOf(e.veh.group);
+  const now = live || (R ? `On duty: ${e.run.job}, between ${e.run.from} and ${e.run.to}.` : e.home ? `Now: at ${e.home}.` : '');
   openPanel(`Culdee Fell Railway · ${diesel ? 'Diesel rack engine' : e.former ? 'Former rack engine' : 'Rack engine'}`, e.name, `${what} ${now}`,
     `${diesel ? 'Diesel' : '0-4-2RT'} · 800 mm gauge, Abt rack${R ? ' · ' + e.run.from + ' – ' + e.run.to : ''}`);
   fly(e.veh.group, 0.035);
-  if(R){ const b = addPanelButton('Follow engine', () => { followTrain = {mesh: e.veh.group, dist: 0.035}; b.classList.add('active'); }); }
+  if(R || (e.home && !e.former)){ const b = addPanelButton('Follow engine', () => { followTrain = {mesh: e.veh.group, dist: 0.035}; b.classList.add('active'); }); }
 }
 const STOCK_TEXT = {
   coaches: {title: 'Culdee Fell Railway Coaches', text: 'The railway began with five open-sided coaches with roofs, and waterproof curtains that are let down in bad weather. For safety only one coach at a time is taken up the mountain, pushed by its engine. They are orange with cream curtains and window surrounds and grey roofs; Godred\'s coach, No. 1, had purple lining.'},
@@ -501,5 +505,5 @@ const stat = document.getElementById('statTrains');
 stat.textContent = (parseInt(stat.textContent, 10) || 0) + RUNNERS.length;
 frameHooks.push(() => { cfrGroup.visible = camDist < 12; });
 
-window.SODOR_CFR = {ENG, DIESELS, RUNNERS, byId, PLACES, sheds, viaduct, lake, summit};
+window.SODOR_CFR = {ENG, DIESELS, RUNNERS, byId, PLACES, sheds, viaduct, lake, summit, show: showEngine};
 })();
