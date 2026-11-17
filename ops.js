@@ -401,19 +401,28 @@ if(RH){
     st.off = []; st.L = 0;
     st.vehs.forEach(v => { st.off.push(st.L + v.len / 2); st.L += v.len + 0.15; });
     st.L -= 0.15; st.flip = false; st.v = 0;
-    st.dayRho = RH.R0 + 1; st.nightRho = Math.max(st.dayRho, RH.R1 - 1 - st.L); st.rho = st.dayRho;
+    st.dayRho = st.door ? Math.max(RH.R0 + 1, st.door - 3) : RH.R0 + 1;          // nose at the doorway by day
+    st.nightRho = Math.max(st.dayRho, (st.end || RH.R1) - 1 - st.L); st.rho = st.dayRho;
     st.engine = !!st.rec;
     if(st.rec){ st.rec.yard = true; byGroup.set(st.vehs[0].group, {RH, st}); }
   });
 }
 const dirW = (phi, out) => { const p0 = RH.kit.pt(RH.ca, RH.cb), p1 = RH.kit.pt(RH.ca + Math.sin(phi), RH.cb + Math.cos(phi)); return out.subVectors(p1, p0).normalize(); };
 const _dw = new V3();
+const _pw = new V3();
 function placeStall(st, phi){
-  dirW(phi, _dw);
   const sf = st.flip ? 1 : -1;                             // facing out of the stall or in towards the table
   st.vehs.forEach((v, j) => {
     const r = st.rho + (st.flip ? st.L - st.off[j] : st.off[j]);
-    v.group.position.copy(RH.kit.pt(RH.ca + Math.sin(phi) * r, RH.cb + Math.cos(phi) * r));
+    if(RH.stallPt){
+      // the stall road curves from the table into its doorway (nwr.js stallPt)
+      const q = RH.stallPt(st, r, phi === st.phi ? undefined : phi);
+      v.group.position.copy(RH.kit.pt(q.a, q.b));
+      _dw.copy(RH.kit.pt(q.a + q.ta, q.b + q.tb)).sub(v.group.position).normalize();
+    } else {
+      dirW(phi, _dw);
+      v.group.position.copy(RH.kit.pt(RH.ca + Math.sin(phi) * r, RH.cb + Math.cos(phi) * r));
+    }
     v.group.rotation.set(0, Math.atan2(sf * _dw.x, sf * _dw.z), 0);
   });
 }

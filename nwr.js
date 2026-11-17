@@ -2005,49 +2005,214 @@ function bakeSite(G){
   keep.forEach(o => G.add(o));
 }
 
-// Tidmouth Sheds: a turntable with a semicircular engine shed of radial stalls.
+// Tidmouth Sheds: a long straight-fronted engine shed in cream brick, its arched doorways fed by a
+// fan of roads off the turntable; a carriage shed, coal stage, water tower and signal box round the
+// gravel yard, and an arcaded retaining wall behind.
 function buildRoundhouse(D){
   const ids = D.engines, units = vehiclesFor(ids, D).concat((D.stock || []).map(s => vehiclesFor(s, D)).flat());
-  const n = units.length, R0 = 12, R1 = 40;
-  const site = findSite(D.station, D.line, 92, 56, {lats: [14, 22, 32, 45, 60]});
-  const kit = siteKit(site), G = kit.G, lx = kit.lx;
-  const ca = kit.lenM / 2, cb = 14;                    // turntable centre (local along, across)
-  const WALL = mat(0x8a4a32, 0.85), ROOF = mat(0x3a3f46, 0.75);
-  cylY(G, R0, R0, 1.0, mat(0x4a4844, 0.9), lx(cb) * 0 + lx(cb), -0.45, ca, 40);
-  cylY(G, R0 + 0.3, R0 + 0.3, 0.3, mat(0x8a8478, 0.9), lx(cb), 0.0, ca, 40);
+  while(units.length < 7) units.push([]);               // spare stalls stand empty
+  const n = units.length, R0 = 12, PITCH = 5.6;
+  const site = findSite(D.station, D.line, 124, 92, {lats: [14, 22, 32, 45, 60]});
+  const kit = siteKit(site), G = kit.G, lx = kit.lx, sx = kit.sx;
+  const ca = 66, cb = 16;                               // turntable centre (local along, across)
+  const BF = cb + 30, BB = BF + 30, BM = (BF + BB) / 2;  // shed front, back and middle (across)
+  const HALF = n * PITCH / 2 + 0.8, H = 8.5;
+  const CREAM = mat(0xe4dccb, 0.85), PIER = mat(0xd3c9b2, 0.85), BRICK = mat(0x8a4a32, 0.85), GREEN = mat(0x2f5a3a, 0.7),
+        SLATE = mat(0x707888, 0.75), DARK = mat(0x2a2c30, 0.7), GRAV = mat(0x8c877c, 0.95), GLASS = glassMat();
+  const rbox = (w, h, d, m, a, b, y, rot) => { const me = box(G, w, h, d, m, lx(b), y, a); me.rotation.y = rot; return me; };
+  const yawAB = (da, db) => Math.atan2(sx * db, da);    // local rotation.y for a run along (da, db)
+
+  // gravel apron with weed patches
+  box(G, 120, 0.04, 88, GRAV, lx(46), 0.0, 62);
+  for(let k = 0; k < 14; k++) box(G, 4 + (k * 7) % 6, 0.02, 3 + (k * 5) % 5, mat(0x6f7a3a, 0.95), lx(8 + (k * 37) % 70), 0.025, 8 + (k * 53) % 108);
+
+  // turntable: brick-lined pit and a green girder bridge with its cabin
+  cylY(G, R0, R0, 1.2, mat(0x6a6a66, 0.95), lx(cb), -0.6, ca, 40);
+  add(G, new THREE.CylinderGeometry(R0 + 0.35, R0 + 0.35, 1.3, 40, 1, true), mat(0xd8d0bc, 0.85, 0, 'double'), lx(cb), -0.55, ca);
+  add(G, new THREE.TorusGeometry(R0 + 0.55, 0.3, 4, 40).rotateX(Math.PI / 2), mat(0xb8b0a0, 0.9), lx(cb), 0.08, ca);
   const bridge = new THREE.Group(); bridge.position.set(lx(cb), 0.12, ca); G.add(bridge);
-  box(bridge, 3.4, 0.4, 2 * R0 - 0.4, mat(0x2a2c30, 0.6, 0.3), 0, -0.1, 0);
   bridge.userData.keep = true;
+  const BGREEN = mat(0x2c4a34, 0.6, 0.2);
+  box(bridge, 3.0, 0.5, 2 * R0 - 0.4, mat(0x2a2c30, 0.6, 0.3), 0, -0.3, 0);
+  for(const s of [-1, 1]){
+    box(bridge, 0.35, 1.1, 2 * R0 - 0.6, BGREEN, s * 1.95, 0.1, 0);
+    box(bridge, 0.35, 0.5, 2 * R0 - 6, BGREEN, s * 1.95, 0.9, 0);
+    box(bridge, 0.06, 0.06, 2 * R0 - 4, DARK, s * 2.3, 1.6, 0);
+    for(let z = -R0 + 2; z <= R0 - 2; z += 4) box(bridge, 0.06, 1.0, 0.06, DARK, s * 2.3, 1.1, z);
+  }
+  box(bridge, 2.4, 2.6, 2.0, mat(0x3a2a24, 0.8), 3.4, 1.2, R0 - 1.6);
+  box(bridge, 2.8, 0.2, 2.4, DARK, 3.4, 2.6, R0 - 1.6);
   const bm = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2 * R0 - 0.4).rotateX(-Math.PI / 2), roadMat('standard'));
   const buv = bm.geometry.attributes.uv; for(let i = 0; i < buv.count; i++) buv.setY(i, buv.getY(i) * (2 * R0) / 0.75);
   bm.position.y = 0.12; bridge.add(bm);
-  // approach road from the turntable towards the line
+  // lead from the turntable towards the line, and short spurs off the table either side
   kit.road(ca, cb - R0, ca, 0);
-  units.forEach((u, k) => {
-    const phi = (-80 + 160 * (k + 0.5) / n) * Math.PI / 180, da = Math.sin(phi), db = Math.cos(phi);
-    const a0 = ca + da * R0, b0 = cb + db * R0, a1 = ca + da * R1, b1 = cb + db * R1;
-    kit.road(a0, b0, a1, b1);
-    kit.row(u, a0, b0, da, db);
-    // stall: roof and back wall
-    const rot = Math.atan2(lx(db), da), mid = (24 + R1) / 2;
-    const roofM = box(G, 5.6, 0.4, R1 - 22, ROOF, lx(cb + db * mid), 8.2, ca + da * mid); roofM.rotation.y = rot;
-    const back = box(G, 5.8, 8, 0.6, WALL, lx(cb + db * (R1 + 0.5)), 4, ca + da * (R1 + 0.5)); back.rotation.y = rot;
-    const vent = box(G, 1.2, 1.0, 4, mat(0x2a2c30, 0.7), lx(cb + db * mid), 8.9, ca + da * mid); vent.rotation.y = rot;
+  const buffer = (a, b, rot) => { rbox(2.6, 0.5, 0.4, mat(0x6a3a22, 0.8), a, b, 0.7, rot); rbox(0.3, 0.9, 0.3, mat(0x6a3a22, 0.8), a, b, 0.4, rot); };
+  [-1.25, -1.9, 1.25, 1.9].forEach(phi => {
+    const da = Math.sin(phi), db = Math.cos(phi), L = 20;
+    kit.road(ca + da * R0, cb + db * R0, ca + da * (R0 + L), cb + db * (R0 + L));
+    buffer(ca + da * (R0 + L - 0.5), cb + db * (R0 + L - 0.5), yawAB(da, db));
   });
+
+  // the stalls: radial off the table to each doorway, easing to run straight in
+  const stalls = units.map((u, k) => {
+    const la = (k - (n - 1) / 2) * PITCH, Da = ca + la, Db = BF;
+    const rd = Math.hypot(la, BF - cb), ua = la / rd, ub = (BF - cb) / rd, rA = rd - 8;
+    const pts = [];
+    for(let r = 0; r <= rA; r += 2) pts.push([ca + ua * r, cb + ub * r]);
+    const A = [ca + ua * rA, cb + ub * rA], B = [Da, Db + 7];
+    for(let i = 1; i <= 16; i++){ const t = i / 16, s = 1 - t; pts.push([s * s * A[0] + 2 * s * t * Da + t * t * B[0], s * s * A[1] + 2 * s * t * Db + t * t * B[1]]); }
+    pts.push([Da, BB - 0.8]);
+    const pl = [{a: pts[0][0], b: pts[0][1], s: 0}];
+    for(let i = 1; i < pts.length; i++){ const p = pl[i - 1]; pl.push({a: pts[i][0], b: pts[i][1], s: p.s + Math.hypot(pts[i][0] - p.a, pts[i][1] - p.b)}); }
+    for(let i = 1; i < pl.length; i++){
+      if(pl[i].s <= R0) continue;
+      const p = pl[i - 1], inPit = p.s < R0;
+      kit.road(inPit ? ca + ua * R0 : p.a, inPit ? cb + ub * R0 : p.b, pl[i].a, pl[i].b);
+    }
+    buffer(Da, BB - 0.6, yawAB(0, 1));
+    const door = pl.find(p => p.b >= BF).s;
+    return {phi: Math.atan2(ua, ub), pl, rA, door, end: pl[pl.length - 1].s, vehs: u, id: (ids.concat((D.stock || []).flat()))[k]};
+  });
+  // place the vehicles along their stalls (ops.js moves them from here on)
+  stalls.forEach(st => {
+    let s = st.door - 3;
+    st.vehs.forEach(v => { s += v.len / 2; const q = stallPt(st, s); v.group.position.copy(kit.pt(q.a, q.b));
+      const w = kit.pt(q.a + q.ta, q.b + q.tb).sub(kit.pt(q.a, q.b)); v.group.rotation.set(0, Math.atan2(-w.x, -w.z), 0); s += v.len / 2 + 0.15; });
+  });
+
+  // ---- the engine shed
+  const z0 = ca - HALF, z1 = ca + HALF;
+  // front: piers between the doorways, a deep band over them with brick arches and fanlights
   for(let k = 0; k <= n; k++){
-    const phi = (-80 + 160 * k / n) * Math.PI / 180, da = Math.sin(phi), db = Math.cos(phi);
-    for(let r = 23; r <= R1; r += 4.25){ const p = box(G, 0.6, 8, 0.6, WALL, lx(cb + db * r), 4, ca + da * r); }
-    const wall = box(G, 0.5, 8, R1 - 23, WALL, lx(cb + db * (23 + R1) / 2), 4, ca + da * (23 + R1) / 2); wall.rotation.y = Math.atan2(lx(db), da);
-    if(k > 0 && k < n) wall.scale.y = 0.15, wall.position.y = 7.4;
+    const a = ca + (k - n / 2) * PITCH;
+    box(G, 1.0, H, 1.3, PIER, lx(BF - 0.2), H / 2, a);
+    box(G, 1.2, 0.5, 1.5, CREAM, lx(BF - 0.3), H + 0.25, a);
+    box(G, 0.12, 6.5, 0.12, GREEN, lx(BF - 0.9), 3.25, a);              // downpipe
+    box(G, 0.7, 0.4, 0.7, GREEN, lx(BF - 0.9), 6.6, a);
   }
+  box(G, 0.8, H - 5.8, 2 * HALF, CREAM, lx(BF), 5.8 + (H - 5.8) / 2, ca);
+  for(let k = 0; k < n; k++){
+    const a = ca + (k - (n - 1) / 2) * PITCH;
+    const arch = add(G, new THREE.TorusGeometry(2.25, 0.32, 5, 14, Math.PI), BRICK, lx(BF - 0.45), 5.4, a); arch.rotation.y = Math.PI / 2;
+    const fan = add(G, new THREE.CircleGeometry(2.1, 14, 0, Math.PI), mat(0x3a5a48, 0.3, 0.3, 'double'), lx(BF - 0.42), 5.4, a); fan.rotation.y = -sx * Math.PI / 2;
+    for(const s of [-1, 1]){                                             // door leaves folded back inside
+      box(G, 2.0, 5.2, 0.12, GREEN, lx(BF + 1.1), 2.7, a + s * 2.1);
+      box(G, 1.6, 1.4, 0.14, GLASS, lx(BF + 1.1), 4.3, a + s * 2.1);
+    }
+  }
+  // side and back walls, with tall arched windows
+  box(G, 0.8, H, 2 * HALF, CREAM, lx(BB + 0.4), H / 2, ca);
+  for(const z of [z0, z1]){
+    box(G, BB - BF + 1.2, H, 0.8, CREAM, lx(BM), H / 2, z);
+    for(let b = BF + 4; b < BB - 2; b += 4.2){ box(G, 1.8, 3.6, 0.2, GLASS, lx(b), 4.0, z + (z > ca ? 0.45 : -0.45)); box(G, 2.1, 0.25, 0.3, GREEN, lx(b), 5.9, z + (z > ca ? 0.45 : -0.45)); }
+    // gable infill with a stepped parapet, finials and a round window
+    gable(G, BB - BF + 1.2, 0.8, H, CREAM, lx(BM), z, 0, 0.42);
+    const rise = (BB - BF + 1.2) / 1.732 * 1.08 * 0.42 * 1.5;
+    add(G, new THREE.CylinderGeometry(1.4, 1.4, 0.3, 18).rotateX(Math.PI / 2), GREEN, lx(BM), H + rise * 0.45, z + (z > ca ? 0.45 : -0.45));
+    for(const b of [BF, BM, BB]) { box(G, 1.4, 1.2, 1.2, PIER, lx(b), (b === BM ? H + rise : H) + 0.4, z); add(G, new THREE.SphereGeometry(0.55, 10, 8), PIER, lx(b), (b === BM ? H + rise : H) + 1.3, z); }
+  }
+  // slate roof, a glazed clerestory along the ridge, smoke vents in a row over the stalls
+  gable(G, BB - BF + 2.0, 2 * HALF + 0.6, H, SLATE, lx(BM), ca, 0, 0.42);
+  const ridge = H + (BB - BF + 2) / 1.732 * 1.08 * 0.42 * 1.5;
+  box(G, 3.6, 1.4, 2 * HALF - 4, SLATE, lx(BM), ridge - 0.2, ca);
+  for(const s of [-1, 1]) box(G, 0.1, 0.9, 2 * HALF - 5, GLASS, lx(BM + s * 1.85), ridge - 0.3, ca);
+  box(G, 4.2, 0.25, 2 * HALF - 3.6, mat(0x2c4a34, 0.7), lx(BM), ridge + 0.55, ca);
+  for(let k = 0; k < n; k++){
+    const a = ca + (k - (n - 1) / 2) * PITCH, b = BF + 8, y = H + (b - BF + 1) / ((BB - BF) / 2) * (ridge - H) * 0.85;
+    cylY(G, 0.4, 0.4, 2.4, DARK, lx(b), y + 0.6, a, 8);
+    add(G, new THREE.ConeGeometry(0.75, 0.8, 8), DARK, lx(b), y + 2.1, a);
+    box(G, 2.4, 0.9, 2.0, SLATE, lx(BM + 6), ridge - 2.0, a);          // dormer vents on the back slope
+  }
+  box(G, 0.4, 0.5, 2 * HALF + 0.8, mat(0x2c4a34, 0.7), lx(BF - 0.6), H - 0.1, ca);   // green gutter
+
+  // ---- carriage shed on the left: three roads under a glazed roof, with the boiler-house chimney
+  const CA = [10, 16, 22];
+  CA.forEach(a => { kit.road(a, 2, a, 80); buffer(a, 79.4, yawAB(0, 1)); });
+  const cz0 = 6.2, cz1 = 25.8, cb0 = 54, cb1 = 80;
+  for(const z of [cz0, cz1]) box(G, cb1 - cb0, 7, 0.7, CREAM, lx((cb0 + cb1) / 2), 3.5, z);
+  box(G, 0.7, 7, cz1 - cz0, CREAM, lx(cb1), 3.5, (cz0 + cz1) / 2);
+  for(const z of [cz0, (cz0 + cz1) / 2, cz1]) box(G, 1.2, 7.6, 1.2, PIER, lx(cb0), 3.8, z);
+  box(G, 0.8, 1.6, cz1 - cz0, CREAM, lx(cb0), 6.6, (cz0 + cz1) / 2);
+  gable(G, cz1 - cz0 + 1, cb1 - cb0 + 1, 7, SLATE, lx((cb0 + cb1) / 2), (cz0 + cz1) / 2, Math.PI / 2, 0.45);
+  for(let b = cb0 + 3; b < cb1 - 2; b += 2.6) for(const s of [-1, 1]) box(G, 2.2, 0.1, 3.2, GLASS, lx(b), 8.4, (cz0 + cz1) / 2 + s * 3.4);
+  for(const b of [cb0, cb1]) gable(G, cz1 - cz0 + 0.6, 0.7, 7, CREAM, lx(b), (cz0 + cz1) / 2, Math.PI / 2, 0.45);
+  box(G, 3.2, 3, 3.2, PIER, lx(cb1 + 3), 1.5, 4);
+  cylY(G, 1.0, 1.5, 22, CREAM, lx(cb1 + 3), 11, 4, 4).rotation.y = Math.PI / 4;
+  box(G, 2.6, 0.7, 2.6, PIER, lx(cb1 + 3), 22.3, 4);
+
+  // ---- yard on the right: coal stage and crane, water tower, sand drier, signal box
+  const YA = 102;
+  kit.road(YA, 2, YA, 70); buffer(YA, 69.4, yawAB(0, 1));
+  kit.road(YA + 8, 2, YA + 8, 62); buffer(YA + 8, 61.4, yawAB(0, 1));
+  for(let k = 0; k < 3; k++){                                           // coal bunkers beside the road
+    box(G, 3.4, 1.2, 5, mat(0x4a3424, 0.9), lx(30 + k * 7), 0.6, YA - 4.5);
+    box(G, 3.0, 0.3, 4.6, mat(0x15161a, 0.95), lx(30 + k * 7), 1.2, YA - 4.5);
+  }
+  // coaling crane: lattice tower, cab and jib over the road
+  for(const s of [-1, 1]) for(const t of [-1, 1]) box(G, 0.3, 9, 0.3, mat(0x3a2a24, 0.8), lx(52 + s * 1.4), 4.5, YA - 5 + t * 1.4);
+  for(let y = 1.5; y < 9; y += 2.2) box(G, 3.1, 0.15, 3.1, mat(0x3a2a24, 0.8), lx(52), y, YA - 5);
+  box(G, 3.2, 2.6, 3.2, mat(0x6a3a2a, 0.8), lx(52), 10.3, YA - 5);
+  gable(G, 3.6, 3.6, 11.6, DARK, lx(52), YA - 5, 0, 0.5);
+  const jib = box(G, 0.5, 0.5, 13, mat(0x3a2a24, 0.8), lx(52), 12.5, YA + 1); jib.rotation.x = -0.35;
+  // water tower
+  for(const s of [-1, 1]) for(const t of [-1, 1]) box(G, 0.35, 7, 0.35, mat(0x5a2a2a, 0.8), lx(40 + s * 1.8), 3.5, YA + 4 + t * 1.8);
+  box(G, 5.2, 2.8, 5.2, mat(0x5a2a2a, 0.75), lx(40), 8.4, YA + 4);
+  box(G, 4.8, 0.1, 4.8, mat(0x4a7a9a, 0.2, 0.2), lx(40), 9.8, YA + 4);
+  // water column and lamps
+  cylY(G, 0.4, 0.5, 4, DARK, lx(30), 2, YA + 4, 10);
+  const lamp = (a, b) => { cylY(G, 0.12, 0.18, 8, GREEN, lx(b), 4, a, 8);
+    for(const s of [-1, 1]){ box(G, 0.1, 0.1, 1.6, GREEN, lx(b), 7.8, a + s * 0.8); add(G, new THREE.ConeGeometry(0.4, 0.4, 10, 1, true), mat(0x2c4a34, 0.6, 0, 'double'), lx(b), 7.6, a + s * 1.6); } };
+  [[40, 10], [52, 30], [80, 30], [92, 12], [30, 40], [114, 40]].forEach(([a, b]) => lamp(a, b));
+  // signal box, white boarded with a blue base and a hipped slate roof
+  const sbA = 116, sbB = 30;
+  box(G, 7, 3.0, 4.6, mat(0x5a7a9a, 0.8), lx(sbB), 1.5, sbA);
+  box(G, 7.2, 2.6, 4.8, mat(0xe8e8e2, 0.8), lx(sbB), 4.3, sbA);
+  for(const s of [-1, 1]) box(G, 0.1, 1.6, 4.0, GLASS, lx(sbB + s * 3.62), 4.5, sbA);
+  add(G, new THREE.ConeGeometry(5.6, 2.4, 4).rotateY(Math.PI / 4), mat(0x30333a, 0.75), lx(sbB), 6.8, sbA).scale.set(1, 1, 0.72);
+  box(G, 7.4, 0.15, 1.2, GREEN, lx(sbB), 3.0, sbA - 3.0);
+  // stores huts by the turntable
+  building(G, lx(cb + 24), ca + 27, 5, 6, 3.2, 0x5a4434, 0x30333a);
+  building(G, lx(cb + 24), ca - 27, 4, 5, 3, 0x8a4a32, 0x30333a);
+  // sleepers and crates stacked about
+  for(let k = 0; k < 4; k++) box(G, 2.6, 0.5, 1.2, mat(0x7a6048, 0.9), lx(34 + k * 0.2), 0.25 + k * 0.5 * 0, 84 + k * 1.6);
+  for(let k = 0; k < 3; k++) box(G, 1.2, 1.2, 1.2, mat(0xa58a5a, 0.9), lx(6 + k * 1.5), 0.6, 92);
+
+  // ---- arcaded retaining wall round the back and ends of the yard
+  const wallRun = (a0, b0, a1, b1) => {
+    const L = Math.hypot(a1 - a0, b1 - b0), da = (a1 - a0) / L, db = (b1 - b0) / L, rot = yawAB(da, db);
+    rbox(1.2, 5.5, L, mat(0xcfc6b2, 0.9), (a0 + a1) / 2, (b0 + b1) / 2, 2.75, rot);
+    rbox(1.8, 0.5, L, mat(0xb8af9c, 0.9), (a0 + a1) / 2, (b0 + b1) / 2, 5.6, rot);
+    for(let s = 3; s < L - 2; s += 5){
+      const a = a0 + da * s, b = b0 + db * s, nb = -da, na = db;      // inset on the yard side
+      const off = (a1 > a0 ? -1 : 1) * 0.62;
+      rbox(0.1, 3.0, 3.2, mat(0x8a8272, 0.9), a + na * off, b + nb * off, 1.5, rot);
+      const c = add(G, new THREE.CircleGeometry(1.6, 12, 0, Math.PI), mat(0x8a8272, 0.9, 0, 'double'), lx(b + nb * off), 3.0, a + na * off); c.rotation.y = rot + Math.PI / 2;
+    }
+  };
+  wallRun(2, 88, 122, 88);
+  wallRun(122, 88, 122, 30);
+  wallRun(2, 30, 2, 88);
+
+  // the many short road strips bake into one mesh of their own
+  const rails = new THREE.Group(); rails.userData.keep = true;
+  G.children.filter(o => o.isMesh && o.material === roadMat('standard')).forEach(o => { G.remove(o); rails.add(o); });
+  G.add(rails); bakeVC(rails, false); rails.children.forEach(m => m.receiveShadow = true);
   parkAll(units);
-  building(G, lx(4), 6, 7, 10, 5, 0x8a4a32, 0x3a3f46);
   finishSite(D, kit);
-  const allIds = ids.concat((D.stock || []).flat());
-  K.roundhouse = {D, kit, ca, cb, R0, R1, bridge, sx: kit.sx, stalls: units.map((u, k) => {
-    const phi = (-80 + 160 * (k + 0.5) / n) * Math.PI / 180;
-    return {phi, vehs: u, id: allIds[k], rec: byId[allIds[k]] || null};
-  })};
+  stalls.forEach(st => st.rec = byId[st.id] || null);
+  K.roundhouse = {D, kit, ca, cb, R0, R1: BB - cb, bridge, sx, stalls, stallPt};
+}
+// a point and heading along a Tidmouth stall, s metres out from the turntable centre
+function stallPt(st, s, phi){
+  if(phi !== undefined && phi !== st.phi || s <= st.rA){
+    const p = phi === undefined ? st.phi : phi, da = Math.sin(p), db = Math.cos(p), c = st.pl[0];
+    return {a: c.a + da * s, b: c.b + db * s, ta: da, tb: db};
+  }
+  const pl = st.pl; let i = 1;
+  while(i < pl.length - 1 && pl[i].s < s) i++;
+  const p = pl[i - 1], q = pl[i], L = q.s - p.s || 1, t = (s - p.s) / L;
+  return {a: p.a + (q.a - p.a) * t, b: p.b + (q.b - p.b) * t, ta: (q.a - p.a) / L, tb: (q.b - p.b) / L};
 }
 
 // Brendam Docks: a quay with Cranky, Carly and Big Mickey, a ship alongside and a siding.
