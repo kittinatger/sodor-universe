@@ -711,13 +711,13 @@ const ENGINES = [
    build: () => buildSteam({len: 2.15, color: 0x9b1730, lining: 0xf3f0e8, tank: 'saddle', cab: 'open', chimneyH: 0.55, capColor: BRASS,
      dome: false, bunkerLen: 0.28, face: {smile: 0.7, brow: -0.3, mustache: false}, plates: plate('Skarloey', 1, '#9b1730', '#d4af37'),
      axles: [{z: 0.62, r: 0.25, coupled: true}, {z: 0.06, r: 0.25, coupled: true}, {z: -0.72, r: 0.15}]}),
-   line: 'skarloey', from: "Crovan's Gate", to: 'Glennock', consist: ['redCoach', 'redCoach', 'redCoach'], cars: ['Agnes', 'Ruth', 'Jane'], speed: 1.0},
+   line: 'skarloey', from: "Crovan's Gate", to: 'Glennock', consist: ['redCoach', 'redCoach', 'redCoach'], cars: ['Agnes', 'Ruth', 'Jane'], speed: 1.0, passenger: true},
   {id: 'rheneas', name: 'Rheneas', no: '2', wheels: '0-4-0WT', basis: 'Talyllyn Railway No. 2 Dolgoch (Fletcher Jennings)',
    livery: 'Vermilion with black and gold lining, brass fittings', job: 'Passenger trains around the Lakeside loop',
    build: () => buildSteam({len: 2.2, color: 0xd23a26, lining: 0xd4af37, tank: 'well', cab: 'open', chimneyH: 0.56, capColor: BRASS, bands: BRASS,
      dome: true, domeAt: 0.45, bunkerLen: 0.28, face: {smile: 0.8, brow: -0.2, wide: true}, plates: Object.assign(plate('Rheneas', 2, '#111111', '#d4af37'), {nameW: 0.5}),
      axles: [{z: 0.66, r: 0.25, coupled: true}, {z: -0.62, r: 0.25, coupled: true}]}),
-   line: 'skarloeyloop', consist: ['redCoach', 'redCoach', 'skBrake'], cars: ['Lucy', 'Mabel', 'Beatrice'], speed: 0.9},
+   line: 'skarloeyloop', consist: ['redCoach', 'redCoach', 'skBrake'], cars: ['Lucy', 'Mabel', 'Beatrice'], speed: 0.9, passenger: true},
   {id: 'sirhandel', name: 'Sir Handel', no: '3', wheels: '0-4-2ST', basis: 'Talyllyn Railway No. 3 Sir Haydn (Hughes "Falcon", ex-Corris Railway)',
    livery: 'Royal blue with red lining and bufferbeams, brass fittings', job: 'Slate trains down from Blue Mountain Quarry',
    build: () => buildSteam({len: 2.3, color: 0x1f4fbf, lining: 0xc8262b, tank: 'saddle', cab: 'closed', chimneyH: 0.46, capColor: null,
@@ -729,7 +729,7 @@ const ENGINES = [
    build: () => buildSteam({len: 2.3, color: 0x2e8b6e, lining: 0xc8262b, tank: 'saddle', cab: 'closed', chimney: 'giesl',
      dome: true, domeAt: 0.4, bunkerLen: 0.3, face: {smile: 0.9, brow: -0.1}, plates: plate('Peter Sam', 4, '#c8262b', '#d4af37'),
      axles: [{z: 0.68, r: 0.25, coupled: true}, {z: 0.1, r: 0.25, coupled: true}, {z: -0.78, r: 0.15}]}),
-   line: 'skarloey', from: 'Cronk Abbey', to: 'Rumblin Bridge', consist: ['blueCoach', 'blueCoach', 'blueCoach'], speed: 1.0},
+   line: 'skarloey', from: 'Cronk Abbey', to: 'Rumblin Bridge', consist: ['blueCoach', 'blueCoach', 'blueCoach'], speed: 1.0, passenger: true},
   {id: 'rusty', name: 'Rusty', no: '5', wheels: '4wDM', basis: 'Talyllyn Railway No. 5 Midlander (Ruston & Hornsby 48DL diesel)',
    livery: 'Safety orange with yellow window lining; black radiator with a brass cap', job: 'Track maintenance and ballast trains',
    build: () => buildRusty({color: 0xff6a13, face: {smile: 0.8, brow: -0.2}}),
@@ -753,7 +753,7 @@ const ENGINES = [
      dome: true, domeAt: 0.4, bunkerLen: 0, cabLen: 0.5, face: {smile: 0.3, brow: 0.3, mustache: true}, plates: Object.assign(plate('Duke', '', '#b3201c', '#d4af37'), {number: null, nameW: 0.4}),
      axles: [{z: 0.42, r: 0.23, coupled: true}, {z: -0.32, r: 0.23, coupled: true}]}),
    tender: {color: 0x9a5426, lining: 0xf2c419},
-   line: 'skarloey', from: 'Lakeside', to: 'Mountain Village', consist: ['trSemiOpen', 'trSemiOpen'], speed: 0.7},
+   line: 'skarloey', from: 'Rheneas', to: 'Mountain Village', consist: ['trSemiOpen', 'trSemiOpen'], speed: 0.7, passenger: true},
   {id: 'bertram', name: 'Bertram', no: '', wheels: '0-4-0ST+T', basis: 'Ffestiniog Railway "Small England" class',
    livery: 'Dark brown with red lining and bufferbeams', job: 'Mine trains at the old workings near Ulfstead',
    build: () => buildSteam({len: 1.75, color: 0x4f2f1c, lining: 0xc8262b, tank: 'saddle', cab: 'open', chimneyH: 0.5, capColor: BRASS,
@@ -764,7 +764,7 @@ const ENGINES = [
   {id: 'mightymac', name: 'Mighty Mac', no: '', wheels: '0-4-4-0T', basis: 'Ffestiniog Railway double Fairlie (resembling David Lloyd George)',
    livery: 'Indigo blue; yellow lining on Mighty\'s end, red on Mac\'s', job: 'Long passenger trains to the Ironworks',
    build: () => buildFairlie({color: 0x2b2f86, face: {smile: 0.9, brow: -0.2}, face2: {smile: -0.3, brow: 0.7}}),
-   line: 'rockyway', fromU: 0.5, toU: 1.0, consist: ['tr4w', 'tr4w', 'refresh', 'semiOpen'], speed: 1.0},
+   line: 'rockyway', fromU: 0.5, toU: 1.0, consist: ['tr4w', 'tr4w', 'refresh', 'semiOpen'], speed: 1.0, passenger: true},
   {id: 'luke', name: 'Luke', no: '22', wheels: '0-4-0ST', basis: 'Kerr Stuart "Wren" class No. 4256 Peter Pan',
    livery: 'Pea green with white lining; brass number plates on the cab', job: 'Shunting at Blue Mountain Quarry',
    build: () => buildSteam({len: 1.7, color: 0x6aa84f, lining: 0xffffff, tank: 'saddle', cab: 'closed', chimneyH: 0.5, capColor: null,
@@ -812,60 +812,207 @@ function showEngine(E){
   const b = addPanelButton('Follow engine', () => { followTrain = {mesh: E.train.engine.group, dist: 9}; b.classList.add('active'); });
 }
 
-const SR_TRAINS = [];
+// ------------------------------------------------------------------ train runner
+// Every train on Sodor runs on this. Vehicles keep their order and facing (tank engines run
+// bunker-first on the way back), trains accelerate and brake into stops, passenger trains call
+// at the stations on their stretch, and at each terminus the engine runs round its train
+// through a passing loop.
+const ACC = 0.55, RR_SPEED = 0.75, MARGIN = 0.25;
+const _p = new THREE.Vector3(), _t = new THREE.Vector3();
+const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+function makeRunner(o){
+  const line = o.line, L = line.length;
+  const sgn = o.uB >= o.uA ? 1 : -1, span = Math.max(0.5, Math.abs(o.uB - o.uA) * L);
+  const gap = o.gap;
+  const unit = o.unit.map(v => ({v, len: v.len * o.scale}));
+  const cars = o.cars.map(v => ({v, len: v.len * o.scale}));
+  const U = unit.reduce((s, m, i) => s + m.len + (i ? gap : 0), 0);
+  const off = [0];
+  for(let k = 1; k < cars.length; k++) off.push(off[k - 1] + (cars[k - 1].len + cars[k].len) / 2 + gap);
+  const last = cars.length - 1, len0 = cars[0].len / 2, lenN = cars[last].len / 2;
+  const Lc = off[last] + len0 + lenN;
+  const R = {o, line, L, sgn, span, gap, unit, cars, U, off, Lc, engine: o.unit[0], v: 0, phase: 'run', timer: 0, lastStop: null, rr: null, puffT: 0};
+
+  R.aB = span - MARGIN - (len0 + gap + U);
+  R.aA = MARGIN + off[last] + lenN + gap + U;
+  R.runRound = R.aA < R.aB - 0.6;
+  if(!R.runRound){
+    R.aA = MARGIN + off[last] + lenN;
+    if(R.aA > R.aB) R.aA = R.aB = (R.aA + R.aB) / 2;
+  }
+  R.stops = [];
+  if(o.passenger && R.aB > R.aA){
+    line.stops.forEach(k => {
+      const st = STATIONS[k], u = lineU(line, st.name), x = (u - o.uA) * sgn * L;
+      const a = x - len0 + Lc / 2;
+      if(a > R.aA + 0.3 && a < R.aB - 0.3) R.stops.push(a);
+    });
+  }
+  R.a = R.aA + Math.random() * (R.aB - R.aA);
+  R.dir = Math.random() < 0.5 ? 1 : -1;
+  R.side = R.runRound ? (R.dir > 0 ? 'B' : 'A') : 'B';
+
+  // Unit (engine + tender) centres for a given anchor and side; the engine always faces B.
+  R.unitX = (a, side) => {
+    const Bend = a + len0, Aend = a - off[last] - lenN, xs = [];
+    if(side === 'B'){ let x = Bend + gap + U; unit.forEach(m => { xs.push(x - m.len / 2); x -= m.len + gap; }); }
+    else { let x = Aend - gap; unit.forEach(m => { xs.push(x - m.len / 2); x -= m.len + gap; }); }
+    return xs;
+  };
+  // Passing loop at each terminus: zero offset exactly where the engine leaves and rejoins.
+  if(R.runRound) R.loops = [R.aB, R.aA].map(a => {
+    const xB = R.unitX(a, 'B')[0], xA = R.unitX(a, 'A')[0];
+    const lo = Math.min(xA, xB), hi = Math.max(xA, xB);
+    return {lo, hi, k: Math.min(0.7, (hi - lo) / 4)};
+  });
+  return R;
+}
+function loopLat(R, loop, x){
+  if(!loop || x <= loop.lo || x >= loop.hi) return 0;
+  return R.o.loopW * smooth(loop.lo, loop.lo + loop.k, x) * (1 - smooth(loop.hi - loop.k, loop.hi, x));
+}
+function placeVeh(R, veh, x, lat){
+  const u = Math.max(0, Math.min(1, R.o.uA + R.sgn * x / R.L));
+  R.line.curve.getPointAt(u, _p); R.line.curve.getTangentAt(u, _t);
+  if(R.sgn < 0) _t.negate();
+  const g = veh.group;
+  g.rotation.order = 'YXZ';
+  g.rotation.set(-Math.asin(Math.max(-0.5, Math.min(0.5, _t.y))), Math.atan2(_t.x, _t.z), 0);
+  const nx = _t.z, nz = -_t.x, nl = Math.hypot(nx, nz) || 1;
+  g.position.set(_p.x + nx / nl * lat, _p.y - 0.1, _p.z + nz / nl * lat);
+  g.visible = R.line.mesh.visible && (lat > 0.3 || !inTunnel(R.line, u));
+}
+function spin(veh, dx, scale){
+  if(!veh.axles || !veh.axles.length || dx === 0) return;
+  veh.axles.forEach(a => { a.g.rotation.x += dx / (a.r * scale); });
+  if(veh.rods && veh.rods.length){
+    const ang = veh.axles.find(a => a.coupled).g.rotation.x;
+    veh.rods.forEach(r => { r.mesh.position.y = r.r + r.rc * Math.cos(ang + r.phase); r.mesh.position.z = r.mid + r.rc * Math.sin(ang + r.phase); });
+  }
+}
+function drawLoops(R){
+  if(!R.runRound) return;
+  const mat = new THREE.LineBasicMaterial({color: 0x3a3028});
+  R.loops.forEach(loop => {
+    for(const s of [-1, 1]){
+      const pts = [];
+      for(let x = loop.lo - 0.3; x <= loop.hi + 0.3 + 1e-6; x += 0.15){
+        const lat = loopLat(R, loop, x) + s * GAUGE / 2 * R.o.scale;
+        const u = Math.max(0, Math.min(1, R.o.uA + R.sgn * x / R.L));
+        R.line.curve.getPointAt(u, _p); R.line.curve.getTangentAt(u, _t);
+        if(R.sgn < 0) _t.negate();
+        const nl = Math.hypot(_t.z, _t.x) || 1;
+        pts.push(new THREE.Vector3(_p.x + _t.z / nl * lat, _p.y - 0.05, _p.z - _t.x / nl * lat));
+      }
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+    }
+  });
+}
+
+function stepRunner(R, dt){
+  let carDx = 0, unitDx = 0, moving = false;
+  if(R.phase === 'run'){
+    const term = R.dir > 0 ? R.aB : R.aA;
+    let target = term;
+    R.stops.forEach(s => { if((s - R.a) * R.dir > 0.02 && s !== R.lastStop && Math.abs(s - R.a) < Math.abs(target - R.a)) target = s; });
+    const d = Math.abs(target - R.a);
+    const vdes = Math.min(R.o.vmax, Math.sqrt(2 * ACC * d));
+    R.v = R.v < vdes ? Math.min(vdes, R.v + ACC * dt) : Math.max(vdes, R.v - 2 * ACC * dt);
+    let step = R.v * dt;
+    if(step >= d || d < 0.005){
+      step = d; R.a = target; R.v = 0;
+      if(target === term){
+        R.lastStop = null;
+        R.phase = 'dwell'; R.timer = 2.5; R.next = R.runRound ? 'rr' : 'turn';
+      } else { R.lastStop = target; R.phase = 'dwell'; R.timer = 3; R.next = 'run'; }
+    } else R.a += R.dir * step;
+    carDx = unitDx = R.dir * step; moving = step > 0;
+  } else if(R.phase === 'dwell'){
+    R.timer -= dt;
+    if(R.timer <= 0){
+      if(R.next === 'rr'){
+        const to = R.side === 'B' ? 'A' : 'B';
+        const x0 = R.unitX(R.a, R.side)[0], x1 = R.unitX(R.a, to)[0];
+        R.rr = {x0, x1, to, p: 0, dur: Math.abs(x1 - x0) / RR_SPEED + 1, loop: R.loops[R.side === 'B' ? 0 : 1], last: x0};
+        R.phase = 'rr';
+      } else if(R.next === 'turn'){ R.dir = -R.dir; R.phase = 'run'; }
+      else R.phase = 'run';
+    }
+  } else if(R.phase === 'rr'){
+    const rr = R.rr;
+    rr.p = Math.min(1, rr.p + dt / rr.dur);
+    const x = rr.x0 + (rr.x1 - rr.x0) * smooth(0, 1, rr.p);
+    unitDx = x - rr.last; rr.last = x; moving = Math.abs(unitDx) > 1e-5;
+    if(rr.p >= 1){ R.side = rr.to; R.dir = -R.dir; R.rr = null; R.phase = 'dwell'; R.timer = 1.5; R.next = 'run'; }
+  }
+
+  R.cars.forEach((c, k) => { placeVeh(R, c.v, R.a - R.off[k], 0); spin(c.v, carDx, R.o.scale); });
+  if(R.phase === 'rr' && R.rr){
+    const xe = R.rr.last, xs = [xe];
+    for(let i = 1; i < R.unit.length; i++) xs.push(xs[i - 1] - (R.unit[i - 1].len + R.unit[i].len) / 2 - R.gap);
+    R.unit.forEach((m, i) => { placeVeh(R, m.v, xs[i], loopLat(R, R.rr.loop, xs[i])); spin(m.v, unitDx, R.o.scale); });
+  } else {
+    const xs = R.unitX(R.a, R.side);
+    R.unit.forEach((m, i) => { placeVeh(R, m.v, xs[i], 0); spin(m.v, unitDx, R.o.scale); });
+  }
+
+  if(moving && !R.o.diesel && R.engine.chimneyAt && R.engine.group.visible){
+    R.puffT -= dt * (0.6 + Math.max(R.v, 0.4));
+    if(R.puffT <= 0){
+      R.puffT = 0.45;
+      [R.engine.chimneyAt, R.engine.chimneyAt2].forEach(c => { if(c){ _p.copy(c); R.engine.group.localToWorld(_p); puff(_p); } });
+    }
+  }
+}
+
+const RUNNERS = [], SR_TRAINS = [];
 ENGINES.forEach(E => {
   const line = LINES[E.line];
   if(!line) return;
   const eng = E.build();
-  const vehicles = [eng];
-  if(E.tender) vehicles.push(buildTender(E.tender));
-  E.consist.forEach(k => vehicles.push(buildStock(k)));
-  vehicles.forEach(v => { v.group.scale.setScalar(NG); scene.add(v.group); allVehicles.push(v); });
+  const unit = [eng];
+  if(E.tender) unit.push(buildTender(E.tender));
+  const cars = E.consist.map(k => buildStock(k));
+  [...unit, ...cars].forEach(v => { v.group.scale.setScalar(NG); scene.add(v.group); allVehicles.push(v); });
   const uA = E.from ? lineU(line, E.from) : (E.fromU || 0), uB = E.to ? lineU(line, E.to) : (E.toU === undefined ? 1 : E.toU);
-  const offs = []; let acc = 0;
-  vehicles.forEach((v, i) => { if(i > 0) acc += (vehicles[i - 1].len + v.len) / 2 * NG + 0.06; offs.push(acc); });
-  const T = {E, line, vehicles, engine: eng, uA, uB, s: Math.random(), dir: 1, dwell: 0, offs, puffT: 0};
-  E.train = T;
-  SR_TRAINS.push(T);
-  vehicles.forEach((v, i) => tagPick(v.group, i === 0 ? () => showEngine(E) : () => {
-    openPanel('Rolling stock', (E.cars && E.cars[i - (E.tender ? 2 : 1)]) || v.label, `${v.label} in ${E.name}'s train on the ${line.name}.`, line.name);
+  const R = makeRunner({line, uA, uB, unit, cars, scale: NG, gap: 0.05, vmax: 1.25 * E.speed, passenger: !!E.passenger, loopW: 0.72, diesel: !!E.diesel});
+  R.E = E; R.engine = eng;
+  E.train = R;
+  drawLoops(R);
+  RUNNERS.push(R); SR_TRAINS.push(R);
+  tagPick(eng.group, () => showEngine(E));
+  if(E.tender) tagPick(unit[1].group, () => showEngine(E));
+  cars.forEach((v, i) => tagPick(v.group, () => {
+    openPanel('Rolling stock', (E.cars && E.cars[i]) || v.label, `${v.label} in ${E.name}'s train on the ${line.name}.`, line.name);
   }));
 });
 
-const _p = new THREE.Vector3(), _q = new THREE.Vector3();
+// The NWR's own engines (built in the main script) run on the same model.
+const NWR_RUNS = {
+  Thomas: {passenger: true}, Percy: {line: 'kirkronan'}, Toby: {passenger: true}, Edward: {passenger: true},
+  James: {from: 'Tidmouth', to: 'Wellsworth', passenger: true}, Gordon: {from: 'Wellsworth', to: 'Kellsthorpe Road'},
+  Henry: {from: 'Kellsthorpe Road', to: 'Barrow-in-Furness', passenger: true}, Duck: {passenger: true},
+  Oliver: {line: 'callandale', passenger: true}, Culdee: {passenger: true}, Rex: {passenger: true},
+  Bill: {fromU: 0, toU: 0.5, cars: 1}, Ben: {fromU: 0.5, toU: 1, cars: 1},
+};
+TRAINS.forEach(tr => {
+  const run = NWR_RUNS[tr.name] || {};
+  if(run.line && LINES[run.line]) tr.line = run.line;
+  const line = LINES[tr.line];
+  if(run.cars !== undefined){ tr.cars.slice(run.cars).forEach(c => c.parent && c.parent.remove(c)); tr.cars = tr.cars.slice(0, run.cars); }
+  const uA = run.from ? lineU(line, run.from) : (run.fromU || 0), uB = run.to ? lineU(line, run.to) : (run.toU === undefined ? 1 : run.toU);
+  const std = line.kind === 'standard';
+  const R = makeRunner({line, uA, uB, unit: [{group: tr.mesh, len: 2.5}], cars: tr.cars.map(c => ({group: c, len: 2.4})),
+    scale: 1, gap: 0.12, vmax: std ? 2.4 : 1.4, passenger: !!run.passenger, loopW: 1.4, diesel: true});
+  R.nwr = tr;
+  drawLoops(R);
+  RUNNERS.push(R);
+});
+
 frameHooks.push(dt => {
-  SR_TRAINS.forEach(T => {
-    const {line} = T;
-    const span = Math.abs(T.uB - T.uA) * line.length || 1;
-    let moved = 0;
-    if(T.dwell > 0) T.dwell -= dt * simSpeed;
-    else {
-      const ds = dt * simSpeed * 1.6 * T.E.speed / span * T.dir;
-      T.s += ds; moved = Math.abs(ds) * span;
-      if(T.s >= 1){ T.s = 1; T.dir = -1; T.dwell = 4; } else if(T.s <= 0){ T.s = 0; T.dir = 1; T.dwell = 4; }
-    }
-    const fwd = (T.uB - T.uA) * T.dir >= 0;
-    const u = T.uA + (T.uB - T.uA) * T.s;
-    const shown = line.mesh.visible;
-    T.vehicles.forEach((v, i) => {
-      const cu = Math.max(0, Math.min(1, fwd ? u - T.offs[i] / line.length : u + T.offs[i] / line.length));
-      placeOnCurve(v.group, line.curve, cu, !fwd);
-      v.group.visible = shown && !inTunnel(line, cu);
-      if(moved > 0){
-        v.axles.forEach(a => { a.g.rotation.x += moved / (a.r * NG); });
-        if(v.rods.length){ const ang = v.axles.find(a => a.coupled).g.rotation.x;
-          v.rods.forEach(r => { r.mesh.position.y = r.r + r.rc * Math.cos(ang + r.phase); r.mesh.position.z = r.mid + r.rc * Math.sin(ang + r.phase); }); }
-      }
-    });
-    if(moved > 0 && !T.E.diesel && T.vehicles[0].group.visible){
-      T.puffT -= dt * simSpeed;
-      if(T.puffT <= 0){
-        T.puffT = 0.35;
-        const eng = T.engine;
-        [eng.chimneyAt, eng.chimneyAt2].forEach(c => { if(c){ _p.copy(c); eng.group.localToWorld(_p); puff(_p); } });
-      }
-    }
-  });
+  const d = dt * simSpeed;
+  RUNNERS.forEach(R => stepRunner(R, d));
   puffs.forEach(p => {
     if(p.life <= 0) return;
     p.life -= dt * 0.55;
@@ -1020,7 +1167,6 @@ function showStatic(c){
 // Madge: the Scammell Scarab lorry who carries loads where the rails don't reach.
 (function(){
   const f = bmqYard.f;
-  const a = f.o.clone().addScaledVector(f.n, 2.2).addScaledVector(f.t, -2.5), b = a.clone().addScaledVector(f.t, 7.0);
   const g = new THREE.Group(); scene.add(g);
   const tractor = new THREE.Group(); g.add(tractor);
   const GR = mat(0x2f6b3a, 0.5), CREAM = mat(0xe9e1c4, 0.5), BLK = mat(BLACK, 0.7), RED = mat(0xb3201c, 0.45);
@@ -1031,25 +1177,52 @@ function showStatic(c){
   box(tractor, 0.82, 0.05, 0.64, GR, 0, 0.98, 0.55);
   faceDisc(tractor, 0.17, {smile: 0.8, brow: -0.3, skin: '#c9ccc9'}, 0, 0.42, 0.952);
   for(const s of [-1, 1]) cylZ(tractor, 0.06, 0.06, 0.04, CREAM, s * 0.3, 0.6, 0.952, 12);
-  const front = cylX(tractor, 0.16, 0.16, 0.12, BLK, 0, 0.16, 0.85, 14);
-  for(const s of [-1, 1]){ cylX(tractor, 0.17, 0.17, 0.12, BLK, s * 0.36, 0.17, 0.25, 14); cylX(tractor, 0.07, 0.07, 0.13, RED, s * 0.36, 0.17, 0.25, 10); }
+  const wheels = [];
+  const wheel = (p, r, x, y, z, hub) => { const w = new THREE.Group(); w.position.set(x, y, z); p.add(w);
+    cylX(w, r, r, 0.12, BLK, 0, 0, 0, 14); if(hub) cylX(w, r * 0.42, r * 0.42, 0.13, RED, 0, 0, 0, 10);
+    box(w, 0.125, r * 1.4, 0.04, mat(0x444444), 0, 0, 0); wheels.push({w, r}); };
+  wheel(tractor, 0.16, 0, 0.16, 0.85, false);
+  for(const s of [-1, 1]) wheel(tractor, 0.17, s * 0.36, 0.17, 0.25, true);
   box(g, 0.86, 0.08, 1.9, GR, 0, 0.38, -0.85);
   for(const s of [-1, 1]) box(g, 0.04, 0.12, 1.9, GR, s * 0.43, 0.46, -0.85);
-  for(const s of [-1, 1]) cylX(g, 0.15, 0.15, 0.12, BLK, s * 0.36, 0.15, -1.45, 14);
+  for(const s of [-1, 1]) wheel(g, 0.15, s * 0.36, 0.15, -1.45, false);
   box(g, 0.6, 0.3, 0.8, mat(0x3c4552, 0.6), 0, 0.57, -0.7);
   g.scale.setScalar(NG);
   const c = {name: 'Madge', kind: 'Lorry', group: g, dist: 9,
     desc: 'Madge is a Scammell Scarab lorry who works with the Skarloey Railway, carrying loads to and from places the rails cannot reach. She is green with a cream upper cab and red hubcaps.'};
   statics.push(c); tagPick(g, () => showStatic(c));
-  let s = 0, dir = 1, wait = 0;
-  const yaw = Math.atan2(f.t.x, f.t.z);
+  // A closed road round the quarry yard, so Madge never has to reverse.
+  const road = [[-2.5, 1.4], [0, 1.15], [3, 1.15], [6, 1.4], [6.9, 2.05], [6, 2.75], [3, 2.95], [0, 2.95], [-2.5, 2.75], [-3.4, 2.05]]
+    .map(([t, n]) => f.o.clone().addScaledVector(f.t, t).addScaledVector(f.n, n));
+  const loop = new THREE.CatmullRomCurve3(road, true, 'centripetal');
+  loop.arcLengthDivisions = 400;
+  const loopLen = loop.getLength(), N = 160, half = 0.3, pos = [], idx = [];
+  for(let i = 0; i <= N; i++){
+    const q = loop.getPointAt(i / N % 1), tg = loop.getTangentAt(i / N % 1), nx = tg.z, nz = -tg.x, nl = Math.hypot(nx, nz) || 1;
+    for(const s of [-1, 1]){ const x = q.x + nx / nl * half * s, z = q.z + nz / nl * half * s; pos.push(x, groundY(x, z) + 0.035, z); }
+    if(i < N){ const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); rg.setIndex(idx); rg.computeVertexNormals();
+  const roadMesh = new THREE.Mesh(rg, new THREE.MeshStandardMaterial({color: 0x8c8172, roughness: 0.95, side: THREE.DoubleSide}));
+  roadMesh.receiveShadow = true; scene.add(roadMesh);
+  let s = 0.3, wait = 0;
+  const q = new THREE.Vector3(), tg = new THREE.Vector3();
   frameHooks.push(dt => {
-    if(wait > 0){ wait -= dt * simSpeed; }
-    else { s += dir * dt * simSpeed * 0.12; if(s > 1){ s = 1; dir = -1; wait = 3; } if(s < 0){ s = 0; dir = 1; wait = 3; } }
-    const p = a.clone().lerp(b, s);
-    g.position.set(p.x, groundY(p.x, p.z) + 0.02, p.z);
-    g.rotation.y = yaw + (dir < 0 ? Math.PI : 0);
-    front.rotation.x += dt * simSpeed * dir * 2;
+    const d = dt * simSpeed;
+    let move = 0;
+    if(wait > 0) wait -= d;
+    else {
+      const prev = s;
+      s = (s + d * 0.45 / loopLen) % 1;
+      move = d * 0.45;
+      if(prev < 0.1 && s >= 0.1) wait = 3;                      // pause at the yard to load
+    }
+    loop.getPointAt(s, q); loop.getTangentAt(s, tg);
+    const hf = groundY(q.x + tg.x * 0.6, q.z + tg.z * 0.6), hb = groundY(q.x - tg.x * 0.6, q.z - tg.z * 0.6);
+    g.position.set(q.x, groundY(q.x, q.z) + 0.03, q.z);
+    g.rotation.order = 'YXZ';
+    g.rotation.set(-Math.atan2(hf - hb, 1.2), Math.atan2(tg.x, tg.z), 0);
+    if(move) wheels.forEach(({w, r}) => { w.rotation.x += move / (r * NG); });
   });
 })();
 
@@ -1076,5 +1249,5 @@ document.getElementById('rosterHead').onclick = () => {
 if(innerWidth < 760){ roster.classList.add('collapsed'); document.getElementById('rosterArrow').textContent = '▸'; }
 
 document.getElementById('statTrains').textContent = TRAINS.length + SR_TRAINS.length;
-window.SODOR_SR = {ENGINES, SR_TRAINS, statics, STOCK};
+window.SODOR_SR = {ENGINES, SR_TRAINS, RUNNERS, statics, STOCK};
 })();

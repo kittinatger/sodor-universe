@@ -424,6 +424,7 @@ function buildTrack(line){
   });
   line.mesh = group;
   line.curve = new THREE.CatmullRomCurve3(p3, false, 'centripetal');
+  line.curve.arcLengthDivisions = Math.max(200, p3.length * 4);   // even speed along long lines
   line.length = line.curve.getLength();
   line.samples = p3;
 }
@@ -745,21 +746,7 @@ function animate(){
   simTime += dt*4*simSpeed;
   document.getElementById('statTime').textContent = fmtTime(simTime);
 
-  TRAINS.forEach(tr=>{
-    const line = LINES[tr.line];
-    tr.t += dt*tr.speed*simSpeed * (60/Math.max(line.length,30));
-    const tt = tr.t % 2, back = tt>1, u = back ? 2-tt : tt;
-    placeOnCurve(tr.mesh, line.curve, u, back);
-    const shown = line.mesh.visible;
-    tr.mesh.visible = shown && !inTunnel(line, u);
-    const gap = 2.6/line.length;
-    tr.cars.forEach((car,k)=>{
-      const cu = back ? u+gap*(k+1) : u-gap*(k+1);
-      car.visible = shown && !inTunnel(line, cu);
-      placeOnCurve(car, line.curve, cu, back);
-    });
-  });
-  frameHooks.forEach(f=>f(dt));
+  frameHooks.forEach(f=>f(dt));        // all trains are driven by the runner in characters.js
 
   if(flight){
     const k = Math.min(1, (performance.now()-flight.start)/flight.dur);
@@ -790,6 +777,6 @@ updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
-<script src="characters.js?v=2"></script>
+<script src="characters.js?v=5"></script>
 </body>
 </html>
