@@ -2032,7 +2032,7 @@ function buildRoundhouse(D){
   const yawAB = (da, db) => Math.atan2(sx * db, da);    // local rotation.y for a run along (da, db)
 
   // gravel apron with weed patches
-  box(G, 120, 0.04, 88, GRAV, lx(46), 0.0, 62);
+  box(G, 93, 0.04, 88, GRAV, lx(45.5), 0.0, 62);
   for(let k = 0; k < 14; k++) box(G, 4 + (k * 7) % 6, 0.02, 3 + (k * 5) % 5, mat(0x6f7a3a, 0.95), lx(8 + (k * 37) % 70), 0.025, 8 + (k * 53) % 108);
 
   // turntable: brick-lined pit and a green girder bridge with its cabin
@@ -2203,6 +2203,31 @@ function buildRoundhouse(D){
   wallRun(122, 88, 122, 30);
   wallRun(2, 30, 2, 88);
 
+  // ---- connection to the Main Line: a shed road runs alongside the line, every road in the depot
+  // (turntable lead, carriage shed, coal and water roads) swings into it through points, and it joins
+  // the near road of the Main Line facing Tidmouth station.
+  {
+    const R = LINES.main.real, c = kit.pt(ca, 0), n = site.n;
+    let bj = 0, bd = Infinity;
+    for(let j = 0; j < R.n; j++){ const d = (R.x[j] - c.x) ** 2 + (R.z[j] - c.z) ** 2; if(d < bd){ bd = d; bj = j; } }
+    const bMain = ((R.x[bj] - site.o.x) * n.x + (R.z[bj] - site.o.z) * n.z) / M, bLane = bMain + MAIN_LANE, SB = bMain + 7.5;
+    const bez = (P0, P1, P2, P3, k = 12) => { let prev = P0; for(let i = 1; i <= k; i++){ const t = i / k, s = 1 - t;
+      const a = s*s*s*P0[0] + 3*s*s*t*P1[0] + 3*s*t*t*P2[0] + t*t*t*P3[0], b = s*s*s*P0[1] + 3*s*s*t*P1[1] + 3*s*t*t*P2[1] + t*t*t*P3[1];
+      kit.road(prev[0], prev[1], a, b); prev = [a, b]; } };
+    // the points face away from Tidmouth station, so the junction is clear of its platforms
+    const into = (a, b0) => bez([a, b0], [a, SB + 2.5], [a + 9, SB], [a + 22, SB]);    // a road swinging into the shed road
+    kit.road(-4, SB, 150, SB);                                                           // the shed road, its headshunt towards Tidmouth
+    buffer(-3.4, SB, yawAB(1, 0));
+    into(ca, cb - R0);                                                                   // turntable lead
+    CA.forEach(a => into(a, 2));                                                         // carriage shed roads
+    into(YA, 2); into(YA + 8, 2);                                                        // coal and water roads
+    bez([150, SB], [166, SB], [182, bLane], [202, bLane], 14);                         // the junction with the Main Line
+    // a ground frame for the points, and the shunt signal at the junction
+    box(G, 2.4, 2.2, 3, mat(0x8a4a32, 0.85), lx(SB + 4.5), 1.1, 140);
+    gable(G, 2.6, 3.2, 2.2, mat(0x30333a, 0.75), lx(SB + 4.5), 140);
+    cylY(G, 0.1, 0.12, 5, mat(0xe8e8e2, 0.6), lx(SB + 2.6), 2.5, 158, 6);
+    box(G, 0.08, 0.3, 1.2, mat(0xc8201e, 0.5), lx(SB + 2.6) + 0.12, 4.5, 158.5);
+  }
   // the many short road strips bake into one mesh of their own
   const rails = new THREE.Group(); rails.userData.keep = true;
   G.children.filter(o => o.isMesh && o.material === roadMat('standard')).forEach(o => { G.remove(o); rails.add(o); });
