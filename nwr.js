@@ -1754,7 +1754,7 @@ const RUNS = {
 // Depots and works, and who is stabled there. Order: by road.
 const DEPOTS = [
   {key: 'tidmouth', label: 'Tidmouth Sheds', station: 'Tidmouth', line: 'main', kind: 'roundhouse', engines: ['nia'], stock: [['snow']],
-   siteFn: () => { const L = LINES.main, len = 124, wid = 92, lat = 18, u = 215 * METRE / L.real.len, p = realAt(L, u, new THREE.Vector3()), t = realDir(L, u, new THREE.Vector3()); t.y = 0; t.normalize();
+   siteFn: () => { const L = LINES.main, len = 210, wid = 84, lat = 12, u = 240 * METRE / L.real.len, p = realAt(L, u, new THREE.Vector3()), t = realDir(L, u, new THREE.Vector3()); t.y = 0; t.normalize();
      const n = new THREE.Vector3(t.z, 0, -t.x), o = p.clone().addScaledVector(n, lat * METRE).addScaledVector(t, -len * METRE / 2); o.y = 0; return {o, t, n, len: len * METRE, wid: wid * METRE, side: 1}; }},      // the rest of the Steam Team come home here at night (ops.js)
   // Knapford Yards lies alongside the station on the west, its six roads fed by a ladder off the
   // down Main Line (drawn by knapford.js); siteFn puts it there instead of searching for a site.
@@ -2016,26 +2016,54 @@ function bakeSite(G){
   keep.forEach(o => G.add(o));
 }
 
-// Tidmouth Sheds: a long straight-fronted engine shed in cream brick, its arched doorways fed by a
-// fan of roads off the turntable; a carriage shed, coal stage, water tower and signal box round the
-// gravel yard, and an arcaded retaining wall behind.
+// Tidmouth Sheds: a long straight-fronted engine shed in cream brick, its arched doorways fed by a fan of
+// stall roads off the turntable. The depot lies alongside the Main Line on a terrace (local a runs with the
+// line, b away from it). A shed road leaves the line through facing points south of the depot and climbs
+// past the coal stage; from it the turntable lead and the three carriage-shed roads curve off gently, and it
+// runs on as a headshunt towards the station. ops.js drives the Steam Team in and out along RH.inPath.
 function buildRoundhouse(D){
   const ids = D.engines, units = vehiclesFor(ids, D).concat((D.stock || []).map(s => vehiclesFor(s, D)).flat());
   while(units.length < 8) units.push([]);               // spare stalls stand empty
   const n = units.length, R0 = 12, PITCH = 5.6;
-  const site = (D.siteFn && D.siteFn()) || findSite(D.station, D.line, 124, 92, {lats: [14, 22, 32, 45, 60]});
-  const kit = siteKit(site), G = kit.G, lx = kit.lx, sx = kit.sx;
-  const ca = 66, cb = 16;                               // turntable centre (local along, across)
+  const site = (D.siteFn && D.siteFn()) || findSite(D.station, D.line, 210, 84, {lats: [12, 18, 26]});
+  const kit = siteKit(site), G = kit.G, lx = kit.lx, sx = kit.sx, LEN = kit.lenM, WID = kit.widM;
+  const ca = 92, cb = 18;                               // turntable centre (local along, across)
   const BF = cb + 30, BB = BF + 30, BM = (BF + BB) / 2;  // shed front, back and middle (across)
   const HALF = n * PITCH / 2 + 0.8, H = 8.5;
   const CREAM = mat(0xe4dccb, 0.85), PIER = mat(0xd3c9b2, 0.85), BRICK = mat(0x8a4a32, 0.85), GREEN = mat(0x2f5a3a, 0.7),
         SLATE = mat(0x707888, 0.75), DARK = mat(0x2a2c30, 0.7), GRAV = mat(0x8c877c, 0.95), GLASS = glassMat();
   const rbox = (w, h, d, m, a, b, y, rot) => { const me = box(G, w, h, d, m, lx(b), y, a); me.rotation.y = rot; return me; };
   const yawAB = (da, db) => Math.atan2(sx * db, da);    // local rotation.y for a run along (da, db)
+  const buffer = (a, b, rot) => { rbox(2.6, 0.5, 0.4, mat(0x6a3a22, 0.8), a, b, 0.7, rot); rbox(0.3, 0.9, 0.3, mat(0x6a3a22, 0.8), a, b, 0.4, rot); };
+  const bezPts = (P0, P1, P2, P3, k = 14) => { const out = []; for(let i = 0; i <= k; i++){ const t = i / k, s = 1 - t;
+    out.push([s*s*s*P0[0] + 3*s*s*t*P1[0] + 3*s*t*t*P2[0] + t*t*t*P3[0], s*s*s*P0[1] + 3*s*s*t*P1[1] + 3*s*t*t*P2[1] + t*t*t*P3[1]]); } return out; };
+  const lay = (pts, yFn) => { for(let i = 1; i < pts.length; i++){ const [a0, b0] = pts[i - 1], [a1, b1] = pts[i]; yFn ? strip(a0, b0, a1, b1) : kit.road(a0, b0, a1, b1); } };
+
+  // the Main Line in the yard's frame
+  const RL = LINES.main.real, ML = [];
+  for(let j = 0; j < RL.n; j++){
+    const dx = RL.x[j] - site.o.x, dz = RL.z[j] - site.o.z, a = (dx * site.t.x + dz * site.t.z) / M;
+    const b = (dx * site.n.x + dz * site.n.z) / M;
+    if(a > -80 && a < LEN + 420 && Math.abs(b) < 250) ML.push({a, b: (dx * site.n.x + dz * site.n.z) / M, y: RL.y[j]});
+  }
+  ML.sort((p, q) => p.a - q.a);
+  const mainAt = (a, k) => { let i = 1; while(i < ML.length - 1 && ML[i].a < a) i++; const p = ML[i - 1], q = ML[i], t = (a - p.a) / ((q.a - p.a) || 1); return p[k] + (q[k] - p[k]) * t; };
+  let bMax = -Infinity; for(let a = 0; a <= 210; a += 6) bMax = Math.max(bMax, mainAt(a, 'b'));
+  const SB = bMax + 6.5;                                // the shed road, parallel to the yard
+  const AJ = 205, AM = 275, bJ = mainAt(AM, 'b') + MAIN_LANE;   // where the shed road leaves its straight, and meets the line
+  const RA = 198, dyJ = (mainAt(AM, 'y') - kit.base) / M - 0.1;
+  const yFn = a => 0.05 + (dyJ - 0.05) * Math.max(0, Math.min(1, (a - RA) / (AM - RA)));
+  const BANK = mat(0x7a756a, 0.95), yg = dyJ - 0.5;
+  function strip(a0, b0, a1, b1){                       // a road strip on the slope, with its bank beneath
+    const y0 = yFn(a0), y1 = yFn(a1); kit.road(a0, b0, a1, b1, 'standard', y0, y1);
+    const ym = (y0 + y1) / 2, hh = ym - yg - 0.1; if(hh < 0.2) return;
+    const len = Math.hypot(a1 - a0, lx(b1) - lx(b0)), bk = box(G, 5.6, hh, len, BANK, lx((b0 + b1) / 2), ym - 0.12 - hh / 2, (a0 + a1) / 2);
+    bk.rotation.order = 'YXZ'; bk.rotation.y = Math.atan2(lx(b1) - lx(b0), a1 - a0); bk.rotation.x = -Math.atan2(y1 - y0, len);
+  }
 
   // gravel apron with weed patches
-  box(G, 93, 0.04, 88, GRAV, lx(45.5), 0.0, 62);
-  for(let k = 0; k < 14; k++) box(G, 4 + (k * 7) % 6, 0.02, 3 + (k * 5) % 5, mat(0x6f7a3a, 0.95), lx(8 + (k * 37) % 70), 0.025, 8 + (k * 53) % 108);
+  box(G, WID, 0.04, LEN, GRAV, lx(WID / 2), 0.0, LEN / 2);
+  for(let k = 0; k < 18; k++) box(G, 4 + (k * 7) % 6, 0.02, 3 + (k * 5) % 5, mat(0x6f7a3a, 0.95), lx(24 + (k * 37) % 56), 0.025, 8 + (k * 53) % (LEN - 16));
 
   // turntable: brick-lined pit and a green girder bridge with its cabin
   cylY(G, R0, R0, 1.2, mat(0x6a6a66, 0.95), lx(cb), -0.6, ca, 40);
@@ -2056,14 +2084,29 @@ function buildRoundhouse(D){
   const bm = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2 * R0 - 0.4).rotateX(-Math.PI / 2), roadMat('standard'));
   const buv = bm.geometry.attributes.uv; for(let i = 0; i < buv.count; i++) buv.setY(i, buv.getY(i) * (2 * R0) / 0.75);
   bm.position.y = 0.12; bridge.add(bm);
-  // lead from the turntable towards the line, and short spurs off the table either side
-  kit.road(ca, cb - R0, ca, 0);
-  const buffer = (a, b, rot) => { rbox(2.6, 0.5, 0.4, mat(0x6a3a22, 0.8), a, b, 0.7, rot); rbox(0.3, 0.9, 0.3, mat(0x6a3a22, 0.8), a, b, 0.4, rot); };
-  [-1.25, -1.9, 1.25, 1.9].forEach(phi => {
+  // two short spurs off the table for spare engines and the breakdown crane
+  [-1.25, 1.25].forEach(phi => {
     const da = Math.sin(phi), db = Math.cos(phi), L = 20;
     kit.road(ca + da * R0, cb + db * R0, ca + da * (R0 + L), cb + db * (R0 + L));
     buffer(ca + da * (R0 + L - 0.5), cb + db * (R0 + L - 0.5), yawAB(da, db));
   });
+
+  // ---- the shed road, its headshunt and the junction with the Main Line
+  kit.road(12, SB, RA, SB); buffer(12.6, SB, yawAB(1, 0));
+  box(G, 6.4, -yg + 0.1, RA - 8, BANK, lx(SB), yg / 2 - 0.1, (RA + 8) / 2);              // the bank the shed road runs on
+  for(let a = RA; a < AJ; a += 7) strip(a, SB, Math.min(AJ, a + 7), SB);
+  const junction = bezPts([AJ, SB], [AJ + 24, SB], [AM - 24, bJ], [AM, bJ], 18);
+  lay(junction, true);
+  // ---- the turntable lead: a straight radial off the table at 20 degrees to the line, easing into the shed road
+  const phiL = Math.atan2(Math.cos(20 * Math.PI / 180), -Math.sin(20 * Math.PI / 180)), uA = Math.sin(phiL), uB = Math.cos(phiL);
+  const E = [ca + uA * R0, cb + uB * R0], Lstr = (E[1] - (SB + 4)) / -uB, S1 = [E[0] + uA * Lstr, E[1] + uB * Lstr];
+  const leadCurve = bezPts(S1, [S1[0] + uA * 11, S1[1] + uB * 11], [S1[0] + 22, SB], [S1[0] + 34, SB], 14);
+  const leadStr = []; for(let i = 0; i <= 12; i++) leadStr.push([E[0] + uA * Lstr * i / 12, E[1] + uB * Lstr * i / 12]);
+  lay(leadStr); lay(leadCurve);
+  const AL = S1[0] + 34;                                // where the lead leaves the shed road
+  // ---- the carriage shed roads, easing off the shed road in long S-curves
+  const CB = [6, 11, 16], CA0 = 4, CA1 = 50;
+  CB.forEach(b => { kit.road(CA0, b, CA1, b); buffer(CA0 + 0.6, b, yawAB(1, 0)); const L = 16 + 2 * (b - SB); lay(bezPts([CA1, b], [CA1 + L / 2, b], [CA1 + L / 2, SB], [CA1 + L, SB], 16)); });
 
   // the stalls: radial off the table to each doorway, easing to run straight in
   const stalls = units.map((u, k) => {
@@ -2085,7 +2128,6 @@ function buildRoundhouse(D){
     const door = pl.find(p => p.b >= BF).s;
     return {phi: Math.atan2(ua, ub), pl, rA, door, end: pl[pl.length - 1].s, vehs: u, id: (ids.concat((D.stock || []).flat()))[k]};
   });
-  // place the vehicles along their stalls (ops.js moves them from here on)
   stalls.forEach(st => {
     let s = st.door - 3;
     st.vehs.forEach(v => { s += v.len / 2; const q = stallPt(st, s); v.group.position.copy(kit.pt(q.a, q.b));
@@ -2094,12 +2136,11 @@ function buildRoundhouse(D){
 
   // ---- the engine shed
   const z0 = ca - HALF, z1 = ca + HALF;
-  // front: piers between the doorways, a deep band over them with brick arches and fanlights
   for(let k = 0; k <= n; k++){
     const a = ca + (k - n / 2) * PITCH;
     box(G, 1.0, H, 1.3, PIER, lx(BF - 0.2), H / 2, a);
     box(G, 1.2, 0.5, 1.5, CREAM, lx(BF - 0.3), H + 0.25, a);
-    box(G, 0.12, 6.5, 0.12, GREEN, lx(BF - 0.9), 3.25, a);              // downpipe
+    box(G, 0.12, 6.5, 0.12, GREEN, lx(BF - 0.9), 3.25, a);
     box(G, 0.7, 0.4, 0.7, GREEN, lx(BF - 0.9), 6.6, a);
   }
   box(G, 0.8, H - 5.8, 2 * HALF, CREAM, lx(BF), 5.8 + (H - 5.8) / 2, ca);
@@ -2107,23 +2148,20 @@ function buildRoundhouse(D){
     const a = ca + (k - (n - 1) / 2) * PITCH;
     const arch = add(G, new THREE.TorusGeometry(2.25, 0.32, 5, 14, Math.PI), BRICK, lx(BF - 0.45), 5.4, a); arch.rotation.y = Math.PI / 2;
     const fan = add(G, new THREE.CircleGeometry(2.1, 14, 0, Math.PI), mat(0x3a5a48, 0.3, 0.3, 'double'), lx(BF - 0.42), 5.4, a); fan.rotation.y = -sx * Math.PI / 2;
-    for(const s of [-1, 1]){                                             // door leaves folded back inside
+    for(const s of [-1, 1]){
       box(G, 2.0, 5.2, 0.12, GREEN, lx(BF + 1.1), 2.7, a + s * 2.1);
       box(G, 1.6, 1.4, 0.14, GLASS, lx(BF + 1.1), 4.3, a + s * 2.1);
     }
   }
-  // side and back walls, with tall arched windows
   box(G, 0.8, H, 2 * HALF, CREAM, lx(BB + 0.4), H / 2, ca);
   for(const z of [z0, z1]){
     box(G, BB - BF + 1.2, H, 0.8, CREAM, lx(BM), H / 2, z);
     for(let b = BF + 4; b < BB - 2; b += 4.2){ box(G, 1.8, 3.6, 0.2, GLASS, lx(b), 4.0, z + (z > ca ? 0.45 : -0.45)); box(G, 2.1, 0.25, 0.3, GREEN, lx(b), 5.9, z + (z > ca ? 0.45 : -0.45)); }
-    // gable infill with a stepped parapet, finials and a round window
     gable(G, BB - BF + 1.2, 0.8, H, CREAM, lx(BM), z, 0, 0.42);
     const rise = (BB - BF + 1.2) / 1.732 * 1.08 * 0.42 * 1.5;
     add(G, new THREE.CylinderGeometry(1.4, 1.4, 0.3, 18).rotateX(Math.PI / 2), GREEN, lx(BM), H + rise * 0.45, z + (z > ca ? 0.45 : -0.45));
     for(const b of [BF, BM, BB]) { box(G, 1.4, 1.2, 1.2, PIER, lx(b), (b === BM ? H + rise : H) + 0.4, z); add(G, new THREE.SphereGeometry(0.55, 10, 8), PIER, lx(b), (b === BM ? H + rise : H) + 1.3, z); }
   }
-  // slate roof, a glazed clerestory along the ridge, smoke vents in a row over the stalls
   gable(G, BB - BF + 2.0, 2 * HALF + 0.6, H, SLATE, lx(BM), ca, 0, 0.42);
   const ridge = H + (BB - BF + 2) / 1.732 * 1.08 * 0.42 * 1.5;
   box(G, 3.6, 1.4, 2 * HALF - 4, SLATE, lx(BM), ridge - 0.2, ca);
@@ -2133,61 +2171,58 @@ function buildRoundhouse(D){
     const a = ca + (k - (n - 1) / 2) * PITCH, b = BF + 8, y = H + (b - BF + 1) / ((BB - BF) / 2) * (ridge - H) * 0.85;
     cylY(G, 0.4, 0.4, 2.4, DARK, lx(b), y + 0.6, a, 8);
     add(G, new THREE.ConeGeometry(0.75, 0.8, 8), DARK, lx(b), y + 2.1, a);
-    box(G, 2.4, 0.9, 2.0, SLATE, lx(BM + 6), ridge - 2.0, a);          // dormer vents on the back slope
+    box(G, 2.4, 0.9, 2.0, SLATE, lx(BM + 6), ridge - 2.0, a);
   }
-  box(G, 0.4, 0.5, 2 * HALF + 0.8, mat(0x2c4a34, 0.7), lx(BF - 0.6), H - 0.1, ca);   // green gutter
+  box(G, 0.4, 0.5, 2 * HALF + 0.8, mat(0x2c4a34, 0.7), lx(BF - 0.6), H - 0.1, ca);
 
-  // ---- carriage shed on the left: three roads under a glazed roof, with the boiler-house chimney
-  const CA = [10, 16, 22];
-  CA.forEach(a => { kit.road(a, 2, a, 80); buffer(a, 79.4, yawAB(0, 1)); });
-  const cz0 = 6.2, cz1 = 25.8, cb0 = 54, cb1 = 80;
-  for(const z of [cz0, cz1]) box(G, cb1 - cb0, 7, 0.7, CREAM, lx((cb0 + cb1) / 2), 3.5, z);
-  box(G, 0.7, 7, cz1 - cz0, CREAM, lx(cb1), 3.5, (cz0 + cz1) / 2);
-  for(const z of [cz0, (cz0 + cz1) / 2, cz1]) box(G, 1.2, 7.6, 1.2, PIER, lx(cb0), 3.8, z);
-  box(G, 0.8, 1.6, cz1 - cz0, CREAM, lx(cb0), 6.6, (cz0 + cz1) / 2);
-  gable(G, cz1 - cz0 + 1, cb1 - cb0 + 1, 7, SLATE, lx((cb0 + cb1) / 2), (cz0 + cz1) / 2, Math.PI / 2, 0.45);
-  for(let b = cb0 + 3; b < cb1 - 2; b += 2.6) for(const s of [-1, 1]) box(G, 2.2, 0.1, 3.2, GLASS, lx(b), 8.4, (cz0 + cz1) / 2 + s * 3.4);
-  for(const b of [cb0, cb1]) gable(G, cz1 - cz0 + 0.6, 0.7, 7, CREAM, lx(b), (cz0 + cz1) / 2, Math.PI / 2, 0.45);
-  box(G, 3.2, 3, 3.2, PIER, lx(cb1 + 3), 1.5, 4);
-  cylY(G, 1.0, 1.5, 22, CREAM, lx(cb1 + 3), 11, 4, 4).rotation.y = Math.PI / 4;
-  box(G, 2.6, 0.7, 2.6, PIER, lx(cb1 + 3), 22.3, 4);
+  // ---- carriage shed at the north end: three roads under a glazed roof, open to the south, with the boiler-house chimney
+  const cw0 = 2.4, cw1 = 19.6, cm = (cw0 + cw1) / 2, cl = CA1 - 10 - CA0;
+  for(const b of [cw0, cw1]) box(G, 0.7, 7, cl, CREAM, lx(b), 3.5, CA0 + cl / 2);
+  box(G, cw1 - cw0 + 0.7, 7, 0.7, CREAM, lx(cm), 3.5, CA0);
+  for(const b of [cw0, 8.5, 13.5, cw1]) box(G, 1.2, 7.6, 1.2, PIER, lx(b), 3.8, CA0 + cl);
+  box(G, cw1 - cw0 + 1.2, 1.6, 0.8, CREAM, lx(cm), 6.6, CA0 + cl);
+  gable(G, cw1 - cw0 + 1, cl + 1, 7, SLATE, lx(cm), CA0 + cl / 2, 0, 0.45);
+  for(let a = CA0 + 3; a < CA0 + cl - 2; a += 2.6) for(const s of [-1, 1]) box(G, 3.2, 0.1, 2.2, GLASS, lx(cm + s * 3.4), 8.4, a);
+  for(const a of [CA0, CA0 + cl]) gable(G, cw1 - cw0 + 0.6, 0.7, 7, CREAM, lx(cm), a, 0, 0.45);
+  box(G, 3.2, 3, 3.2, PIER, lx(25), 1.5, 8);
+  cylY(G, 1.0, 1.5, 22, CREAM, lx(25), 11, 8, 4).rotation.y = Math.PI / 4;
+  box(G, 2.6, 0.7, 2.6, PIER, lx(25), 22.3, 8);
 
-  // ---- yard on the right: coal stage and crane, water tower, sand drier, signal box
-  const YA = 102;
-  kit.road(YA, 2, YA, 70); buffer(YA, 69.4, yawAB(0, 1));
-  kit.road(YA + 8, 2, YA + 8, 62); buffer(YA + 8, 61.4, yawAB(0, 1));
-  for(let k = 0; k < 3; k++){                                           // coal bunkers beside the road
-    box(G, 3.4, 1.2, 5, mat(0x4a3424, 0.9), lx(30 + k * 7), 0.6, YA - 4.5);
-    box(G, 3.0, 0.3, 4.6, mat(0x15161a, 0.95), lx(30 + k * 7), 1.2, YA - 4.5);
+  // ---- the coal stage and its crane beside the shed road, the water column on the lead, the water tower
+  for(let k = 0; k < 3; k++){
+    box(G, 3.4, 1.2, 5, mat(0x4a3424, 0.9), lx(SB + 6.5), 0.6, 178 + k * 6.5);
+    box(G, 3.0, 0.3, 4.6, mat(0x15161a, 0.95), lx(SB + 6.5), 1.2, 178 + k * 6.5);
   }
-  // coaling crane: lattice tower, cab and jib over the road
-  for(const s of [-1, 1]) for(const t of [-1, 1]) box(G, 0.3, 9, 0.3, mat(0x3a2a24, 0.8), lx(52 + s * 1.4), 4.5, YA - 5 + t * 1.4);
-  for(let y = 1.5; y < 9; y += 2.2) box(G, 3.1, 0.15, 3.1, mat(0x3a2a24, 0.8), lx(52), y, YA - 5);
-  box(G, 3.2, 2.6, 3.2, mat(0x6a3a2a, 0.8), lx(52), 10.3, YA - 5);
-  gable(G, 3.6, 3.6, 11.6, DARK, lx(52), YA - 5, 0, 0.5);
-  const jib = box(G, 0.5, 0.5, 13, mat(0x3a2a24, 0.8), lx(52), 12.5, YA + 1); jib.rotation.x = -0.35;
-  // water tower
-  for(const s of [-1, 1]) for(const t of [-1, 1]) box(G, 0.35, 7, 0.35, mat(0x5a2a2a, 0.8), lx(40 + s * 1.8), 3.5, YA + 4 + t * 1.8);
-  box(G, 5.2, 2.8, 5.2, mat(0x5a2a2a, 0.75), lx(40), 8.4, YA + 4);
-  box(G, 4.8, 0.1, 4.8, mat(0x4a7a9a, 0.2, 0.2), lx(40), 9.8, YA + 4);
-  // water column and lamps
-  cylY(G, 0.4, 0.5, 4, DARK, lx(30), 2, YA + 4, 10);
+  for(const s of [-1, 1]) for(const t of [-1, 1]) box(G, 0.3, 9, 0.3, mat(0x3a2a24, 0.8), lx(SB + 11 + s * 1.4), 4.5, 185 + t * 1.4);
+  for(let y = 1.5; y < 9; y += 2.2) box(G, 3.1, 0.15, 3.1, mat(0x3a2a24, 0.8), lx(SB + 11), y, 185);
+  box(G, 3.2, 2.6, 3.2, mat(0x6a3a2a, 0.8), lx(SB + 11), 10.3, 185);
+  gable(G, 3.6, 3.6, 11.6, DARK, lx(SB + 11), 185, 0, 0.5);
+  const jib = box(G, 12, 0.5, 0.5, mat(0x3a2a24, 0.8), lx(SB + 6), 12.3, 185); jib.rotation.z = sx * 0.3;
+  const wcA = (E[0] + S1[0]) / 2 + 4, wcB = E[1] + uB * ((wcA - E[0]) / uA) + 3.2;
+  cylY(G, 0.4, 0.5, 4, DARK, lx(wcB), 2, wcA, 10); box(G, 0.25, 0.25, 2.6, DARK, lx(wcB - 1.2), 3.9, wcA);
+  for(const s of [-1, 1]) for(const t of [-1, 1]) box(G, 0.35, 7, 0.35, mat(0x5a2a2a, 0.8), lx(12 + s * 1.8), 3.5, 152 + t * 1.8);
+  box(G, 5.2, 2.8, 5.2, mat(0x5a2a2a, 0.75), lx(12), 8.4, 152);
+  box(G, 4.8, 0.1, 4.8, mat(0x4a7a9a, 0.2, 0.2), lx(12), 9.8, 152);
   const lamp = (a, b) => { cylY(G, 0.12, 0.18, 8, GREEN, lx(b), 4, a, 8);
     for(const s of [-1, 1]){ box(G, 0.1, 0.1, 1.6, GREEN, lx(b), 7.8, a + s * 0.8); add(G, new THREE.ConeGeometry(0.4, 0.4, 10, 1, true), mat(0x2c4a34, 0.6, 0, 'double'), lx(b), 7.6, a + s * 1.6); } };
-  [[40, 10], [52, 30], [80, 30], [92, 12], [30, 40], [114, 40]].forEach(([a, b]) => lamp(a, b));
-  // signal box, white boarded with a blue base and a hipped slate roof
-  const sbA = 116, sbB = 30;
-  box(G, 7, 3.0, 4.6, mat(0x5a7a9a, 0.8), lx(sbB), 1.5, sbA);
-  box(G, 7.2, 2.6, 4.8, mat(0xe8e8e2, 0.8), lx(sbB), 4.3, sbA);
-  for(const s of [-1, 1]) box(G, 0.1, 1.6, 4.0, GLASS, lx(sbB + s * 3.62), 4.5, sbA);
-  add(G, new THREE.ConeGeometry(5.6, 2.4, 4).rotateY(Math.PI / 4), mat(0x30333a, 0.75), lx(sbB), 6.8, sbA).scale.set(1, 1, 0.72);
-  box(G, 7.4, 0.15, 1.2, GREEN, lx(sbB), 3.0, sbA - 3.0);
-  // stores huts by the turntable
-  building(G, lx(cb + 24), ca + 27, 5, 6, 3.2, 0x5a4434, 0x30333a);
-  building(G, lx(cb + 24), ca - 27, 4, 5, 3, 0x8a4a32, 0x30333a);
-  // sleepers and crates stacked about
-  for(let k = 0; k < 4; k++) box(G, 2.6, 0.5, 1.2, mat(0x7a6048, 0.9), lx(34 + k * 0.2), 0.25 + k * 0.5 * 0, 84 + k * 1.6);
-  for(let k = 0; k < 3; k++) box(G, 1.2, 1.2, 1.2, mat(0xa58a5a, 0.9), lx(6 + k * 1.5), 0.6, 92);
+  [[30, 24], [56, 22], [122, 32], [140, 18], [170, 12], [192, 12], [50, 40], [135, 44]].forEach(([a, b]) => lamp(a, b));
+  // signal box at the south end of the yard, white boarded with a blue base and a hipped slate roof
+  const sbA = 200, sbB = SB + 10;
+  box(G, 4.6, 3.0, 7, mat(0x5a7a9a, 0.8), lx(sbB), 1.5, sbA);
+  box(G, 4.8, 2.6, 7.2, mat(0xe8e8e2, 0.8), lx(sbB), 4.3, sbA);
+  for(const s of [-1, 1]) box(G, 4.0, 1.6, 0.1, GLASS, lx(sbB), 4.5, sbA + s * 3.62);
+  box(G, 0.1, 1.6, 6.4, GLASS, lx(sbB) - sx * 2.42, 4.5, sbA);
+  add(G, new THREE.ConeGeometry(5.6, 2.4, 4).rotateY(Math.PI / 4), mat(0x30333a, 0.75), lx(sbB), 6.8, sbA).scale.set(0.72, 1, 1);
+  // ground frame and the shunt signal by the points into the yard
+  box(G, 3, 2.2, 2.4, mat(0x8a4a32, 0.85), lx(SB + 4.5), 1.1, AL + 6);
+  gable(G, 3.2, 2.6, 2.2, mat(0x30333a, 0.75), lx(SB + 4.5), AL + 6);
+  cylY(G, 0.1, 0.12, 5, mat(0xe8e8e2, 0.6), lx(SB + 2.6), 2.5, AL + 12, 6);
+  box(G, 0.08, 0.3, 1.2, mat(0xc8201e, 0.5), lx(SB + 2.6) + 0.12, 4.5, AL + 12.5);
+  // stores huts by the shed front
+  building(G, lx(41), ca - HALF - 6, 5, 6, 3.2, 0x5a4434, 0x30333a);
+  building(G, lx(41), ca + HALF + 7, 4, 5, 3, 0x8a4a32, 0x30333a);
+  for(let k = 0; k < 4; k++) box(G, 2.6, 0.5, 1.2, mat(0x7a6048, 0.9), lx(34), 0.25, 140 + k * 1.6);
+  for(let k = 0; k < 3; k++) box(G, 1.2, 1.2, 1.2, mat(0xa58a5a, 0.9), lx(28 + k * 1.5), 0.6, 40);
 
   // ---- arcaded retaining wall round the back and ends of the yard
   const wallRun = (a0, b0, a1, b1) => {
@@ -2195,53 +2230,16 @@ function buildRoundhouse(D){
     rbox(1.2, 5.5, L, mat(0xcfc6b2, 0.9), (a0 + a1) / 2, (b0 + b1) / 2, 2.75, rot);
     rbox(1.8, 0.5, L, mat(0xb8af9c, 0.9), (a0 + a1) / 2, (b0 + b1) / 2, 5.6, rot);
     for(let s = 3; s < L - 2; s += 5){
-      const a = a0 + da * s, b = b0 + db * s, nb = -da, na = db;      // inset on the yard side
+      const a = a0 + da * s, b = b0 + db * s, nb = -da, na = db;
       const off = (a1 > a0 ? -1 : 1) * 0.62;
       rbox(0.1, 3.0, 3.2, mat(0x8a8272, 0.9), a + na * off, b + nb * off, 1.5, rot);
       const c = add(G, new THREE.CircleGeometry(1.6, 12, 0, Math.PI), mat(0x8a8272, 0.9, 0, 'double'), lx(b + nb * off), 3.0, a + na * off); c.rotation.y = rot + Math.PI / 2;
     }
   };
-  wallRun(2, 88, 122, 88);
-  wallRun(122, 88, 122, 30);
-  wallRun(2, 30, 2, 88);
+  wallRun(2, WID - 2, LEN - 2, WID - 2);
+  wallRun(LEN - 2, WID - 2, LEN - 2, 30);
+  wallRun(2, 26, 2, WID - 2);
 
-  // ---- connection to the Main Line: a shed road runs alongside the line, every road in the depot
-  // (turntable lead, carriage shed, coal and water roads) swings into it through points, and it joins
-  // the near road of the Main Line facing Tidmouth station.
-  {
-    const R = LINES.main.real, c = kit.pt(ca, 0), n = site.n;
-    let bj = 0, bd = Infinity;
-    for(let j = 0; j < R.n; j++){ const d = (R.x[j] - c.x) ** 2 + (R.z[j] - c.z) ** 2; if(d < bd){ bd = d; bj = j; } }
-    const bMain = ((R.x[bj] - site.o.x) * n.x + (R.z[bj] - site.o.z) * n.z) / M, bLane = bMain + MAIN_LANE, SB = bMain + 7.5;
-    // the yard stands on a terrace above the Main Line, so the shed road falls to the line's level between a = 132 and the junction
-    let bj2 = 0, bd2 = Infinity; const jp = kit.pt(202, bLane);
-    for(let j = 0; j < R.n; j++){ const d = (R.x[j] - jp.x) ** 2 + (R.z[j] - jp.z) ** 2; if(d < bd2){ bd2 = d; bj2 = j; } }
-    const dyJ = (R.y[bj2] - kit.base) / M - 0.1, RA = 132, RB = 202, yFn = a => 0.05 + (dyJ - 0.05) * Math.max(0, Math.min(1, (a - RA) / (RB - RA)));
-    const BANK = mat(0x7a756a, 0.95), yg = dyJ - 0.5;
-    const strip = (a0, b0, a1, b1) => {                                                    // a road strip on the slope, with its bank beneath
-      const y0 = yFn(a0), y1 = yFn(a1); kit.road(a0, b0, a1, b1, 'standard', y0, y1);
-      const ym = (y0 + y1) / 2, hh = ym - yg - 0.1; if(hh < 0.2) return;
-      const len = Math.hypot(a1 - a0, lx(b1) - lx(b0)), bk = box(G, 5.6, hh, len, BANK, lx((b0 + b1) / 2), ym - 0.12 - hh / 2, (a0 + a1) / 2);
-      bk.rotation.order = 'YXZ'; bk.rotation.y = Math.atan2(lx(b1) - lx(b0), a1 - a0); bk.rotation.x = -Math.atan2(y1 - y0, len);
-    };
-    const bez = (P0, P1, P2, P3, k = 12, sl = false) => { let prev = P0; for(let i = 1; i <= k; i++){ const t = i / k, s = 1 - t;
-      const a = s*s*s*P0[0] + 3*s*s*t*P1[0] + 3*s*t*t*P2[0] + t*t*t*P3[0], b = s*s*s*P0[1] + 3*s*s*t*P1[1] + 3*s*t*t*P2[1] + t*t*t*P3[1];
-      if(sl) strip(prev[0], prev[1], a, b); else kit.road(prev[0], prev[1], a, b); prev = [a, b]; } };
-    // the points face away from Tidmouth station, so the junction is clear of its platforms
-    const into = (a, b0) => bez([a, b0], [a, SB + 2.5], [a + 9, SB], [a + 22, SB]);    // a road swinging into the shed road
-    kit.road(-4, SB, RA, SB);                                                            // the shed road, its headshunt towards Tidmouth
-    buffer(-3.4, SB, yawAB(1, 0));
-    for(let a = RA; a < 150; a += 6) strip(a, SB, Math.min(150, a + 6), SB);
-    into(ca, cb - R0);                                                                   // turntable lead
-    CA.forEach(a => into(a, 2));                                                         // carriage shed roads
-    into(YA, 2); into(YA + 8, 2);                                                        // coal and water roads
-    bez([150, SB], [166, SB], [182, bLane], [202, bLane], 14, true);                   // the junction with the Main Line
-    // a ground frame for the points, and the shunt signal at the junction
-    box(G, 2.4, 2.2, 3, mat(0x8a4a32, 0.85), lx(SB + 4.5), 1.1, 140);
-    gable(G, 2.6, 3.2, 2.2, mat(0x30333a, 0.75), lx(SB + 4.5), 140);
-    cylY(G, 0.1, 0.12, 5, mat(0xe8e8e2, 0.6), lx(SB + 2.6), 2.5, 158, 6);
-    box(G, 0.08, 0.3, 1.2, mat(0xc8201e, 0.5), lx(SB + 2.6) + 0.12, 4.5, 158.5);
-  }
   // the many short road strips bake into one mesh of their own
   const rails = new THREE.Group(); rails.userData.keep = true;
   G.children.filter(o => o.isMesh && o.material === roadMat('standard')).forEach(o => { G.remove(o); rails.add(o); });
@@ -2249,7 +2247,17 @@ function buildRoundhouse(D){
   parkAll(units);
   finishSite(D, kit);
   stalls.forEach(st => st.rec = byId[st.id] || null);
-  K.roundhouse = {D, kit, ca, cb, R0, R1: BB - cb, bridge, sx, stalls, stallPt};
+
+  // ---- the route an engine takes home: up the Main Line from the south, through the points, along the shed
+  // road and the lead to the edge of the turntable (world points, every couple of metres)
+  const route = [];
+  const put = (a, b, y) => { const p = kit.pt(a, b); p.y = y; route.push(p); };
+  ML.filter(p => p.a > AM && p.a < AM + 320).reverse().forEach(p => put(p.a, p.b + MAIN_LANE, p.y));
+  junction.slice().reverse().forEach(([a, b]) => put(a, b, kit.base + (yFn(a) - 0.05) * M));
+  for(let a = AJ - 4; a > AL; a -= 4) put(a, SB, kit.base + (yFn(a) - 0.05) * M);
+  leadCurve.slice().reverse().forEach(([a, b]) => put(a, b, kit.base));
+  leadStr.slice().reverse().slice(1).forEach(([a, b]) => put(a, b, kit.base));
+  K.roundhouse = {D, kit, ca, cb, R0, R1: BB - cb, bridge, sx, stalls, stallPt, phiL, inPath: route};
 }
 // a point and heading along a Tidmouth stall, s metres out from the turntable centre
 function stallPt(st, s, phi){
