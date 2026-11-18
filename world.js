@@ -72,9 +72,21 @@ function inObb(o, x, z){
   const c = Math.cos(o.yaw), s = Math.sin(o.yaw), dx = x - o.x, dz = z - o.z;
   return Math.abs(dx * c - dz * s) < o.hx && Math.abs(dx * s + dz * c) < o.hz;
 }
+// two oriented boxes overlap unless some edge direction of one of them separates them (separating axis test),
+// which also catches two long buildings crossing like a plus sign with no corner inside the other
+function obbHit(a, b){
+  const ca = obbCorners(a), cb = obbCorners(b);
+  for(const o of [a, b]) for(const [ax, az] of [[Math.cos(o.yaw), -Math.sin(o.yaw)], [Math.sin(o.yaw), Math.cos(o.yaw)]]){
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    ca.forEach(([x, z]) => { const p = x * ax + z * az; a0 = Math.min(a0, p); a1 = Math.max(a1, p); });
+    cb.forEach(([x, z]) => { const p = x * ax + z * az; b0 = Math.min(b0, p); b1 = Math.max(b1, p); });
+    if(a1 <= b0 || b1 <= a0) return false;
+  }
+  return true;
+}
 function obbFree(o){
-  const cs = obbCorners(o), r = Math.hypot(o.hx, o.hz);
-  return !bldGrid.each(o.x - r, o.z - r, o.x + r, o.z + r, b => !b.dead && (cs.some(([x, z]) => inObb(b, x, z)) || inObb(b, o.x, o.z) || obbCorners(b).some(([x, z]) => inObb(o, x, z))));
+  const r = Math.hypot(o.hx, o.hz);
+  return !bldGrid.each(o.x - r, o.z - r, o.x + r, o.z + r, b => !b.dead && obbHit(o, b));
 }
 function addObb(o){ const r = Math.hypot(o.hx, o.hz); bldGrid.add(o.x - r, o.z - r, o.x + r, o.z + r, o); }
 
@@ -143,7 +155,70 @@ function registerRoad(r){
   return r;
 }
 const obstacle = (p) => inZone(p.x, p.z);
+// Is there already a road running alongside this point (overlapping it and roughly parallel)? Crossing is fine.
+function alongRoad(p, tx, tz, hw){
+  const tl = Math.hypot(tx, tz) || 1, r = hw + 4 * M;
+  return roadGrid.each(p.x - r, p.z - r, p.x + r, p.z + r, s => {
+    const d = segDist(p.x, p.z, s.ax, s.az, s.bx, s.bz);
+    if(d > (hw + s.hw) * 0.95) return false;
+    const ux = s.bx - s.ax, uz = s.bz - s.az, ul = Math.hypot(ux, uz) || 1;
+    return Math.abs((tx * ux + tz * uz) / (tl * ul)) > 0.75;
+  });
+}
+// The stretches of a new road that do not lie along an existing one (each at least minLen long), so two
+// roads never share the same strip of ground: where they would, the new road simply joins the old.
+function freeRuns(pts, hw, minLen = 40 * M, extraBad){
+  const runs = []; let cur = [];
+  for(let i = 0; i < pts.length; i++){
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    const bad = alongRoad(pts[i], b.x - a.x, b.z - a.z, hw) || (extraBad && extraBad(pts[i], b.x - a.x, b.z - a.z));
+    if(bad){ if(cur.length) runs.push(cur); cur = []; } else cur.push(pts[i]);
+  }
+  if(cur.length) runs.push(cur);
+  return runs.filter(r => r.length > 1 && r[0].distanceTo(r[r.length - 1]) >= minLen);
+}
 
+// Motorways: dual carriageways joining the five cities (a spanning tree and one more link), swinging round the
+// towns on the way rather than through them. Each ends at a roundabout on the city's edge, with a link road in.
+const motorways = [], roundabouts = [];
+(function(){
+  const C = towns.filter(t => t.cls === 3); if(C.length < 2) return;
+  const pairs = []; for(let i = 0; i < C.length; i++) for(let j = i + 1; j < C.length; j++) pairs.push([i, j, Math.hypot(C[i].x - C[j].x, C[i].z - C[j].z)]);
+  pairs.sort((a, b) => a[2] - b[2]);
+  const par = C.map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i]));
+  const chosen = []; pairs.forEach(p => { const a = find(p[0]), b = find(p[1]); if(a !== b){ par[a] = b; chosen.push(p); } });
+  const extra = pairs.find(p => !chosen.includes(p)); if(extra) chosen.push(extra);
+  const endOf = (t, toward) => { const L = Math.hypot(toward.x - t.x, toward.z - t.z), dx = (toward.x - t.x) / L, dz = (toward.z - t.z) / L;
+    for(let f = 0.75; f < 1.6; f += 0.05){ const p = {x: t.x + dx * t.R * f, z: t.z + dz * t.R * f}; if(!wet(p.x, p.z) && !nearStation(p.x, p.z, 80 * M) && !K.nearTrack(p.x, p.z, 45 * M)) return p; } return null; };
+  chosen.forEach(([i, j]) => {
+    const a = C[i], b = C[j], A0 = endOf(a, b), B0 = endOf(b, a); if(!A0 || !B0) return;
+    const L2 = Math.hypot(B0.x - A0.x, B0.z - A0.z), dx = (B0.x - A0.x) / L2, dz = (B0.z - A0.z) / L2, nx = -dz, nz = dx;
+    for(const off of [0.04, -0.04, 0.12, -0.12, 0.2, -0.2, 0.3, -0.3, 0.4, -0.4]){
+      const ctrl = [A0, {x: A0.x + dx * 60 * M, z: A0.z + dz * 60 * M}];
+      [0.33, 0.66].forEach(f => ctrl.push({x: A0.x + (B0.x - A0.x) * f + nx * L2 * off, z: A0.z + (B0.z - A0.z) * f + nz * L2 * off}));
+      ctrl.push({x: B0.x - dx * 60 * M, z: B0.z - dz * 60 * M}, B0);
+      const pts = polyFrom(ctrl, 10 * M);
+      let wetRun = 0, maxWet = 0, bad = false, along = 0;
+      for(let k = 0; k < pts.length && !bad; k++){
+        const p = pts[k];
+        if(k && k < pts.length - 1 && alongRoad(p, pts[k + 1].x - pts[k - 1].x, pts[k + 1].z - pts[k - 1].z, 7.6 * M) && ++along > 6) bad = true;      // never laid along an older road
+        if(wet(p.x, p.z)){ wetRun++; maxWet = Math.max(maxWet, wetRun); } else wetRun = 0;
+        if(towns.some(t => t !== a && t !== b && Math.hypot(t.x - p.x, t.z - p.z) < t.R * (t.cls === 1 ? 0.5 : 0.75))) bad = true;
+        if(k > 4 && k < pts.length - 5 && nearStation(p.x, p.z, 70 * M)) bad = true;
+        if(k && Math.abs(H(p.x, p.z) - H(pts[k - 1].x, pts[k - 1].z)) > 0.08 * pts[k].distanceTo(pts[k - 1])) bad = true;
+      }
+      if(bad || maxWet * 10 > 700) continue;
+      const rd = registerRoad({pts, hw: 7.6 * M, cls: 'M', ends: [a, b], name: `${a.name} – ${b.name}`});
+      motorways.push(rd);
+      [[a, A0], [b, B0]].forEach(([t, E]) => {
+        if(!roundabouts.some(r => Math.hypot(r.x - E.x, r.z - E.z) < 200 * M)) roundabouts.push({x: E.x, z: E.z, t});
+        const link = cut(polyFrom([{x: E.x, z: E.z}, {x: (E.x * 2 + t.x) / 3, z: (E.z * 2 + t.z) / 3}, {x: t.x, z: t.z}]), p => wet(p.x, p.z));
+        if(link.length > 4 && !t.roads.some(r => r.link === E)) freeRuns(link.slice().reverse(), ROAD_W.A * M).forEach(run => t.roads.push(registerRoad({pts: run, hw: ROAD_W.A * M, cls: 'A', town: t, link: E, ends: [t, t]})));
+      });
+      break;
+    }
+  });
+})();
 // Between towns: each joins its nearest neighbours, plus a spanning tree so the whole island connects.
 (function(){
   const edges = new Map(), key = (a, b) => a < b ? a + '-' + b : b + '-' + a;
@@ -177,61 +252,91 @@ const obstacle = (p) => inZone(p.x, p.z);
       }
       if(maxWet * 8 > 160 || blocked || steep) continue;
       const cls = a.cls >= 2 && b.cls >= 2 ? 'A' : a.cls + b.cls >= 3 ? 'B' : 'lane';
-      registerRoad({pts, hw: ROAD_W[cls] * M, cls, ends: [a, b]});
-      a.roads.push(roads[roads.length - 1]); b.roads.push(roads[roads.length - 1]);
-      break;
-    }
-  });
-})();
-
-// Motorways: dual carriageways joining the five cities (a spanning tree and one more link), swinging round the
-// towns on the way rather than through them. Each ends at a roundabout on the city's edge, with a link road in.
-const motorways = [], roundabouts = [];
-(function(){
-  const C = towns.filter(t => t.cls === 3); if(C.length < 2) return;
-  const pairs = []; for(let i = 0; i < C.length; i++) for(let j = i + 1; j < C.length; j++) pairs.push([i, j, Math.hypot(C[i].x - C[j].x, C[i].z - C[j].z)]);
-  pairs.sort((a, b) => a[2] - b[2]);
-  const par = C.map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i]));
-  const chosen = []; pairs.forEach(p => { const a = find(p[0]), b = find(p[1]); if(a !== b){ par[a] = b; chosen.push(p); } });
-  const extra = pairs.find(p => !chosen.includes(p)); if(extra) chosen.push(extra);
-  const endOf = (t, toward) => { const L = Math.hypot(toward.x - t.x, toward.z - t.z), dx = (toward.x - t.x) / L, dz = (toward.z - t.z) / L;
-    for(let f = 0.75; f < 1.6; f += 0.05){ const p = {x: t.x + dx * t.R * f, z: t.z + dz * t.R * f}; if(!wet(p.x, p.z) && !nearStation(p.x, p.z, 80 * M) && !K.nearTrack(p.x, p.z, 45 * M)) return p; } return null; };
-  chosen.forEach(([i, j]) => {
-    const a = C[i], b = C[j], A0 = endOf(a, b), B0 = endOf(b, a); if(!A0 || !B0) return;
-    const L2 = Math.hypot(B0.x - A0.x, B0.z - A0.z), dx = (B0.x - A0.x) / L2, dz = (B0.z - A0.z) / L2, nx = -dz, nz = dx;
-    for(const off of [0.04, -0.04, 0.12, -0.12, 0.2, -0.2, 0.3, -0.3, 0.4, -0.4]){
-      const ctrl = [A0, {x: A0.x + dx * 60 * M, z: A0.z + dz * 60 * M}];
-      [0.33, 0.66].forEach(f => ctrl.push({x: A0.x + (B0.x - A0.x) * f + nx * L2 * off, z: A0.z + (B0.z - A0.z) * f + nz * L2 * off}));
-      ctrl.push({x: B0.x - dx * 60 * M, z: B0.z - dz * 60 * M}, B0);
-      const pts = polyFrom(ctrl, 10 * M);
-      let wetRun = 0, maxWet = 0, bad = false;
-      for(let k = 0; k < pts.length && !bad; k++){
-        const p = pts[k];
-        if(wet(p.x, p.z)){ wetRun++; maxWet = Math.max(maxWet, wetRun); } else wetRun = 0;
-        if(towns.some(t => t !== a && t !== b && Math.hypot(t.x - p.x, t.z - p.z) < t.R * (t.cls === 1 ? 0.5 : 0.75))) bad = true;
-        if(k > 4 && k < pts.length - 5 && nearStation(p.x, p.z, 70 * M)) bad = true;
-        if(k && Math.abs(H(p.x, p.z) - H(pts[k - 1].x, pts[k - 1].z)) > 0.08 * pts[k].distanceTo(pts[k - 1])) bad = true;
-      }
-      if(bad || maxWet * 10 > 700) continue;
-      const rd = registerRoad({pts, hw: 7.6 * M, cls: 'M', ends: [a, b], name: `${a.name} – ${b.name}`});
-      motorways.push(rd);
-      [[a, A0], [b, B0]].forEach(([t, E]) => {
-        if(!roundabouts.some(r => Math.hypot(r.x - E.x, r.z - E.z) < 200 * M)) roundabouts.push({x: E.x, z: E.z, t});
-        const link = cut(polyFrom([{x: E.x, z: E.z}, {x: (E.x * 2 + t.x) / 3, z: (E.z * 2 + t.z) / 3}, {x: t.x, z: t.z}]), p => wet(p.x, p.z));
-        if(link.length > 4 && !t.roads.some(r => r.link === E)){ const lr = registerRoad({pts: link.slice().reverse(), hw: ROAD_W.A * M, cls: 'A', town: t, link: E, ends: [t, t]}); t.roads.push(lr); }
+      freeRuns(pts, ROAD_W[cls] * M).forEach(run => {
+        const rd = registerRoad({pts: run, hw: ROAD_W[cls] * M, cls, ends: [a, b]});
+        a.roads.push(rd); b.roads.push(rd);
       });
       break;
     }
   });
 })();
+
 lap('interTownRoads');
-// Inside towns: extra spokes from the centre, a station road, and side streets branching off.
+// ------------------------------------------------------------------ the character of each place
+// Every city has a look of its own, and the smaller towns and villages take theirs from where they stand:
+// pastel fishing ports on the coast, grey stone and steep slate on the uplands, whitewashed cottages in the
+// west, red brick and red tile in the east. A style sets the wall and roof colours, how many storeys the
+// terraces and shops rise to, how steep the roofs are, and how many towers and mills there are.
+const PAL = {
+  brick: [0xa0523a, 0x8e4532, 0xb5603f, 0x9a4a32, 0xa85a40], buff: [0xc9a46a, 0xd8b878, 0xc8a060, 0xd2b27e], stone: [0x9a958a, 0x8a867c, 0xa8a296, 0x938d80],
+  render: [0xf0ece0, 0xe8dcc0, 0xf3efe6, 0xe6e0d2], pastel: [0xf2d6d0, 0xd8e4ec, 0xe8f0d0, 0xf2e2a8, 0xe0d0e8, 0xf6e8d8, 0xcfe4e0], dark: [0x6e3a2c, 0x7a4636, 0x5a4a42, 0x6a5040],
+  slate: [0x4a4f58, 0x3e434b, 0x55585c], tile: [0x8a3a2a, 0x9a4a32, 0xa0502e], brown: [0x6b4a3a, 0x5a4232], stoneRoof: [0x6a6a66, 0x5e5e5a],
+};
+const CITY_STYLE = {
+  Tidmouth:   {name: 'harbour city', walls: [...PAL.render, ...PAL.pastel, ...PAL.pastel], roofs: PAL.slate, floors: {terrace: 3, shop: 4}, rh: 0.9, scale: 1.0, tower: 0.3},
+  Knapford:   {name: 'Victorian brick capital', walls: [...PAL.brick, ...PAL.brick, ...PAL.buff], roofs: PAL.slate, floors: {terrace: 3, shop: 4, house: 3}, rh: 1.0, scale: 1.05, tower: 0.32},
+  Vicarstown: {name: 'grey stone mainland town', walls: [...PAL.stone, ...PAL.stone, ...PAL.render], roofs: [...PAL.slate, ...PAL.stoneRoof], floors: {terrace: 3, shop: 3}, rh: 1.15, scale: 1.0, tower: 0.2},
+  Wellsworth: {name: 'buff brick market town', walls: [...PAL.buff, ...PAL.buff, ...PAL.brick], roofs: [...PAL.tile, ...PAL.tile, ...PAL.slate], floors: {terrace: 2, shop: 3}, rh: 0.9, scale: 1.0, tower: 0.22},
+  Suddery:    {name: 'industrial brick town', walls: [...PAL.dark, ...PAL.brick], roofs: PAL.slate, floors: {terrace: 2, shop: 3}, rh: 0.95, scale: 0.97, tower: 0.12},
+};
+const REGION_STYLE = {
+  fishing: {name: 'fishing village', walls: [...PAL.pastel, ...PAL.render], roofs: PAL.slate, floors: {terrace: 2, shop: 3}, rh: 0.95, scale: 0.95},
+  upland:  {name: 'upland stone village', walls: [...PAL.stone, ...PAL.stone, ...PAL.render], roofs: [...PAL.slate, ...PAL.stoneRoof], floors: {terrace: 2, shop: 2}, rh: 1.3, scale: 0.9, cottage: 0.75},
+  west:    {name: 'whitewashed west', walls: [...PAL.render, ...PAL.render, 0xf8f6f0, 0xece4d0], roofs: [...PAL.slate, ...PAL.brown], floors: {terrace: 2, shop: 3}, rh: 1.1, scale: 0.95},
+  east:    {name: 'red brick east', walls: [...PAL.brick, ...PAL.buff], roofs: [...PAL.tile, ...PAL.brown, ...PAL.slate], floors: {terrace: 2, shop: 3}, rh: 0.9, scale: 1.0},
+};
+function townStyle(t){
+  if(CITY_STYLE[t.name]) return CITY_STYLE[t.name];
+  let coast = false;
+  for(let k = 0; k < 12 && !coast; k++){ const a = k / 12 * TAU; if(H(t.x + Math.cos(a) * 650 * M, t.z + Math.sin(a) * 650 * M) < 0) coast = true; }
+  if(coast && t.cls <= 2) return REGION_STYLE.fishing;
+  if(H(t.x, t.z) > 160 * M) return REGION_STYLE.upland;
+  return t.x < 0 ? REGION_STYLE.west : REGION_STYLE.east;
+}
+// a taller (or shorter-roofed) version of a house type, built once and shared
+const BAND = {terrace: 0.5, house: 0.5, shop: 1 / 3, villa: 0.5};
+function styledType(type, st){
+  const floors = (st.floors && st.floors[type]) || 2, rh = st.rh || 1;
+  if(!BAND[type] || (floors === 2 && rh === 1)) return type;
+  const key = `${type}_${floors}_${rh}`;
+  if(!ARCH[key]){
+    const A0 = ARCH[type], extra = type === 'shop' ? floors - 3 : floors - 2;
+    const A = Object.assign({}, A0, {h2: A0.h, bandV: BAND[type], h: A0.h + Math.max(0, extra) * A0.h * BAND[type], rh: A0.rh * rh});
+    Object.assign(A, archGeo(A)); ARCH[key] = A;
+  }
+  return key;
+}
+// A planned grid of streets in the centre of the cities and big towns, laid square to the railway, broken
+// where it meets water, the line, a station or depot, or an older road already running that way.
+function cityGrid(t, gR, r){
+  const ang = Math.atan2(t.axis.z, t.axis.x) + (r() - 0.5) * 0.2;
+  const ux = Math.cos(ang), uz = Math.sin(ang), vx = -uz, vz = ux;
+  const bw = (t.cls === 3 ? 92 : 118) * M, bd = (t.cls === 3 ? 70 : 86) * M, hw = ROAD_W.street * M, out = [];
+  const bad = p => wet(p.x, p.z) || inZone(p.x, p.z) || K.nearTrack(p.x, p.z, 12 * M) || nearStation(p.x, p.z, 30 * M);
+  for(const [ax, az, bx, bz, step] of [[ux, uz, vx, vz, bd], [vx, vz, ux, uz, bw]]){
+    const n = Math.floor(gR / step);
+    for(let k = -n; k <= n; k++){
+      const off = k * step, half = Math.sqrt(Math.max(0, gR * gR - off * off));
+      if(half < 60 * M) continue;
+      const pts = []; for(let s = -half; s <= half + 1e-9; s += 8 * M) pts.push(new V3(t.x + bx * off + ax * s, 0, t.z + bz * off + az * s));
+      freeRuns(pts, hw, 50 * M, bad).forEach(run => out.push(registerRoad({pts: run, hw, cls: 'street', town: t, grid: true})));
+    }
+  }
+  return out;
+}
+
+// Inside towns: the planned centre, spokes out from its edge, a station road, and side streets branching off.
 towns.forEach(t => {
   const r = rng(t.seed), R = t.R;
+  t.style = townStyle(t);
+  const gR = t.cls === 3 ? R * 0.42 : t.cls === 2 ? R * 0.3 : 0;
+  t.gridR = gR;
+  const grid = gR ? cityGrid(t, gR, r) : [];
   const want = t.cls === 3 ? 6 : t.cls === 2 ? 4 : 2;
   const angles = t.roads.map(rd => { const far = rd.ends[0] === t ? rd.pts[Math.min(rd.pts.length - 1, 12)] : rd.pts[Math.max(0, rd.pts.length - 13)]; return Math.atan2(far.z - t.z, far.x - t.x); });
   const streetCls = t.cls === 1 ? 'lane' : 'street';
   const badStreet = p => wet(p.x, p.z) || obstacle(p) || Math.hypot(p.x - t.x, p.z - t.z) > R * 1.05;
+  const outsideGrid = pts => { if(!gR) return pts; let i = 0; while(i < pts.length && Math.hypot(pts[i].x - t.x, pts[i].z - t.z) < gR * 0.92) i++; return pts.slice(i); };
   for(let k = angles.length; k < want; k++){
     // the widest gap between existing directions
     const sorted = angles.slice().sort((a, b) => a - b);
@@ -239,38 +344,41 @@ towns.forEach(t => {
     for(let i = 0; i < sorted.length; i++){ const a0 = sorted[i], a1 = i + 1 < sorted.length ? sorted[i + 1] : sorted[0] + TAU; if(a1 - a0 > gw){ gw = a1 - a0; ga = (a0 + a1) / 2; } }
     const a = ga + (r() - 0.5) * 0.3, len = R * (0.8 + r() * 0.25), bend = (r() - 0.5) * 0.5;
     const ctrl = [{x: t.x, z: t.z}, {x: t.x + Math.cos(a + bend) * len * 0.5, z: t.z + Math.sin(a + bend) * len * 0.5}, {x: t.x + Math.cos(a) * len, z: t.z + Math.sin(a) * len}];
-    const pts = cut(polyFrom(ctrl), badStreet);
+    const pts = outsideGrid(cut(polyFrom(ctrl), badStreet));
     angles.push(a);
-    if(pts.length > 6) t.roads.push(registerRoad({pts, hw: ROAD_W[streetCls] * M, cls: streetCls, town: t}));
+    if(pts.length > 6) freeRuns(pts, ROAD_W[streetCls] * M).forEach(run => t.roads.push(registerRoad({pts: run, hw: ROAD_W[streetCls] * M, cls: streetCls, town: t})));
   }
-  // station road: from the station forecourt to the centre
+  // station road: from the station forecourt towards the centre (it stops where it meets the grid)
   const fore = t.name === 'Tidmouth' && window.TIDMOUTH && window.TIDMOUTH.fore ? window.TIDMOUTH.fore.clone() : new V3(t.st.x, 0, t.st.z).addScaledVector(t.n, 22 * M);
   if(Math.hypot(fore.x - t.x, fore.z - t.z) > 35 * M && !wet(fore.x, fore.z)){
-    const pts = cut(polyFrom([{x: fore.x, z: fore.z}, {x: (fore.x + t.x) / 2, z: (fore.z + t.z) / 2}, {x: t.x, z: t.z}]), p => wet(p.x, p.z));
-    if(pts.length > 3) t.roads.push(registerRoad({pts, hw: ROAD_W.street * M, cls: 'street', town: t, stationRoad: true}));
+    let pts = cut(polyFrom([{x: fore.x, z: fore.z}, {x: (fore.x + t.x) / 2, z: (fore.z + t.z) / 2}, {x: t.x, z: t.z}]), p => wet(p.x, p.z));
+    if(gR){ let i = 0; while(i < pts.length && Math.hypot(pts[i].x - t.x, pts[i].z - t.z) > gR * 0.85) i++; pts = pts.slice(0, Math.min(pts.length, i + 2)); }
+    if(pts.length > 3) freeRuns(pts, ROAD_W.street * M, 30 * M).forEach(run => t.roads.push(registerRoad({pts: run, hw: ROAD_W.street * M, cls: 'street', town: t, stationRoad: true})));
   }
-  if(t.cls === 1){ t.mains = t.roads.slice(); return; }
-  // side streets off every main street, both sides; cities get a second level
   t.mains = t.roads.slice();
+  grid.forEach(g => t.roads.push(g));                            // lined with buildings, but no side streets off them
+  if(t.cls === 1) return;
+  // side streets off every main street outside the grid, both sides; cities get a second level
   const spacing = (t.cls === 3 ? 95 : 120) * M;
   const branch = (parent, level) => {
     for(let s = 50 * M; s < parent.s[parent.s.length - 1] - 30 * M; s += spacing * (0.8 + r() * 0.5)){
       const i = Math.min(parent.pts.length - 2, Math.round(s / (8 * M))), p = parent.pts[i], q = parent.pts[i + 1];
-      if(Math.hypot(p.x - t.x, p.z - t.z) > R * 0.92) continue;
+      const dc = Math.hypot(p.x - t.x, p.z - t.z);
+      if(dc > R * 0.92 || dc < gR * 1.05) continue;
       const tx = q.x - p.x, tz = q.z - p.z, tl = Math.hypot(tx, tz) || 1;
       for(const side of [-1, 1]){
         if(r() < (level ? 0.35 : 0.15)) continue;
         const a = Math.atan2(tx * side, -tz * side) + (r() - 0.5) * 0.35;      // roughly perpendicular
-        const q01 = Math.hypot(p.x - t.x, p.z - t.z) / R, len = (70 + r() * 170) * (1 - q01 * 0.5) * M * (level ? 0.8 : 1);
+        const q01 = dc / R, len = (70 + r() * 170) * (1 - q01 * 0.5) * M * (level ? 0.8 : 1);
         const start = {x: p.x + Math.cos(a) * (parent.hw + 1 * M), z: p.z + Math.sin(a) * (parent.hw + 1 * M)};
         const bend = (r() - 0.5) * 0.4;
         const ctrl = [start, {x: start.x + Math.cos(a + bend) * len * 0.5, z: start.z + Math.sin(a + bend) * len * 0.5}, {x: start.x + Math.cos(a) * len, z: start.z + Math.sin(a) * len}];
         let pts = polyFrom(ctrl);
-        // stop before running into another street, water, a depot or the edge of town
+        // stop before running into another street, water, the grid, a depot or the edge of town
         const out = [];
         for(let k = 0; k < pts.length; k++){
           const pp = pts[k];
-          if(badStreet(pp) || K.nearTrack(pp.x, pp.z, 9 * M)) break;
+          if(badStreet(pp) || K.nearTrack(pp.x, pp.z, 9 * M) || Math.hypot(pp.x - t.x, pp.z - t.z) < gR) break;
           if(k > 2 && roadClear(pp.x, pp.z) < 6 * M){ out.push(pp); break; }
           out.push(pp);
         }
@@ -657,8 +765,14 @@ function archGeo(A){
   const {w, h, d, rh} = A, hw = w / 2, hd = d / 2, P = [], U = [], N = [], I = [];
   const poly = (pts, uvs, n) => { const b = P.length / 3; pts.forEach(p => P.push(...p)); uvs.forEach(u => U.push(...u)); pts.forEach(() => N.push(...n)); for(let k = 1; k < pts.length - 1; k++) I.push(b, b + k, b + k + 1); };
   const rect = (uv, fx0, fy0, fx1, fy1) => [[uv[0] + (uv[2] - uv[0]) * fx0, uv[1] + (uv[3] - uv[1]) * fy0], [uv[0] + (uv[2] - uv[0]) * fx1, uv[1] + (uv[3] - uv[1]) * fy0], [uv[0] + (uv[2] - uv[0]) * fx1, uv[1] + (uv[3] - uv[1]) * fy1], [uv[0] + (uv[2] - uv[0]) * fx0, uv[1] + (uv[3] - uv[1]) * fy1]];
-  poly([[-hw, 0, hd], [hw, 0, hd], [hw, h, hd], [-hw, h, hd]], rect(CELLS[A.front], 0, 0, 1, 1), [0, 0, 1]);
-  poly([[hw, 0, -hd], [-hw, 0, -hd], [-hw, h, -hd], [hw, h, -hd]], rect(CELLS[A.back || A.front], 0, 0, 1, 1), [0, 0, -1]);
+  // the front and back: the painted two storeys, then any extra storeys as repeats of the top floor of the cell
+  const h2 = A.h2 || h, bv = A.bandV || 0.5, hb = h2 * bv;
+  const faceBands = (cell, z, sgn) => {
+    const xs = sgn > 0 ? [-hw, hw] : [hw, -hw];
+    poly([[xs[0], 0, z], [xs[1], 0, z], [xs[1], h2, z], [xs[0], h2, z]], rect(CELLS[cell], 0, 0, 1, 1), [0, 0, sgn]);
+    for(let y = h2; y < h - 1e-3; y += hb){ const y1 = Math.min(h, y + hb); poly([[xs[0], y, z], [xs[1], y, z], [xs[1], y1, z], [xs[0], y1, z]], rect(CELLS[cell], 0, 1 - bv * (y1 - y) / hb, 1, 1), [0, 0, sgn]); }
+  };
+  faceBands(A.front, hd, 1); faceBands(A.back || A.front, -hd, -1);
   const sv = (z, y) => { const c = CELLS[A.side || 'side']; return [c[0] + (c[2] - c[0]) * z, c[1] + (c[3] - c[1]) * y]; };
   const top = h + rh, f = y => y / top;
   poly([[hw, 0, hd], [hw, 0, -hd], [hw, h, -hd], [hw, top, 0], [hw, h, hd]], [sv(0, 0), sv(1, 0), sv(1, f(h)), sv(0.5, 1), sv(0, f(h))], [1, 0, 0]);
@@ -758,7 +872,8 @@ function tryPlace(owner, type, x, z, yaw, scale, r, extraOk){
   if(!obbFree(o)) return false;
   if(roadClear(x, z) < 1 * M) return false;
   const walls = obbCorners({x, z, hx: hx - 0.3 * M, hz: hz - 0.3 * M, yaw});
-  for(const [cx, cz] of walls) if(roadClear(cx, cz) < 0.4 * M) return false;
+  for(let k = 0; k < 4; k++){ const [x0, z0] = walls[k], [x1, z1] = walls[(k + 1) % 4];
+    for(let f = 0; f < 1; f += 0.2) if(roadClear(x0 + (x1 - x0) * f, z0 + (z1 - z0) * f) < 0.4 * M) return false; }
   if(K.nearTrack(x, z, Math.max(hx, hz) + 8 * M) || nearStation(x, z, 40 * M)) return false;
   let lo = Infinity, hi = -Infinity;
   for(const [cx, cz] of walls.concat([[x, z]])){
@@ -769,7 +884,9 @@ function tryPlace(owner, type, x, z, yaw, scale, r, extraOk){
   if(extraOk && !extraOk(o)) return false;
   addObb(o);
   const list = owner.inst[type] || (owner.inst[type] = []);
-  const rec = {x, y: lo - 0.25 * M, z, yaw, s: scale, wall: A.walls[Math.floor(r() * A.walls.length)], roof: A.roofs[Math.floor(r() * A.roofs.length)], obb: o};
+  const st = owner.style, own = st && !A.mat && type.indexOf('warehouse') < 0 && type.indexOf('barn') < 0;
+  const W_ = own ? st.walls : A.walls, R_ = own ? st.roofs : A.roofs;
+  const rec = {x, y: lo - 0.25 * M, z, yaw, s: scale, wall: W_[Math.floor(r() * W_.length)], roof: R_[Math.floor(r() * R_.length)], obb: o};
   list.push(rec);
   return rec;
 }
@@ -786,19 +903,21 @@ function lineStreet(t, rd, r){
       const dc = Math.hypot(x0 - t.x, z0 - t.z), qd = dc / t.R;
       if(qd > 1.0 + (fbm(x0 * 3, z0 * 3) - 0.5) * 0.3){ s += (qd > 1.6 ? 120 : 12) * M; row = null; continue; }
       let type;
-      if(t.cls === 1) type = r() < 0.6 ? 'cottage' : 'house';
-      else if(t.cls === 3 && qd < (t.name === 'Knapford' || t.name === 'Tidmouth' ? 0.14 : 0.1) && rd.cls !== 'lane' && r() < 0.28) type = ['towerA', 'towerB', 'towerC', 'towerD'][Math.floor(r() * (qd < 0.08 ? 4 : 2)) + (qd < 0.08 ? 0 : 0)];       // the business district
+      if(t.cls === 1) type = r() < ((t.style && t.style.cottage) || 0.6) ? 'cottage' : 'house';
+      else if(t.cls === 3 && qd < 0.14 && rd.cls !== 'lane' && r() < ((t.style && t.style.tower) || 0.2)) type = ['towerA', 'towerB', 'towerC', 'towerD'][Math.floor(r() * (qd < 0.08 ? 4 : 2)) + (qd < 0.08 ? 0 : 0)];       // the business district
       else if(qd < 0.22) type = rd.cls !== 'lane' && r() < 0.65 ? 'shop' : 'terrace';
       else if(qd < 0.55) type = r() < 0.7 ? 'terrace' : 'house';
       else type = r() < 0.55 ? 'house' : r() < 0.7 ? 'villa' : 'cottage';
       if(row && (row.type === 'terrace' || row.type === 'shop') && row.left > 0 && (type === 'terrace' || type === 'shop')) type = row.type === 'shop' && qd < 0.22 ? 'shop' : 'terrace';
-      const A = ARCH[type], sc = type === 'terrace' || type === 'shop' || A.mat ? 1 : 0.9 + r() * 0.2;
+      const base = type;
+      if(t.style && !ARCH[type].mat) type = styledType(type, t.style);
+      const A = ARCH[type], ss = (t.style && t.style.scale) || 1, sc = (A.front === 'terraceF' || A.front === 'shopF' || A.mat ? 1 : 0.9 + r() * 0.2) * (A.mat ? 1 : ss);
       const back = rd.hw + A.setback * M + A.d * sc * M / 2;
       const x = x0 + nx * back, z = z0 + nz * back, yaw = Math.atan2(-nx, -nz);
       const rec = tryPlace(t, type, x, z, yaw, sc, r);
       if(rec){
-        if(type === 'terrace' || type === 'shop'){
-          if(!row || row.type !== type || row.left <= 0) row = {type, left: 4 + Math.floor(r() * 7), wall: rec.wall, roof: rec.roof};
+        if(base === 'terrace' || base === 'shop'){
+          if(!row || row.type !== base || row.left <= 0) row = {type: base, left: 4 + Math.floor(r() * 7), wall: rec.wall, roof: rec.roof};
           rec.wall = row.wall; rec.roof = row.roof; row.left--;
         } else row = null;
         s += A.w * sc * M + A.gap * M * (0.6 + r() * 0.8);
