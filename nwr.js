@@ -1639,6 +1639,7 @@ const STOCK_STD = {
   slip:        {build: () => coach({L: 18.5, color: 0x6b1f2a, upper: 0xefe4c4, roof: 0x1d1d1d, n: 9, doors: true, lineColor: '#d4af37', bogies: 6.4}), name: 'Slip Coach'},
   dexter:      {build: () => coach({L: 9.0, color: 0x2a4fa8, ends: 0xf2c419, roof: 0xb3201c, n: 3, doors: true, drawings: true, axles: [2.8, -2.8], face: {smile: 0.85, brow: -0.2}}), name: 'Dexter'},
   greenExpress:{build: () => coach({L: 19.5, color: 0x1f4a2e, surround: 0xe9dfc0, roof: 0x2a2a2a, n: 9, gangway: true, lineColor: '#d4af37', bogies: 6.7}), name: 'Green Express Coach'},
+  suburban:    {build: () => coach({L: 17.5, color: 0x7a1e24, roof: 0x3a3a3a, n: 8, doors: true, lineColor: '#d4af37', bogies: 6.0}), name: 'Suburban coach'},
   emilyCoach:  {build: () => coach({L: 17.0, color: 0x0f8a4a, surround: 0xe9dfc0, roof: 0x55585c, n: 7, gangway: true, lineColor: '#f2c419', bogies: 5.8, rim: 0xffffff}), name: "Emily's Coach"},
   museum:      {build: () => coach({L: 9.0, color: 0x6a2a1a, roof: 0x2a2a2a, n: 3, doors: true, lineColor: '#d4af37', clerestory: true, axles: [2.8, -2.8], spokes: 8}), name: "Toby's Museum Coach"},
   floraTram:   {build: () => coach({L: 8.0, color: 0x2a6b3a, upper: 0xe9dfc0, n: 6, winW: 0.75, balcony: 0.7, doubleDeck: true, beam: BEAM, axles: [2.0, -2.0], lineColor: '#c8202a'}), name: "Flora's Tram Coach"},
@@ -1826,7 +1827,32 @@ Object.keys(RUNS).forEach(id => {
     loopW: loopW * M, lane: lane * M, bedM: 3.6, diesel: !!run.diesel || rec.cat === 'Diesel', noRunRound: !run.consist.length || !!run.noRunRound, latFn,
     shedEnd: run.shedEnd, shedSide: run.shedSide});
   R.rec = rec; rec.runner = R; rec.run = run;
-  if(run.lane !== 1) K.drawLoops(R);
+  // spare rakes for the train's other workings (duties.js); ops.js keeps them in sidings by the shed
+  R.rakes = {main: cars};
+  const RK = ((window.SODOR_DUTIES || {}).rakes || {})[id];
+  if(RK && R.runRound && run.consist.length){
+    const maxL = R.Lc;
+    Object.entries(RK).forEach(([name, keys]) => {
+      const vs = [];
+      let L = 0;
+      for(const k of keys){
+        if(!STOCK_STD[k]) continue;
+        const v = scaleAdd(makeStock(k)), add = v.len * M + (vs.length ? 0.12 * M : 0);
+        if(L + add > maxL && vs.length){ scene.remove(v.group); break; }       // never longer than the train's own rake
+        vs.push(v); L += add;
+      }
+      if(!vs.length) return;
+      vs.forEach(v => { tagStock(v, {rec, run}); allNWR.push({v, parked: true}); });
+      R.rakes[name] = vs;
+    });
+  }
+  if(run.lane !== 1){
+    K.drawLoops(R);
+    // the run-round loops for each spare rake, so the engine always runs round on track
+    const keep = R.cars;
+    Object.values(R.rakes).forEach(vs => { if(vs === cars) return; K.setCars(R, vs); K.drawLoops(R); });
+    K.setCars(R, keep.map(c => c.v));
+  }
   K.addMarker(R, rec.dot, () => pickHandler(rec));
   K.RUNNERS.push(R); NWR_RUNNERS.push(R);
   tagEngine(rec);

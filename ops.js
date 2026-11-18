@@ -93,7 +93,7 @@ const WORK_KIND = {
 const WORK_SHORT = {express: 'Express', fast: 'fast train', stopping: 'stopping train', market: 'market train', mail: 'mail', pickup: 'pick-up goods', through: 'through goods', heavy: 'heavy goods'};
 function parseWork(list){
   if(!list || !list.length) return null;
-  return list.map(([t, kind, txt]) => ({t: hm(t), kind, k: WORK_KIND[kind] || WORK_KIND.stopping, txt: txt || (WORK_KIND[kind] || WORK_KIND.stopping).txt})).sort((a, b) => a.t - b.t);
+  return list.map(([t, kind, txt, rake]) => ({t: hm(t), kind, rake, k: WORK_KIND[kind] || WORK_KIND.stopping, txt: txt || (WORK_KIND[kind] || WORK_KIND.stopping).txt})).sort((a, b) => a.t - b.t);
 }
 // the working in force at sim minute t (the last one carries on past midnight)
 function workAt(W, t){
@@ -105,6 +105,8 @@ function workAt(W, t){
 function applyWork(D, w){
   const R = D.R, k = w.k, std = R.o.passenger ? (R.o.stopsAt || 'all') : 'none';
   R.stops = K.stopsFor(R, k.stops === 'run' ? std : k.stops);
+  // trains on the Arlesdale Railway also stop at the passing loops to cross each other
+  if(R.block) R.block.nodeA.forEach(a => { if(!R.stops.some(s => Math.abs(s - a) < 0.5 * M)) R.stops.push(a); });
   R.o.vmax = R.vBase * k.v;
   R.stopDwell = k.dwell;
   D.w = w;
@@ -149,7 +151,7 @@ K.RUNNERS.filter(R => R.nwr).forEach(R => {
 
 function addDuty(o){
   const R = o.R, D = {id: o.id, rail: o.rail, railName: o.railName, R, rota: o.rota, shifts: parseShifts(o.dd.shifts), note: o.dd.note || '', job: o.job,
-    work: o.rail === 'nwr' ? parseWork((DUT.work || {})[o.id]) : null, w: null,
+    work: parseWork(o.rail === 'nwr' ? (DUT.work || {})[o.id] : ((DUT.workOther || {})[o.rail === 'rex' ? 'ar' : o.rail] || {})[o.id]), w: null,
     cur: 0, state: 'run', mover: null, timer: 0, want: 0, turn: null, gauge: R.line.kind === 'standard' ? 'std' : R.line.kind === 'miniature' ? 'mini' : 'ng'};
   DUTIES.push(D);
   o.rota.forEach((m, i) => byGroup.set(m.unit[0].group, {D, i}));
@@ -314,6 +316,115 @@ function stepMover(D, dt){
   return Math.abs(mv.q1 - mv.q) < 1e-7;
 }
 
+// ------------------------------------------------------------------ spare rakes in sidings by the shed
+// Beyond the shed roads lie open sidings, one for each of the train's rakes. When a working wants a
+// different rake, the engine (having run round, so it stands at the inner end) propels its rake into
+// that rake's siding, runs back clear of the points, takes the siding with the new rake and draws it
+// out to the platform.
+function rakeOffs(R, vs){ const off = [0]; for(let k = 1; k < vs.length; k++) off.push(off[k - 1] + (vs[k - 1].len + vs[k].len) * R.o.scale / 2 + R.gap); return off; }
+// engine (and tender) centres coupled to the inner end of rake rk standing at the platform
+function engX(D, rk){
+  const R = D.R, g = D.shed, sc = R.o.scale, nc = rk.vs.length - 1, xs = [], un = R.unit;
+  const U = un.reduce((s, m, i) => s + m.len + (i ? R.gap : 0), 0);
+  if(rk.inner === 'B'){ let x = g.aT + rk.vs[0].len * sc / 2 + R.gap + U; un.forEach(m => { xs.push(x - m.len / 2); x -= m.len + R.gap; }); }
+  else { let x = g.aT - rk.off[nc] - rk.vs[nc].len * sc / 2 - R.gap; un.forEach(m => { xs.push(x - m.len / 2); x -= m.len + R.gap; }); }
+  return xs;
+}
+function placeRakeAt(D, rk, q){
+  const R = D.R, g = D.shed;
+  rk.vs.forEach((v, k) => placeOn(R, v, g.aT - rk.off[k] + g.s * q, rk.latFn));
+}
+function placeEngAt(D, xs, q, latFn){
+  const R = D.R, g = D.shed;
+  R.unit.forEach((m, i) => placeOn(R, m.v, xs[i] + g.s * q, latFn));
+}
+function setupRakes(D){
+  const R = D.R, g = D.shed, names = Object.keys(R.rakes || {});
+  const alt = names.filter(n => n !== 'main');
+  if(!alt.length) return;
+  if(!R.runRound || !D.work || !D.work.some(w => w.rake && w.rake !== 'main' && R.rakes[w.rake])){
+    alt.forEach(n => R.rakes[n].forEach(v => scene.remove(v.group)));           // nothing ever uses them
+    return;
+  }
+  const G = GEO[D.gauge], inner = g.T === 'A' ? 'B' : 'A';
+  D.rakes = {}; D.rakeOn = 'main';
+  const wall = g.lat[g.n - 1] + g.side * (g.sp / 2 + 1.3 * M + 4 * M);          // clear of the shed's side wall
+  names.forEach((name, j) => {
+    const vs = R.rakes[name], lat = wall + g.side * j * g.sp * 1.15, ramp = G.ramp * (1.6 + g.n * 0.4 + j * 0.4) * M;
+    const rk = {name, vs, inner, off: rakeOffs(R, vs), lat, ramp};
+    rk.latFn = x => lat * smooth(0, ramp, (x - g.xDiv) * g.s);
+    const nc = vs.length - 1, len0 = vs[0].len * R.o.scale / 2, lenN = vs[nc].len * R.o.scale / 2;
+    const innerEnd = inner === 'A' ? g.aT - rk.off[nc] - lenN : g.aT + len0, outerEnd = inner === 'A' ? g.aT + len0 : g.aT - rk.off[nc] - lenN;
+    rk.qStore = g.s * (g.xDiv - innerEnd) + ramp + 4 * M;                         // far enough in to clear the points
+    rk.xs = engX(D, rk);
+    strip(R, g.xDiv - g.s * 2 * M, outerEnd + g.s * (rk.qStore + 5 * M), rk.latFn);
+    for(let x = g.xDiv; (x - (outerEnd + g.s * (rk.qStore + 5 * M))) * g.s < 0; x += g.s * 8 * M){     // no trees on the sidings
+      const p = pathPoint(R, x, rk.latFn(x), _q); K.clearArea(p.x, p.z, 7 * M);
+    }
+    const stop = pathPoint(R, outerEnd + g.s * (rk.qStore + 5 * M), lat, new V3());   // buffer stop at the end
+    const bs = K.box(shedGroup, 2.6 * M, 1.1 * M, 0.5 * M, K.mat(0x8a2a1a, 0.8), stop.x, K._p.y + 0.55 * M, stop.z);
+    bs.rotation.y = Math.atan2(K._t.x, K._t.z);
+    D.rakes[name] = rk;
+    if(name !== 'main') placeRakeAt(D, rk, rk.qStore);
+  });
+}
+const MOVE = {std: [3, 0.3], ng: [2, 0.25], mini: [1.5, 0.2]};
+function stepQ(D, sw, to, dt){
+  const [vm, ac] = MOVE[D.gauge], vmax = vm * M, acc = ac * M, d = to - sw.q, ad = Math.abs(d);
+  sw.v = Math.min(vmax, Math.sqrt(2 * acc * ad) + 0.05 * M, sw.v + acc * dt);
+  const step = Math.min(ad, sw.v * dt), dq = Math.sign(d) * step;
+  sw.q += dq;
+  sw.dq = dq;
+  if(Math.abs(to - sw.q) < 1e-7){ sw.v = 0; return true; }
+  return false;
+}
+const spinAll = (D, vs, dq) => vs.forEach(v => K.spin(v, D.shed.s * dq, D.R.o.scale));
+function startSwap(D){
+  const R = D.R, from = D.rakes[D.rakeOn], to = D.rakes[D.w.rake];
+  R.manual = true;
+  D.sw = {from, to, phase: 'out', q: 0, v: 0, timer: 0};
+  D.state = 'swap';
+}
+function stepSwap(D, dt){
+  const R = D.R, g = D.shed, sw = D.sw, eng = R.unit.map(m => m.v), steam = !D.rota[D.cur].diesel;
+  if(sw.phase === 'out'){                                  // propel the rake into its siding
+    const done = stepQ(D, sw, sw.from.qStore, dt);
+    placeRakeAt(D, sw.from, sw.q); placeEngAt(D, sw.from.xs, sw.q, sw.from.latFn);
+    spinAll(D, sw.from.vs.concat(eng), sw.dq); if(steam) smoke(eng[0], true, dt, sw);
+    if(done){ sw.phase = 'uncouple'; sw.timer = 40; }
+  } else if(sw.phase === 'uncouple'){
+    if((sw.timer -= dt) <= 0){
+      // back out until the engine is clear of the points
+      const eo = Math.max(...R.unit.map((m, i) => g.s * sw.from.xs[i] + m.len / 2));
+      sw.clear = g.s * g.xDiv - 3 * M - eo;
+      sw.phase = 'back';
+    }
+  } else if(sw.phase === 'back'){
+    const done = stepQ(D, sw, sw.clear, dt);
+    placeEngAt(D, sw.from.xs, sw.q, sw.from.latFn); spinAll(D, eng, sw.dq); if(steam) smoke(eng[0], true, dt, sw);
+    if(done){ sw.q += g.s * (sw.from.xs[0] - sw.to.xs[0]); sw.phase = 'fetch'; }        // same spot, measured from the new rake
+  } else if(sw.phase === 'fetch'){                         // along the other siding to the new rake
+    const done = stepQ(D, sw, sw.to.qStore, dt);
+    placeEngAt(D, sw.to.xs, sw.q, sw.to.latFn); spinAll(D, eng, sw.dq); if(steam) smoke(eng[0], true, dt, sw);
+    if(done){ sw.phase = 'couple'; sw.timer = 40; }
+  } else if(sw.phase === 'couple'){
+    if((sw.timer -= dt) <= 0) sw.phase = 'in';
+  } else if(sw.phase === 'in'){                            // draw it out to the platform
+    const done = stepQ(D, sw, 0, dt);
+    placeRakeAt(D, sw.to, sw.q); placeEngAt(D, sw.to.xs, sw.q, sw.to.latFn);
+    spinAll(D, sw.to.vs.concat(eng), sw.dq); if(steam) smoke(eng[0], true, dt, sw);
+    if(done){
+      K.setCars(R, sw.to.vs);
+      sw.from.vs.forEach(v => { const e = entryOf.get(v); if(e) e.parked = true; });
+      sw.to.vs.forEach(v => { const e = entryOf.get(v); if(e) e.parked = false; });
+      D.rakeOn = sw.to.name;
+      applyWork(D, D.w);
+      R.a = g.aT; R.manual = false; R.timer = Math.max(R.timer, 20);
+      D.sw = null; D.state = 'run';
+    }
+  }
+}
+
 const markerMats = new Map();
 const markerFor = c => { if(!markerMats.has(c)) markerMats.set(c, K.markerMat(c)); return markerMats.get(c); };
 function syncCulling(D){
@@ -328,6 +439,7 @@ DUTIES.forEach(D => {
   D.shed = best.g; D.shedScore = best.sc;
   D.endName = best.g.st ? best.g.st.name : null;
   buildShed(D); built++;
+  setupRakes(D);
   D.rota.forEach((m, i) => { if(i > 0) placeUnit(D, i, parkQ(D, i)); });
   syncCulling(D);
 });
@@ -346,6 +458,12 @@ function stepDuty(D, dt){
   switch(D.state){
     case 'run':
       if(want !== D.cur && atShedEnd(D)){ R.hold = true; D.state = 'uncouple'; D.timer = 50; }
+      // a working that wants other stock: change rakes once the engine has run round at the shed end
+      else if(D.rakes && want === D.cur && D.w && D.w.rake && D.rakes[D.w.rake] && D.w.rake !== D.rakeOn &&
+              R.phase === 'dwell' && R.next === 'run' && !R.rr && R.a === D.shed.aT && R.side !== D.shed.T) startSwap(D);
+      break;
+    case 'swap':
+      stepSwap(D, dt);
       break;
     case 'uncouple':
       if((D.timer -= dt) <= 0){ R.attached = false; moveTo(D, D.cur, 0, parkQ(D, D.cur)); D.state = 'toShed'; }
@@ -398,25 +516,45 @@ const _yp = new V3();
 function placeRake(Y, r){
   r.vehs.forEach((v, j) => { Y.at(r.s + r.off[j], _yp); v.group.position.copy(_yp); v.group.rotation.set(0, Y.yaw, 0); });
 }
+// A depot engine's shift in parts: marshalling the morning trains, steady shunting, a break for coal,
+// water and the crew's dinner, steady again, then making up the evening trains.
+const YARD_PART = {
+  marshal: {txt: 'marshalling the morning trains', wait: [1, 5], far: true},
+  steady:  {txt: 'shunting trucks between the roads', wait: [6, 30], far: false},
+  rest:    {txt: 'stopped for coal, water and the crew\'s dinner', rest: true},
+  busy:    {txt: 'making up the evening trains', wait: [2, 9], far: true},
+};
+function yardPart(r, t){
+  const on = hm(r.hours[0]), off = hm(r.hours[1]), span = mod(off - on, 1440) || 1440, into = mod(mod(t, 1440) - on, 1440);
+  const f = into / span, mid = 0.5 + (r.seed - 0.5) * 0.16, rest = 45 / span;
+  const parts = [['marshal', Math.min(0.22, 120 / span)], ['steady', mid - rest / 2], ['rest', mid + rest / 2], ['steady', Math.max(mid + rest / 2, 1 - Math.min(0.2, 90 / span))], ['busy', 1]];
+  let lo = 0;
+  for(const [kind, hi] of parts){ if(f < hi) return {kind, p: YARD_PART[kind], end: on + hi * span}; lo = hi; }
+  return {kind: 'busy', p: YARD_PART.busy, end: off};
+}
 function stepYards(dt){
   const GAP = 1.2, VMAX = 2, ACC = 0.2;
   YARDS.forEach(Y => {
     const n = Y.rakes.length;
     Y.rakes.forEach((r, k) => {
       if(!r.rec) return;
+      if(r.seed === undefined) r.seed = Math.abs(Math.sin(k * 12.9898 + YARDS.indexOf(Y) * 78.233) * 43758.5453) % 1;
       const working = inHours(r.hours, simTime);
       const lo = k > 0 ? Y.rakes[k - 1].s + Y.rakes[k - 1].L + GAP : Y.sMin;
       const hi = k < n - 1 ? Y.rakes[k + 1].s - GAP - r.L : Y.sMax - r.L;
       r.working = working;
+      r.part = working ? yardPart(r, simTime) : null;
       if(!working){ if(Y.shed) r.target = r.nightS; }
+      else if(r.part.p.rest){ if(r.partWas !== 'rest'){ r.target = Y.shed ? r.nightS : r.s; } }
       else if(Math.abs(r.target - r.s) < 0.05){
         r.wait -= dt;
         if(r.wait <= 0){
-          const a = Math.min(lo, r.s), b = Math.max(hi, r.s);
-          if(b - a > 4) r.target = a + Math.random() * (b - a);
-          r.wait = (6 + Math.random() * 30) * 60;                 // a pause between shunting moves
+          const a = Math.min(lo, r.s), b = Math.max(hi, r.s), P = r.part.p;
+          if(b - a > 4) r.target = P.far ? (r.s - a > b - r.s ? a + Math.random() * (b - a) * 0.2 : b - Math.random() * (b - a) * 0.2) : a + Math.random() * (b - a);
+          r.wait = (P.wait[0] + Math.random() * (P.wait[1] - P.wait[0])) * 60;   // a pause between shunting moves
         }
       }
+      r.partWas = r.part ? r.part.kind : null;
       const d = r.target - r.s;
       if(Math.abs(d) < 1e-4){ r.v = 0; return; }
       const room = d > 0 ? Math.max(0, hi - r.s) : Math.max(0, r.s - lo);
@@ -702,6 +840,11 @@ function dutyStatus(D, i){
       }
       return `Finishing ${job}: the last trip back${at}, then on shed.`;
     }
+    if(D.state === 'swap'){
+      const sw = D.sw, what = sw.to.vs[0].name.toLowerCase();
+      return sw.phase === 'out' || sw.phase === 'uncouple' ? `Shunting${at}: putting the ${sw.from.vs[0].name.toLowerCase()} rake away in its siding, to fetch the ${what} rake for ${job}.`
+        : `Shunting${at}: drawing the ${what} rake out of its siding for ${job}.`;
+    }
     if(D.state === 'uncouple') return `Uncoupling from the train${at} to go on shed.`;
     if(D.state === 'toShed') return `Running into the engine shed${at}.`;
     if(D.state === 'couple') return `Coupled on${at}, about to start ${job}.`;
@@ -726,7 +869,7 @@ function statusOf(group){
   }
   if(e.Y){
     const r = e.rake, Y = e.Y;
-    if(r.working) return `Shunting at ${Y.label} until ${fmtTime(hm(r.hours[1]))} (works ${r.hours[0]}–${r.hours[1]}).`;
+    if(r.working && r.part) return `At ${Y.label}: ${r.part.p.txt} until ${fmtTime(mod(Math.round(r.part.end), 1440))}. Works ${r.hours[0]}–${r.hours[1]}: marshalling first, a dinner break midway, the evening trains last.`;
     return `${Y.shed ? 'Put away in the shed' : 'Stabled'} at ${Y.label} until ${r.hours[0]}.`;
   }
   if(e.RH){
@@ -760,6 +903,7 @@ function shortState(D){
   switch(D.state){
     case 'run': return D.want === D.cur ? [m, `${m.name} · ${D.w ? WORK_SHORT[D.w.kind] + ' to ' + fmtTime(D.turn.end) : 'on duty to ' + fmtTime(D.turn.end)}`, 'on'] : [m, `${m.name} · last trip, then on shed`, 'off'];
     case 'uncouple': case 'toShed': return [m, `${m.name} · going on shed`, 'off'];
+    case 'swap': return [m, `${m.name} · changing rakes`, 'on'];
     case 'fromShed': { const c = D.rota[D.coming]; return [c, `${c.name} · coming off shed`, 'on']; }
     case 'couple': return [m, `${m.name} · coupling on`, 'on'];
     default: {
@@ -798,7 +942,7 @@ function updateLamps(){
   if(NIGHT_U.value < 0.02){ lamps.pts.visible = false; return; }
   lamps.pts.visible = true;
   DUTIES.forEach(D => {
-    const R = D.R; if(!R.line.userVisible) return;
+    const R = D.R; if(!R.line.userVisible || D.sw) return;
     const h = D.gauge === 'std' ? 2.4 * M : 0.6 * R.o.scale;
     if(D.mover){ const g = D.rota[D.mover.i].unit[0].group; lamps.add(g.position.x, g.position.y + h, g.position.z, WHITE, 40 * M); return; }
     if(R.hold || R.phase === 'rr'){ if(R.phase === 'rr' || D.state === 'couple'){ const g = R.engine.group; lamps.add(g.position.x, g.position.y + h, g.position.z, WHITE, 40 * M); } return; }

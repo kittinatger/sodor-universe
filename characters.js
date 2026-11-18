@@ -910,7 +910,7 @@ function makeRunner(o){
 
   // Unit (engine + tender) centres for a given anchor and side; the engine always faces B.
   R.unitX = (a, side, un = R.unit) => {
-    const Bend = a + len0, Aend = a - off[last] - lenN, xs = [], UU = un.reduce((s, m, i) => s + m.len + (i ? gap : 0), 0);
+    const nc = R.cars.length - 1, Bend = a + R.cars[0].len / 2, Aend = a - R.off[nc] - R.cars[nc].len / 2, xs = [], UU = un.reduce((s, m, i) => s + m.len + (i ? gap : 0), 0);
     if(side === 'B'){ let x = Bend + gap + UU; un.forEach(m => { xs.push(x - m.len / 2); x -= m.len + gap; }); }
     else { let x = Aend - gap; un.forEach(m => { xs.push(x - m.len / 2); x -= m.len + gap; }); }
     return xs;
@@ -1019,6 +1019,19 @@ function drawLoops(R){
   });
 }
 
+// Put a different rake of coaches or trucks on a train (ops.js shunts them in and out of the sidings).
+// The train's turning points stay where they are, so a rake is never longer than the train's first.
+function setCars(R, vehicles){
+  R.cars = vehicles.map(v => ({v, len: v.len * R.o.scale}));
+  R.off = [0];
+  for(let k = 1; k < R.cars.length; k++) R.off.push(R.off[k - 1] + (R.cars[k - 1].len + R.cars[k].len) / 2 + R.gap);
+  const nc = R.cars.length - 1;
+  R.Lc = R.off[nc] + R.cars[0].len / 2 + R.cars[nc].len / 2;
+  if(R.runRound) R.loops = [R.aB, R.aA].map(a => {
+    const xB = R.unitX(a, 'B')[0], xA = R.unitX(a, 'A')[0], lo = Math.min(xA, xB), hi = Math.max(xA, xB);
+    return {lo, hi, k: Math.min(15 * METRE, (hi - lo) / 4)};
+  });
+}
 // Swap the engine (and tender) working a train: used by the duty rosters in ops.js.
 function swapUnit(R, vehicles){
   R.unit = vehicles.map(v => ({v, len: v.len * R.o.scale}));
@@ -1031,6 +1044,7 @@ function swapUnit(R, vehicles){
 }
 function stepRunner(R, dt){
   let carDx = 0, unitDx = 0, moving = false;
+  if(R.manual) return;                              // being shunted by ops.js, which places every vehicle itself
   if(R.hold){                                       // stabled for the night: the train stands, the engine may be away
     R.cars.forEach((c, k) => placeVeh(R, c.v, R.a - R.off[k], 0));
     if(R.attached !== false){ const xs = R.unitX(R.a, R.side); R.unit.forEach((m, i) => placeVeh(R, m.v, xs[i], 0)); }
@@ -1653,7 +1667,7 @@ window.SODOR_SR = {ENGINES, SR_TRAINS, RUNNERS, statics, STOCK, COLORS: ENGINE_C
 // The model kit and train runner, shared with nwr.js.
 window.SODOR_KIT = {mat, add, box, cylZ, cylX, cylY, domeCap, arcZ, roof, bake, canvasTex, faceMat, plateMat, sidePlates, sidePlatesTex,
   glassMat, brassMat, bronzeMat, buildSteam, buildTender, wheelset, makeRunner, drawLoops, addMarker, RUNNERS, tagPick, lineU,
-  placeVeh, spin, puff, trackFrame, swapUnit, stopsFor, loopLat, markerMat, _p, _t, yards: [], roundhouse: null,
+  placeVeh, spin, puff, trackFrame, swapUnit, stopsFor, setCars, loopLat, markerMat, _p, _t, yards: [], roundhouse: null,
   nearTrack, clearArea, inClearZone, clearZones, ground, rosterRow, NG, STD, BLACK, BEAM_RED, BRASS, sceneryNear, trees, ribbon, MINI};
 // Arlesdale sidings: a short road beside the station, shunted by a Blister (ops.js YARDS).
 ENGINES.filter(E => E.yard && E.unit).forEach(E => {
