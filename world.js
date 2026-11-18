@@ -121,7 +121,7 @@ lap('settlements');
 // ------------------------------------------------------------------ roads
 // Roads are polylines of points every ~8 m, with a half-width and a class (A, B, street, lane).
 const roads = [];
-const ROAD_W = {A: 3.6, B: 3.0, street: 3.2, lane: 2.3};
+const ROAD_W = {A: 3.6, B: 3.0, street: 3.2, lane: 2.3, M: 7.6};
 function polyFrom(ctrl, step = 8 * M){
   const curve = new THREE.CatmullRomCurve3(ctrl.map(p => new V3(p.x, 0, p.z)), false, 'centripetal');
   const n = Math.max(2, Math.ceil(curve.getLength() / step));
@@ -184,6 +184,46 @@ const obstacle = (p) => inZone(p.x, p.z);
   });
 })();
 
+// Motorways: dual carriageways joining the five cities (a spanning tree and one more link), swinging round the
+// towns on the way rather than through them. Each ends at a roundabout on the city's edge, with a link road in.
+const motorways = [], roundabouts = [];
+(function(){
+  const C = towns.filter(t => t.cls === 3); if(C.length < 2) return;
+  const pairs = []; for(let i = 0; i < C.length; i++) for(let j = i + 1; j < C.length; j++) pairs.push([i, j, Math.hypot(C[i].x - C[j].x, C[i].z - C[j].z)]);
+  pairs.sort((a, b) => a[2] - b[2]);
+  const par = C.map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i]));
+  const chosen = []; pairs.forEach(p => { const a = find(p[0]), b = find(p[1]); if(a !== b){ par[a] = b; chosen.push(p); } });
+  const extra = pairs.find(p => !chosen.includes(p)); if(extra) chosen.push(extra);
+  const endOf = (t, toward) => { const L = Math.hypot(toward.x - t.x, toward.z - t.z), dx = (toward.x - t.x) / L, dz = (toward.z - t.z) / L;
+    for(let f = 0.75; f < 1.6; f += 0.05){ const p = {x: t.x + dx * t.R * f, z: t.z + dz * t.R * f}; if(!wet(p.x, p.z) && !nearStation(p.x, p.z, 80 * M) && !K.nearTrack(p.x, p.z, 45 * M)) return p; } return null; };
+  chosen.forEach(([i, j]) => {
+    const a = C[i], b = C[j], A0 = endOf(a, b), B0 = endOf(b, a); if(!A0 || !B0) return;
+    const L2 = Math.hypot(B0.x - A0.x, B0.z - A0.z), dx = (B0.x - A0.x) / L2, dz = (B0.z - A0.z) / L2, nx = -dz, nz = dx;
+    for(const off of [0.04, -0.04, 0.12, -0.12, 0.2, -0.2, 0.3, -0.3, 0.4, -0.4]){
+      const ctrl = [A0, {x: A0.x + dx * 60 * M, z: A0.z + dz * 60 * M}];
+      [0.33, 0.66].forEach(f => ctrl.push({x: A0.x + (B0.x - A0.x) * f + nx * L2 * off, z: A0.z + (B0.z - A0.z) * f + nz * L2 * off}));
+      ctrl.push({x: B0.x - dx * 60 * M, z: B0.z - dz * 60 * M}, B0);
+      const pts = polyFrom(ctrl, 10 * M);
+      let wetRun = 0, maxWet = 0, bad = false;
+      for(let k = 0; k < pts.length && !bad; k++){
+        const p = pts[k];
+        if(wet(p.x, p.z)){ wetRun++; maxWet = Math.max(maxWet, wetRun); } else wetRun = 0;
+        if(towns.some(t => t !== a && t !== b && Math.hypot(t.x - p.x, t.z - p.z) < t.R * (t.cls === 1 ? 0.5 : 0.75))) bad = true;
+        if(k > 4 && k < pts.length - 5 && nearStation(p.x, p.z, 70 * M)) bad = true;
+        if(k && Math.abs(H(p.x, p.z) - H(pts[k - 1].x, pts[k - 1].z)) > 0.08 * pts[k].distanceTo(pts[k - 1])) bad = true;
+      }
+      if(bad || maxWet * 10 > 700) continue;
+      const rd = registerRoad({pts, hw: 7.6 * M, cls: 'M', ends: [a, b], name: `${a.name} – ${b.name}`});
+      motorways.push(rd);
+      [[a, A0], [b, B0]].forEach(([t, E]) => {
+        if(!roundabouts.some(r => Math.hypot(r.x - E.x, r.z - E.z) < 200 * M)) roundabouts.push({x: E.x, z: E.z, t});
+        const link = cut(polyFrom([{x: E.x, z: E.z}, {x: (E.x * 2 + t.x) / 3, z: (E.z * 2 + t.z) / 3}, {x: t.x, z: t.z}]), p => wet(p.x, p.z));
+        if(link.length > 4 && !t.roads.some(r => r.link === E)){ const lr = registerRoad({pts: link.slice().reverse(), hw: ROAD_W.A * M, cls: 'A', town: t, link: E, ends: [t, t]}); t.roads.push(lr); }
+      });
+      break;
+    }
+  });
+})();
 lap('interTownRoads');
 // Inside towns: extra spokes from the centre, a station road, and side streets branching off.
 towns.forEach(t => {
@@ -275,7 +315,7 @@ const crossings = [];
         const rdir = new V3(b.x - a.x, 0, b.z - a.z).normalize();
         let kind;
         if(ty - gnd > 4.5 * M) kind = 'under';                                      // the railway is on a viaduct or bank
-        else if(line.id === 'main' && rd.cls !== 'lane') kind = 'over';             // road bridge over the double track
+        else if((line.id === 'main' && rd.cls !== 'lane') || rd.cls === 'M') kind = 'over';             // road bridge over the double track
         else kind = 'level';
         const c = {kind, line, u, x, z, ty, gnd, tdir, rdir, road: rd, s};
         rd.mods.push(c); crossings.push(c);
@@ -299,10 +339,18 @@ function roadTex(kind){
     if(kind === 'A' || kind === 'B'){ g.fillStyle = '#e8e8e2'; g.fillRect(w / 2 - 1, 0, 2, h * 0.45); }
     if(kind === 'lane'){ g.fillStyle = 'rgba(90,120,60,0.6)'; g.fillRect(0, 0, 4, h); g.fillRect(w - 4, 0, 4, h); }
     if(kind === 'street'){ g.fillStyle = '#8a8a86'; g.fillRect(0, 0, 6, h); g.fillRect(w - 6, 0, 6, h); }
+    if(kind === 'M'){                               // two carriageways of two lanes, hard shoulders and a grass central reserve
+      g.fillStyle = '#3e3f42'; g.fillRect(0, 0, w, h);
+      for(let k = 0; k < 700; k++){ const v = 52 + rnd() * 30 | 0; g.fillStyle = `rgba(${v},${v},${v + 4},0.5)`; g.fillRect(rnd() * w, rnd() * h, 1.2, 1.2); }
+      g.fillStyle = '#4f7a3a'; g.fillRect(w * 0.46, 0, w * 0.08, h);
+      g.fillStyle = '#ececE6'; for(const x of [0.07, 0.43, 0.57, 0.93]) g.fillRect(w * x - 0.6, 0, 1.2, h);
+      g.fillStyle = '#ececE6'; for(const x of [0.25, 0.75]) g.fillRect(w * x - 0.6, 0, 1.2, h * 0.35);
+      g.fillStyle = '#e8c23a'; g.fillRect(w * 0.425, 0, 0.8, h); g.fillRect(w * 0.567, 0, 0.8, h);
+    }
   });
 }
 (function(){
-  const LAYER = {A: 0.18, B: 0.17, street: 0.16, lane: 0.15};
+  const LAYER = {M: 0.2, A: 0.18, B: 0.17, street: 0.16, lane: 0.15};
   const buf = {};
   roads.forEach(rd => {
     const n = rd.pts.length, ys = new Float32Array(n);
@@ -378,6 +426,61 @@ function bankAlong(pts, ys, hw, minLift = 0.4 * M){
 // (not under the bridge decks themselves: the railway runs through there)
 roads.forEach(rd => bankAlong(rd.pts, Array.from(rd.ys, (y, i) => rd.mods.some(c => c.kind === 'over' && Math.abs(rd.s[i] - c.s) < 11 * M) ? -1e9 : y), rd.hw + 0.3 * M));
 
+// Motorway furniture: steel crash barriers on both verges and the central reserve, lighting columns along the
+// reserve, blue overhead direction signs near each end, and the roundabouts where the motorways meet the cities.
+const mwayGroup = new THREE.Group(); scene.add(mwayGroup);
+(function(){
+  if(!motorways.length) return;
+  const bars = [], lamps = [];
+  motorways.forEach(rd => {
+    const n = rd.pts.length, hw = rd.hw / M;
+    for(let i = 0; i < n - 1; i++){
+      const p = rd.pts[i], q = rd.pts[i + 1], tx = q.x - p.x, tz = q.z - p.z, L = Math.hypot(tx, tz), nx = tz / L, nz = -tx / L, y = (rd.ys[i] + rd.ys[i + 1]) / 2 + 0.2 * M;
+      const yaw = Math.atan2(tx, tz), mx = (p.x + q.x) / 2, mz = (p.z + q.z) / 2;
+      for(const lat of [-(hw - 0.35), hw - 0.35, -0.45, 0.45]) bars.push({x: mx + nx * lat * M, y, z: mz + nz * lat * M, yaw, L: L / M + 0.1});
+      if(i % 5 === 0) lamps.push({x: p.x, y: rd.ys[i] + 0.2 * M, z: p.z, yaw});
+    }
+  });
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new V3(), s = new V3();
+  const inst = (geo, material, list, fn) => { const im = new THREE.InstancedMesh(geo, material, list.length); list.forEach((b, i) => { fn(b); im.setMatrixAt(i, m4); }); im.frustumCulled = false; im.castShadow = true; mwayGroup.add(im); return im; };
+  inst(new THREE.BoxGeometry(0.12, 0.34, 1).translate(0, 0.62, 0), mat(0xb8bcc0, 0.4, 0.6), bars, b => m4.compose(v.set(b.x, b.y, b.z), q.setFromEuler(e.set(0, b.yaw, 0)), s.set(M, M, b.L * M)));
+  inst(new THREE.BoxGeometry(0.08, 0.6, 1).translate(0, 0.3, 0), mat(0x6a6d70, 0.6, 0.4), bars, b => m4.compose(v.set(b.x, b.y, b.z), q.setFromEuler(e.set(0, b.yaw, 0)), s.set(M, M, 0.08 * M)));   // posts
+  const lampGeo = mergeBox([[0.14, 12, 0.14, 0, 6, 0], [6.4, 0.12, 0.2, 0, 12, 0], [0.5, 0.18, 0.9, 3.1, 11.9, 0], [0.5, 0.18, 0.9, -3.1, 11.9, 0]]);
+  inst(lampGeo, mat(0x9a9ea2, 0.5, 0.5), lamps, b => m4.compose(v.set(b.x, b.y, b.z), q.setFromEuler(e.set(0, b.yaw, 0)), s.setScalar(M)));
+  lamps.forEach(b => (mwayGroup.userData.lampPts || (mwayGroup.userData.lampPts = [])).push(b));
+  // overhead direction signs 700 m from each end, one board over each carriageway
+  const signTex = (no, name) => canvasTex(512, 192, (g, w, h) => { g.fillStyle = '#1f4fa8'; g.fillRect(0, 0, w, h); g.strokeStyle = '#f2f2ee'; g.lineWidth = 8; g.strokeRect(10, 10, w - 20, h - 20);
+    g.fillStyle = '#f2f2ee'; g.font = 'bold 54px Arial'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(name, 40, h * 0.62);
+    g.fillStyle = '#f2f2ee'; g.fillRect(w - 150, 26, 110, 56); g.fillStyle = '#1f4fa8'; g.font = 'bold 40px Arial'; g.textAlign = 'center'; g.fillText(no, w - 95, 56); });
+  motorways.forEach((rd, k) => {
+    const no = 'M' + (k + 1), n = rd.pts.length, hw = rd.hw / M, step = Math.max(2, Math.min(70, Math.floor(n / 3)));
+    [[step, rd.ends[1], 1], [n - 1 - step, rd.ends[0], -1]].forEach(([i, dest, dir]) => {
+      const p = rd.pts[i], q2 = rd.pts[Math.min(n - 1, i + 1)], tx = q2.x - p.x, tz = q2.z - p.z, L = Math.hypot(tx, tz) || 1;
+      const g = new THREE.Group(); g.position.set(p.x, rd.ys[i] + 0.2 * M, p.z); g.rotation.y = Math.atan2(tx, tz); g.scale.setScalar(M); mwayGroup.add(g);
+      for(const sd of [-1, 1]) box(g, 0.4, 8.2, 0.4, mat(0x9a9ea2, 0.5, 0.5), sd * (hw + 0.8), 4.1, 0);
+      box(g, 2 * hw + 2, 0.5, 0.5, mat(0x9a9ea2, 0.5, 0.5), 0, 7.9, 0);
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(hw * 0.95, hw * 0.36), new THREE.MeshStandardMaterial({map: signTex(no, dest.name.toUpperCase()), roughness: 0.6}));
+      board.position.set(dir * hw * 0.5, 6.6, -dir * 0.3); board.rotation.y = dir > 0 ? Math.PI : 0; g.add(board);
+      const back = new THREE.Mesh(new THREE.PlaneGeometry(hw * 0.95, hw * 0.36), mat(0x6a6d70, 0.6)); back.position.set(dir * hw * 0.5, 6.6, -dir * 0.32); back.rotation.y = dir > 0 ? 0 : Math.PI; g.add(back);
+    });
+  });
+  // roundabouts: a ring of carriageway round a grassed island with a flower bed and a tree
+  roundabouts.forEach(r => {
+    const y = Math.max(0, H(r.x, r.z)) + 0.23 * M, g = new THREE.Group(); g.position.set(r.x, y, r.z); g.scale.setScalar(M); mwayGroup.add(g);
+    add(g, new THREE.RingGeometry(15, 25, 40).rotateX(-Math.PI / 2), mat(0x3e3f42, 0.92), 0, 0, 0);
+    add(g, new THREE.RingGeometry(14.6, 15.2, 40).rotateX(-Math.PI / 2), mat(0xececE6, 0.6), 0, 0.01, 0);
+    cylY(g, 14.6, 14.8, 0.5, mat(0x4f7a3a, 0.95), 0, 0.2, 0, 40); cylY(g, 6, 6, 0.6, mat(0x9a4a6a, 0.9), 0, 0.3, 0, 24);
+    cylY(g, 0.35, 0.5, 4, mat(0x5a4030, 0.9), 0, 2.4, 0, 8); add(g, new THREE.IcosahedronGeometry(3.2, 1), mat(0x4a7c3a, 0.85), 0, 6.2, 0);
+    S.bakeVC(g);
+  });
+})();
+function mergeBox(list){
+  const parts = list.map(([w, h, d, x, y, z]) => new THREE.BoxGeometry(w, h, d).translate(x, y, z).toNonIndexed());
+  let n = 0; parts.forEach(p => n += p.attributes.position.count);
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3); let o = 0;
+  parts.forEach(p => { pos.set(p.attributes.position.array, o * 3); nor.set(p.attributes.normal.array, o * 3); o += p.attributes.position.count; });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); return g;
+}
 lap('roadMeshes');
 // ------------------------------------------------------------------ crossings and road bridges
 const crossGroup = new THREE.Group(); scene.add(crossGroup);
@@ -600,6 +703,44 @@ const ARCH = {
     walls: [0x9a958a, 0xc9a46a, 0xa0523a], roofs: [0x4a4f58]},
 };
 Object.values(ARCH).forEach(A => Object.assign(A, archGeo(A)));
+// Office towers and skyscrapers for the city centres: their own facade tile (4 bays by 4 floors of glazing between
+// concrete bands), repeated up the walls by UV, a flat roof with a plant room, and windows lit at random after dark.
+const TW = 12, TH = 14.4;
+function paintTower(g, w, h, lit){
+  let s = lit ? 41 : 17; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  g.fillStyle = lit ? '#000' : '#e4e2dc'; g.fillRect(0, 0, w, h);
+  const bx = w / 4, fy = h / 4;
+  for(let f = 0; f < 4; f++) for(let b = 0; b < 4; b++){
+    const x = b * bx + bx * 0.08, y = f * fy + fy * 0.18, ww = bx * 0.84, hh = fy * 0.66;
+    if(lit){ if(rnd() < 0.45){ const k = 0.6 + rnd() * 0.4; g.fillStyle = `rgb(${255 * k | 0},${232 * k | 0},${180 * k | 0})`; g.fillRect(x, y, ww, hh); } continue; }
+    const gr = g.createLinearGradient(x, y, x + ww, y + hh); gr.addColorStop(0, '#5f7f96'); gr.addColorStop(0.5, '#2c4558'); gr.addColorStop(1, '#3c5a70');
+    g.fillStyle = gr; g.fillRect(x, y, ww, hh);
+    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(x + ww * 0.1, y + hh * 0.08, ww * 0.18, hh * 0.84);
+    g.fillStyle = '#bdbab2'; g.fillRect(x + ww / 2 - 1, y, 2, hh);
+  }
+  if(!lit){ g.fillStyle = 'rgba(0,0,0,0.08)'; for(let f = 0; f <= 4; f++) g.fillRect(0, f * fy - 1, w, 3); }
+}
+const towerTex = canvasTex(256, 308, (g, w, h) => paintTower(g, w, h, false)), towerLit = canvasTex(256, 308, (g, w, h) => paintTower(g, w, h, true));
+[towerTex, towerLit].forEach(t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; });
+const towerMat = new THREE.MeshStandardMaterial({map: towerTex, roughness: 0.35, metalness: 0.25, emissive: 0xffd9a0, emissiveMap: towerLit, emissiveIntensity: 1});
+towerMat.onBeforeCompile = atlasMat.onBeforeCompile;
+const roofTopMat = new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.85});
+function towerGeo(A){
+  const {w, h, d} = A, hw = w / 2, hd = d / 2, P = [], U = [], N = [], I = [];
+  const face = (pts, n, len) => { const b = P.length / 3; pts.forEach(p => P.push(...p)); [[0, 0], [len / TW, 0], [len / TW, h / TH], [0, h / TH]].forEach(u => U.push(...u)); pts.forEach(() => N.push(...n)); I.push(b, b + 1, b + 2, b, b + 2, b + 3); };
+  face([[-hw, 0, hd], [hw, 0, hd], [hw, h, hd], [-hw, h, hd]], [0, 0, 1], w);
+  face([[hw, 0, -hd], [-hw, 0, -hd], [-hw, h, -hd], [hw, h, -hd]], [0, 0, -1], w);
+  face([[hw, 0, hd], [hw, 0, -hd], [hw, h, -hd], [hw, h, hd]], [1, 0, 0], d);
+  face([[-hw, 0, -hd], [-hw, 0, hd], [-hw, h, hd], [-hw, h, -hd]], [-1, 0, 0], d);
+  const body = new THREE.BufferGeometry();
+  body.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); body.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); body.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); body.setIndex(I);
+  const roof = mergeBox([[w + 0.4, 0.6, d + 0.4, 0, h + 0.3, 0], [w * 0.42, 3.4, d * 0.42, 0, h + 2.3, 0], [1.2, 6, 1.2, w * 0.3, h + 3, -d * 0.3], [w + 0.4, 1.1, 0.3, 0, h + 1.1, hd + 0.05], [w + 0.4, 1.1, 0.3, 0, h + 1.1, -hd - 0.05]]);
+  roof.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(roof.attributes.position.count * 2), 2));
+  return {body, roof};
+}
+const TOWERS = {towerA: {w: 20, d: 18, h: TH * 2, shade: 1}, towerB: {w: 22, d: 22, h: TH * 3.5, shade: 1}, towerC: {w: 18, d: 18, h: TH * 5.5, shade: 1}, towerD: {w: 26, d: 20, h: TH * 1.5, shade: 1}};
+Object.entries(TOWERS).forEach(([k, A]) => { Object.assign(A, {rh: 0, setback: 4, gap: 7, mat: towerMat, roofMat: roofTopMat,
+  walls: [0xffffff, 0xe8eef2, 0xf2e2c8, 0xd6e4ee, 0xc8d4dc, 0xe6d2c0, 0xb8c8d8], roofs: [0x8a8d91, 0x9a9ea2, 0x7a7d80]}, towerGeo(A)); ARCH[k] = A; });
 
 lap('atlas');
 // ------------------------------------------------------------------ laying out the buildings
@@ -646,11 +787,12 @@ function lineStreet(t, rd, r){
       if(qd > 1.0 + (fbm(x0 * 3, z0 * 3) - 0.5) * 0.3){ s += (qd > 1.6 ? 120 : 12) * M; row = null; continue; }
       let type;
       if(t.cls === 1) type = r() < 0.6 ? 'cottage' : 'house';
+      else if(t.cls === 3 && qd < (t.name === 'Knapford' || t.name === 'Tidmouth' ? 0.14 : 0.1) && rd.cls !== 'lane' && r() < 0.28) type = ['towerA', 'towerB', 'towerC', 'towerD'][Math.floor(r() * (qd < 0.08 ? 4 : 2)) + (qd < 0.08 ? 0 : 0)];       // the business district
       else if(qd < 0.22) type = rd.cls !== 'lane' && r() < 0.65 ? 'shop' : 'terrace';
       else if(qd < 0.55) type = r() < 0.7 ? 'terrace' : 'house';
       else type = r() < 0.55 ? 'house' : r() < 0.7 ? 'villa' : 'cottage';
       if(row && (row.type === 'terrace' || row.type === 'shop') && row.left > 0 && (type === 'terrace' || type === 'shop')) type = row.type === 'shop' && qd < 0.22 ? 'shop' : 'terrace';
-      const A = ARCH[type], sc = type === 'terrace' || type === 'shop' ? 1 : 0.9 + r() * 0.2;
+      const A = ARCH[type], sc = type === 'terrace' || type === 'shop' || A.mat ? 1 : 0.9 + r() * 0.2;
       const back = rd.hw + A.setback * M + A.d * sc * M / 2;
       const x = x0 + nx * back, z = z0 + nz * back, yaw = Math.atan2(-nx, -nz);
       const rec = tryPlace(t, type, x, z, yaw, sc, r);
@@ -1123,7 +1265,7 @@ function buildOwner(owner){
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color(), v = new V3(), s = new V3();
   Object.keys(owner.inst).forEach(type => {
     const list = owner.inst[type], A = ARCH[type]; if(!list.length) return;
-    const body = new THREE.InstancedMesh(A.body, atlasMat, list.length), rf = new THREE.InstancedMesh(A.roof, atlasMat, list.length);
+    const body = new THREE.InstancedMesh(A.body, A.mat || atlasMat, list.length), rf = new THREE.InstancedMesh(A.roof, A.roofMat || atlasMat, list.length);
     list.forEach((b, i) => {
       q.setFromEuler(e.set(0, b.yaw, 0)); m4.compose(v.set(b.x, b.y, b.z), q, s.setScalar(b.s * M));
       body.setMatrixAt(i, m4); rf.setMatrixAt(i, m4);
@@ -1155,7 +1297,7 @@ lap('instancing');
 // A low-resolution land-use map (fields / woods / built-up / sand) drives a terrain shader that draws a
 // patchwork of fields with hedgerows at any zoom; trees are planted from the same map.
 const LW = 768, LH = Math.round(LW * MAP_D / MAP_W);
-const land = new Uint8ClampedArray(LW * LH * 4);
+const land = new Uint8ClampedArray(LW * LH * 4), seaD = new Uint8Array(LW * LH * 4);      // seaD: water depth, for the surf
 (function(){
   // built-up ground: each town paints its own patch first
   const urban = new Float32Array(LW * LH), pxOf = x => (x + MAP_W / 2) / MAP_W * LW, pyOf = z => (z + MAP_D / 2) / MAP_D * LH;
@@ -1173,7 +1315,7 @@ const land = new Uint8ClampedArray(LW * LH * 4);
   const hAt = (px, py) => hp[Math.max(0, Math.min(LH - 1, py)) * LW + Math.max(0, Math.min(LW - 1, px))];
   for(let py = 0; py < LH; py++) for(let px = 0; px < LW; px++){
     const x = (px + 0.5) * sx - MAP_W / 2, z = (py + 0.5) * sz - MAP_D / 2, h = hp[py * LW + px] / M, i = (py * LW + px) * 4;
-    if(h < 0.3){ land[i] = land[i + 1] = land[i + 2] = land[i + 3] = 0; continue; }
+    if(h < 0.3){ land[i] = land[i + 1] = land[i + 2] = land[i + 3] = 0; seaD[i] = Math.min(255, Math.max(0, (0.3 - h) / 30 * 255)); seaD[i + 3] = 255; continue; }
     const reg = regionAt(x, z), dx = (hAt(px + 1, py) - hAt(px - 1, py)) / (2 * sx), dz = (hAt(px, py + 1) - hAt(px, py - 1)) / (2 * sz), slope = Math.hypot(dx, dz);
     const sea = hAt(px + 1, py) < 0 || hAt(px - 1, py) < 0 || hAt(px, py + 1) < 0 || hAt(px, py - 1) < 0;
     const beach = sea && h < 5 ? 1 : 0;
@@ -1195,8 +1337,8 @@ if(terrainMesh){
     sh.uniforms.uLand = {value: landTex};
     sh.uniforms.uLandRect = {value: new THREE.Vector4(-MAP_W / 2, -MAP_D / 2, MAP_W, MAP_D)};
     sh.uniforms.uMetre = {value: M};
-    sh.vertexShader = 'varying vec2 vLandXZ;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vLandXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
-    sh.fragmentShader = `uniform sampler2D uLand; uniform vec4 uLandRect; uniform float uMetre; varying vec2 vLandXZ;
+    sh.vertexShader = 'varying vec2 vLandXZ; varying float vLandY;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vec4 lw = modelMatrix * vec4(transformed, 1.0); vLandXZ = lw.xz; vLandY = lw.y;');
+    sh.fragmentShader = `uniform sampler2D uLand; uniform vec4 uLandRect; uniform float uMetre; varying vec2 vLandXZ; varying float vLandY;
       vec2 lhash(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
       float lh1(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float lnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -1211,6 +1353,15 @@ if(terrainMesh){
     #endif
     float distM = length(vViewPosition) / uMetre;
     vec2 pm = vLandXZ / uMetre;
+    float nearF = clamp(1.0 - distM / 1800.0, 0.0, 1.0);
+    // meadow grass: never one flat green, but drifts of lighter and darker turf, and buttercups up close
+    {
+      float g1 = lnoise(pm / 23.0), g2 = lnoise(pm / 5.0 + 9.1), g3 = lnoise(pm / 140.0 - 4.0);
+      diffuseColor.rgb *= 0.86 + 0.18 * g1 + 0.08 * g2 * nearF + 0.1 * (g3 - 0.5);
+      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 1.04, 0.82), smoothstep(0.62, 0.9, g3) * 0.5);
+      float fl = step(0.97, lh1(floor(pm * 3.0))) * (1.0 - step(0.18, length(fract(pm * 3.0) - 0.5))) * clamp(1.0 - distM / 45.0, 0.0, 1.0);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.85, 0.25), fl * 0.6);
+    }
     // fields: an irregular patchwork, longer than wide, gently bent so no two districts line up
     vec2 pw = pm + 160.0 * vec2(lnoise(pm / 900.0), lnoise(pm / 900.0 + 17.3)) + 60.0 * vec2(lnoise(pm / 260.0 + 5.1), lnoise(pm / 260.0 - 3.7));
     pw = vec2(0.8776 * pw.x - 0.4794 * pw.y, 0.4794 * pw.x + 0.8776 * pw.y); pw.x *= 0.62;
@@ -1236,7 +1387,25 @@ if(terrainMesh){
     float crowns = 0.78 + 0.22 * lnoise(pm / 9.0) + 0.14 * lnoise(pm / 41.0 + 3.0);
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.22, 0.36, 0.17) * crowns * detail, land.g * 0.9);
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.45, 0.50, 0.38) * detail, land.b * 0.85);
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.80, 0.60) * detail, land.a);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.80, 0.60) * detail, land.a * 0.5);
+    // the true shoreline from the height itself: dry sand with wind ripples, wet darker sand at the water's edge, and
+    // marram dunes behind; on steep ground grass gives way to grey rock and scree
+    float hM = vLandY / uMetre;
+    vec3 wp = vec3(vLandXZ.x, vLandY, vLandXZ.y);
+    vec3 fn = normalize(cross(dFdx(wp), dFdy(wp)));
+    float slope = 1.0 - abs(fn.y);
+    float coast = max(land.a, smoothstep(0.0, 1.0, land.a * 3.0));
+    float sandH = 2.4 + 1.6 * lnoise(pm / 60.0);
+    float sand = (1.0 - smoothstep(sandH - 0.8, sandH, hM)) * step(-2.0, hM) * (1.0 - land.b * 0.8) * (1.0 - smoothstep(0.25, 0.45, slope));
+    float ripple = 0.94 + 0.06 * sin(dot(pm, vec2(0.83, 0.55)) * 3.1 + lnoise(pm / 3.0) * 4.0) * clamp(1.0 - distM / 300.0, 0.0, 1.0);
+    vec3 sandCol = vec3(0.88, 0.81, 0.62) * ripple * (0.93 + 0.1 * lnoise(pm / 11.0));
+    sandCol = mix(sandCol, vec3(0.62, 0.56, 0.42), 1.0 - smoothstep(0.15, 0.75, hM));             // wet sand
+    float dune = smoothstep(sandH - 0.4, sandH + 1.5, hM) * (1.0 - smoothstep(sandH + 1.5, sandH + 4.0, hM)) * coast;
+    diffuseColor.rgb = mix(diffuseColor.rgb, sandCol, sand);
+    diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.70, 0.68, 0.45), vec3(0.52, 0.60, 0.34), lnoise(pm / 4.0)), dune * 0.55);
+    float rock = smoothstep(0.32, 0.5, slope + 0.08 * (lnoise(pm / 17.0) - 0.5)) * (1.0 - sand);
+    vec3 rockCol = vec3(0.50, 0.49, 0.46) * (0.75 + 0.35 * lnoise(pm / 6.0) + 0.15 * lnoise(pm / 1.7) * nearF);
+    diffuseColor.rgb = mix(diffuseColor.rgb, rockCol * detail, rock * 0.9);
   }`);
   };
   tm.needsUpdate = true;
@@ -1248,6 +1417,78 @@ window.SODOR_LAND = {
 };
 
 lap('landMap');
+// ------------------------------------------------------------------ the sea: rolling swell, breakers cycling in onto the beaches
+// The water plane is one quad, so the waves live in its shader: sea normals from a few travelling swells,
+// colour from the depth map (turquoise in the shallows, deep blue offshore), and bands of surf that form
+// over the shallows and roll in to break in a line of foam at the water's edge, over and over.
+// The island's own height grid (16-bit, -60..+20 m), read in the shader with the same triangle interpolation as
+// heightAt(), so the line of foam lies exactly where the land meets the sea.
+const hgData = new Uint8Array(T.cols * T.rows * 4);
+for(let i = 0; i < T.cols * T.rows; i++){ const v = Math.round(Math.max(0, Math.min(1, (HEIGHTS[i] / M + 60) / 80)) * 65535); hgData[i * 4] = v >> 8; hgData[i * 4 + 1] = v & 255; hgData[i * 4 + 3] = 255; }
+const hgTex = new THREE.DataTexture(hgData, T.cols, T.rows, THREE.RGBAFormat);
+hgTex.magFilter = hgTex.minFilter = THREE.NearestFilter; hgTex.generateMipmaps = false; hgTex.needsUpdate = true;
+const seaU = {uTime: {value: 0}, uSea: {value: hgTex}, uGrid: {value: new THREE.Vector4(MAP_SCALE, T.imgW / 2, T.imgH / 2, T.step)}, uGridN: {value: new THREE.Vector2(T.cols, T.rows)}, uMetreW: {value: M}};
+if(typeof water !== 'undefined' && water && water.material){
+  const wm = water.material;
+  wm.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, seaU);
+    sh.vertexShader = 'varying vec2 vSeaXZ;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vSeaXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+    sh.fragmentShader = `uniform float uTime; uniform sampler2D uSea; uniform vec4 uGrid; uniform vec2 uGridN; uniform float uMetreW; varying vec2 vSeaXZ;
+      float sh1(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float snoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(sh1(i), sh1(i + vec2(1, 0)), f.x), mix(sh1(i + vec2(0, 1)), sh1(i + vec2(1, 1)), f.x), f.y); }
+      float hgAt(vec2 ij){ vec4 t = texture2D(uSea, (ij + 0.5) / uGridN); return (t.r * 255.0 * 256.0 + t.g * 255.0) / 65535.0 * 80.0 - 60.0; }
+      float seaDepth(){                                   // metres of water here (negative on land), as heightAt() has it
+        vec2 cr = clamp(vec2(vSeaXZ.x / uGrid.x + uGrid.y, vSeaXZ.y / uGrid.x + uGrid.z) / uGrid.w, vec2(0.0), uGridN - 1.001);
+        vec2 i0 = floor(cr), f = cr - i0;
+        float a = hgAt(i0), b = hgAt(i0 + vec2(1, 0)), d = hgAt(i0 + vec2(0, 1)), e = hgAt(i0 + vec2(1, 1));
+        float h = f.x + f.y <= 1.0 ? a + (b - a) * f.x + (d - a) * f.y : e + (d - e) * (1.0 - f.x) + (b - e) * (1.0 - f.y);
+        return -h;
+      }
+      // travelling swells: height gradient of a sum of sine waves (metres)
+      vec2 swellGrad(vec2 p, float t){
+        vec2 g = vec2(0.0);
+        vec3 W[5]; W[0] = vec3(0.8, 0.6, 31.0); W[1] = vec3(-0.3, 0.95, 17.0); W[2] = vec3(0.95, -0.2, 9.0); W[3] = vec3(-0.7, -0.7, 5.3); W[4] = vec3(0.2, -0.98, 3.1);
+        for(int k = 0; k < 5; k++){ vec2 d = normalize(W[k].xy); float L = W[k].z, kk = 6.2831 / L, c = sqrt(9.8 / kk);
+          g += d * kk * cos(dot(d, p) * kk - c * kk * t) * (0.012 * L); }
+        return g;
+      }
+` + sh.fragmentShader
+      .replace('#include <color_fragment>', `#include <color_fragment>
+  float seaD = seaDepth();
+  vec2 seaP = vSeaXZ / uMetreW;
+  float seaDist = length(vViewPosition) / uMetreW;
+  // shallows show turquoise over sand, the deep stays dark blue
+  vec3 shallow = vec3(0.20, 0.62, 0.66), deep = vec3(0.07, 0.24, 0.42);
+  float sd = smoothstep(0.0, 14.0, seaD);
+  diffuseColor.rgb *= mix(shallow, deep, sd) / vec3(0.18, 0.52, 0.75);
+  // surf: breakers form where it shoals and roll in (crests move to shallower water) to break on the beach
+  float wob = snoise(seaP / 40.0) * 0.9 + snoise(seaP / 9.0) * 0.25;
+  float phase = seaD / 0.8 + wob + uTime * 0.18;
+  float band = pow(0.5 + 0.5 * sin(phase * 6.2831), 5.0) * smoothstep(0.1, 0.6, seaD);
+  float surfZone = 1.0 - smoothstep(1.2, 3.5, seaD);
+  // the swash: foam rushing up the beach and draining back, in time with the breakers
+  float swash = 0.4 + 0.3 * sin(uTime * 0.18 * 6.2831 + wob * 6.2831);
+  float edge = 1.0 - smoothstep(swash * 0.6, swash, seaD);
+  float lace = smoothstep(0.45, 0.8, snoise(seaP / 2.2 + uTime * 0.3));
+  float foam = clamp(band * surfZone * (0.75 + 0.25 * lace) * 1.2 + edge * (0.55 + 0.45 * lace), 0.0, 1.0) * clamp(1.4 - seaDist / 3000.0, 0.25, 1.0);
+  // whitecaps offshore, here and there
+  foam = max(foam, smoothstep(0.82, 0.95, snoise(seaP / 14.0 + vec2(uTime * 0.08, 0.0))) * smoothstep(8.0, 20.0, seaD) * 0.35 * clamp(1.0 - seaDist / 1500.0, 0.0, 1.0));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.96, 0.97), foam);
+  diffuseColor.a = mix(diffuseColor.a, 0.5, 1.0 - sd) ;
+  diffuseColor.a = max(diffuseColor.a, foam);`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  {
+    float fadeN = clamp(1.0 - seaDist / 2500.0, 0.0, 1.0);
+    vec2 gW = swellGrad(seaP, uTime) * fadeN * (0.35 + 0.65 * sd);
+    vec3 nW = normalize(vec3(-gW.x, 1.0, -gW.y));
+    normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
+  }`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 0.9, foam);');
+  };
+  wm.needsUpdate = true;
+  frameHooks.push(() => { seaU.uTime.value = performance.now() * 0.001; });
+}
 // ------------------------------------------------------------------ lights after dark
 // From afar each town is a scatter of lit windows along its streets; closer in, the street lamps and
 // station lamps glow, and the lighthouses sweep their beams over the sea.
@@ -1326,7 +1567,7 @@ headlands.forEach(h => harbourGroup.add(h.g));
 const _cp = new V3();
 frameHooks.push(dt => {
   const cp = camera.position, near = camDist < 6;
-  roadGroup.visible = camDist < 12; bankGroup.visible = camDist < 12; crossGroup.visible = camDist < 5; stationGroup.visible = camDist < 5;
+  roadGroup.visible = camDist < 12; mwayGroup.visible = camDist < 6; bankGroup.visible = camDist < 12; crossGroup.visible = camDist < 5; stationGroup.visible = camDist < 5;
   railStruct.visible = camDist < 14; harbourGroup.visible = camDist < 9; boatGroup.visible = camDist < 12;
   let builtOne = false;
   owners.forEach(o => {
@@ -1370,7 +1611,7 @@ frameHooks.push(dt => {
 let nb = 0; owners.forEach(o => Object.values(o.inst).forEach(l => nb += l.length));
 const statTowns = document.getElementById('statTowns');
 if(statTowns) statTowns.textContent = `${towns.length} · ${crossings.filter(c => c.kind === 'level').length}`;
-window.SODOR_WORLD = {towns, roads, crossings, harbours, headlands, sailing, extraSites, vicarstownBridge, buildings: nb, timing, ensureTown, lights, atlasMat,
+window.SODOR_WORLD = {towns, roads, motorways, roundabouts, countryside: [...countryside.values()], wet, roadClear, crossings, harbours, headlands, sailing, extraSites, vicarstownBridge, buildings: nb, timing, ensureTown, lights, atlasMat,
   buildAll: () => towns.forEach(ensureTown), count: () => { let n = 0; owners.forEach(o => Object.values(o.inst).forEach(l => n += l.length)); return n; }};
 console.log(`World: ${towns.length} towns, ${roads.length} roads, ${crossings.length} crossings (${crossings.filter(c => c.kind === 'level').length} level), ${nb} buildings, ${harbours.length} harbours, ${headlands.length} lighthouses, ${sailing.length} ships — ${Math.round(performance.now() - t0)} ms`);
 })();

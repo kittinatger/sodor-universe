@@ -1561,13 +1561,21 @@ const inClearZone = (x, z) => clearZones.some(c => (c.x - x) ** 2 + (c.z - z) **
 const trees = (function(){
   const CAP = 3200;
   const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.18, 1, 5).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({color: 0x5a4030, roughness: 0.9}), CAP);
-  const cone = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({roughness: 0.85}), CAP);
-  const ball = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({roughness: 0.85}), CAP);
+  // conifers: three tiers of branches; broadleaves: a crown of overlapping lobes, its surface roughened a little
+  const mergeT = parts => { parts = parts.map(p => p.index ? p.toNonIndexed() : p); let n = 0; parts.forEach(p => n += p.attributes.position.count);
+    const pos = new Float32Array(n * 3); let o = 0; parts.forEach(p => { pos.set(p.attributes.position.array, o * 3); o += p.attributes.position.count; });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); return g; };
+  const rough = (g, amt) => { const p = g.attributes.position; for(let i = 0; i < p.count; i++){ const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = 1 + amt * (Math.sin(x * 7.1 + z * 3.3) * Math.cos(y * 5.7 - x * 2.1)); p.setXYZ(i, x * k, y * k, z * k); } g.computeVertexNormals(); return g; };
+  const coneGeo = rough(mergeT([new THREE.ConeGeometry(1, 0.5, 9).translate(0, 0.25, 0), new THREE.ConeGeometry(0.78, 0.45, 9).translate(0, 0.5, 0), new THREE.ConeGeometry(0.52, 0.42, 9).translate(0, 0.78, 0)]), 0.05);
+  const ballGeo = rough(mergeT([new THREE.IcosahedronGeometry(0.78, 1), new THREE.IcosahedronGeometry(0.58, 1).translate(0.45, 0.12, 0.22), new THREE.IcosahedronGeometry(0.56, 1).translate(-0.42, 0.08, -0.26),
+    new THREE.IcosahedronGeometry(0.5, 1).translate(0.08, 0.48, -0.1), new THREE.IcosahedronGeometry(0.5, 1).translate(-0.18, -0.18, 0.38), new THREE.IcosahedronGeometry(0.45, 1).translate(0.3, -0.12, -0.42)]), 0.07);
+  const cone = new THREE.InstancedMesh(coneGeo, new THREE.MeshStandardMaterial({roughness: 0.9, flatShading: true}), CAP);
+  const ball = new THREE.InstancedMesh(ballGeo, new THREE.MeshStandardMaterial({roughness: 0.9, flatShading: true}), CAP);
   const g = new THREE.Group(); g.add(trunk, cone, ball); scene.add(g);
   // create the per-tree colours now, so the shader is built with them even if the first fill has no trees of a kind
   [cone, ball].forEach(m => { m.castShadow = true; m.setColorAt(0, new THREE.Color(0x3f6b2e)); });
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), c = new THREE.Color();
-  const greens = [0x3f6b2e, 0x4c7a34, 0x2f5a2a, 0x5a8a3c, 0x3a5f30];
+  const greens = [0x3f6b2e, 0x4c7a34, 0x2f5a2a, 0x5a8a3c, 0x3a5f30, 0x6a8a3a, 0x2e4f2c, 0x7a9a46], firs = [0x2a4a2c, 0x30523a, 0x26402a, 0x3a5a34], up = new THREE.Vector3(0, 1, 0);
   let last = null;
   function fill(cx, cz, radius){
     const step = 12 * METRE, n = Math.ceil(radius / step);
@@ -1586,9 +1594,13 @@ const trees = (function(){
       if(inClearZone(x, z) || (L && L.blocked(x, z))) continue;
       const th = (8 + hash2(gi * 3, gk) * 9) * METRE, conifer = hash2(gk * 5, gi) < 0.45;
       m4.compose(v.set(x, h - 0.3 * METRE, z), q.identity(), s.set(th * 0.06, th * 0.45, th * 0.06)); trunk.setMatrixAt(nt, m4);
-      c.setHex(greens[Math.floor(hash2(gi, gk * 3) * greens.length)]);
-      if(conifer){ m4.compose(v.set(x, h + th * 0.2, z), q, s.set(th * 0.22, th * 0.85, th * 0.22)); cone.setMatrixAt(nc, m4); cone.setColorAt(nc++, c); }
-      else { m4.compose(v.set(x, h + th * 0.62, z), q, s.set(th * 0.3, th * 0.27, th * 0.3)); ball.setMatrixAt(nb, m4); ball.setColorAt(nb++, c); }
+      c.setHex(conifer ? firs[Math.floor(hash2(gi, gk * 3) * firs.length)] : greens[Math.floor(hash2(gi, gk * 3) * greens.length)]);
+      c.offsetHSL(0, 0, (hash2(gi * 7, gk * 11) - 0.5) * 0.08);
+      q.setFromAxisAngle(up, hash2(gi * 13, gk) * 6.283);
+      const wd = 0.85 + hash2(gk * 17, gi) * 0.35;
+      if(conifer){ m4.compose(v.set(x, h + th * 0.15, z), q, s.set(th * 0.22 * wd, th * 0.9, th * 0.22 * wd)); cone.setMatrixAt(nc, m4); cone.setColorAt(nc++, c); }
+      else { m4.compose(v.set(x, h + th * 0.62, z), q, s.set(th * 0.3 * wd, th * 0.27, th * 0.3 * wd)); ball.setMatrixAt(nb, m4); ball.setColorAt(nb++, c); }
+      q.identity();
       nt++;
     }
     trunk.count = nt; cone.count = nc; ball.count = nb;

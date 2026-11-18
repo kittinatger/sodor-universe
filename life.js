@@ -42,6 +42,31 @@ function busModel(color){
   g.userData.len = len; g.userData.h = h;
   return g;
 }
+// a red double-decker: two decks of windows, a destination blind, the stairs window at the back
+function deckerModel(color){
+  const g = new THREE.Group(), C = mat(color, 0.4), len = 10.2, w = 2.5, h = 4.3;
+  box(g, w, h - 0.5, len, C, 0, 0.5 + (h - 0.5) / 2, 0);
+  box(g, w * 1.01, 0.18, len * 1.0, mat(0xf2e8c8, 0.6), 0, 2.45, 0);                    // the cream band between the decks
+  for(const y of [1.75, 3.35]) box(g, w * 1.01, 0.85, len * 0.92, glassMat(), 0, y, -0.1);
+  box(g, w * 0.98, 0.95, 0.06, glassMat(), 0, 1.75, len / 2 + 0.01); box(g, w * 0.98, 0.8, 0.06, glassMat(), 0, 3.35, len / 2 + 0.01);
+  box(g, w * 0.7, 0.32, 0.07, mat(0x1a1a1a, 0.5), 0, 4.0, len / 2 + 0.02); box(g, w * 0.6, 0.2, 0.08, mat(0xf2d860, 0.4), 0, 4.0, len / 2 + 0.03);
+  for(const sx of [-1, 1]) for(const sz of [len * 0.33, -len * 0.3]) cylX(g, 0.5, 0.5, 0.32, WHEEL(), sx * w * 0.5, 0.5, sz, 12);
+  box(g, w * 0.4, 0.14, 0.06, mat(0xfff2c0, 0.5), 0, 0.9, len / 2 - 0.02);
+  bakeVC(g); g.userData.len = len; g.userData.h = h; return g;
+}
+// a lorry: cab and a box body (rigid), or a tractor unit hauling a long trailer
+function lorryModel(color, artic){
+  const g = new THREE.Group(), C = mat(color, 0.45), cabL = 2.4, bodyL = artic ? 12.5 : 6.5, len = cabL + bodyL + 0.4, w = 2.5;
+  const zc = len / 2 - cabL / 2;
+  box(g, w, 2.6, cabL, C, 0, 1.75, zc); box(g, w * 0.96, 0.9, 0.06, glassMat(), 0, 2.4, zc + cabL / 2 + 0.01);
+  box(g, w * 0.9, 0.3, 0.1, CHROME(), 0, 0.75, zc + cabL / 2 + 0.03);
+  const zb = zc - cabL / 2 - 0.2 - bodyL / 2, bodyC = mat([0xeeece2, 0xc8ccd0, 0x2a4a7a, 0xb3201c, 0x3a6a3a][Math.floor(rnd() * 5)], 0.6);
+  box(g, w, 3.0, bodyL, bodyC, 0, 2.3, zb); box(g, w * 0.9, 0.35, len - 0.6, mat(0x222222, 0.7), 0, 0.7, 0);
+  const axles = artic ? [zc, zc - 1.6, zb - bodyL * 0.3, zb - bodyL * 0.42] : [zc, zb - bodyL * 0.3];
+  for(const sx of [-1, 1]) axles.forEach(z => cylX(g, 0.5, 0.5, 0.34, WHEEL(), sx * w * 0.47, 0.5, z, 12));
+  box(g, w * 0.3, 0.12, 0.06, mat(0xfff2c0, 0.5), 0, 0.95, len / 2 + 0.02);
+  bakeVC(g); g.userData.len = len; g.userData.h = 3.8; return g;
+}
 function tractorModel(color){
   const g = new THREE.Group(), C = mat(color, 0.5), len = 3.6, h = 2.1;
   box(g, 1.1, 1.0, 1.9, C, 0, 1.1, 0.1);
@@ -97,14 +122,16 @@ function laneBusy(rd, s, dir){
 function makeVehicle(rd, kind){
   const colors = BODY, color = colors[Math.floor(rnd() * colors.length) % colors.length];
   let g, trailer = null;
-  if(kind === 'bus') g = busModel(0x2a6a4a);
+  if(kind === 'bus') g = rnd() < 0.6 ? deckerModel(0xc8262b) : busModel(0x2a6a4a);
+  else if(kind === 'lorry') g = lorryModel(BODY[Math.floor(rnd() * BODY.length)], rd.cls === 'M' ? rnd() < 0.7 : rnd() < 0.3);
   else if(kind === 'van') g = carModel(color, true);
   else if(kind === 'tractor'){ g = tractorModel(0x3a6b2a); if(rnd() < 0.5){ trailer = trailerModel(); scene.add(trailer); trailer.scale.setScalar(M); } }
   else g = carModel(color, false);
   scene.add(g); g.scale.setScalar(M); g.frustumCulled = false; if(trailer) trailer.frustumCulled = false;
   const len = g.userData.len * M, dir = rnd() < 0.5 ? 1 : -1, span = rd.s[rd.s.length - 1];
   const v = {g, trailer, rd, kind, dir, len, _i: 0, s: Math.max(len, Math.min(span - len, rnd() * span)),
-    v: 0, vmax: (kind === 'bus' ? 7.5 : kind === 'tractor' ? 4.5 : 8.5 + rnd() * 3) * M, pause: 0, lane: rd.hw * 0.42};
+    v: 0, vmax: (rd.cls === 'M' ? (kind === 'lorry' || kind === 'bus' ? 22 : 27 + rnd() * 6) : kind === 'bus' ? 7.5 : kind === 'lorry' ? 7.5 : kind === 'tractor' ? 4.5 : 8.5 + rnd() * 3) * M, pause: 0,
+    lane: rd.cls === 'M' ? rd.hw * (kind === 'lorry' || rnd() < 0.5 ? 0.68 : 0.32) : rd.hw * 0.42};
   stepVehicle(v, 0);                   // place it at its spawn point now, not wherever (0,0,0) happens to be
   VEHICLES.push(v);
   return v;
@@ -138,15 +165,20 @@ function stepVehicle(v, dt){
 
 // A light scatter of traffic on the arterial roads — enough to feel alive without crowding the
 // island (over a thousand road segments exist; only a couple of hundred ever carry a vehicle).
-const CAP = 220;
+const CAP = 360;
 const arterial = (W.roads || []).filter(rd => rd.s[rd.s.length - 1] > 90 * M && (rd.cls === 'A' || rd.cls === 'B' || (rd.cls === 'street' && rd.town && rd.town.cls === 3)));
 arterial.forEach(rd => {
   if(VEHICLES.length >= CAP) return;
   const chance = rd.cls === 'A' ? 0.85 : rd.cls === 'B' ? 0.45 : 0.1;
   if(rnd() > chance) return;                                        // most side streets stay quiet
   const roll = rnd(), busRoute = rd.cls === 'A' && rd.town;
-  const kind = busRoute && roll < 0.1 ? 'bus' : roll < 0.16 ? 'van' : roll < 0.2 ? 'tractor' : 'car';
+  const kind = busRoute && roll < 0.12 ? 'bus' : roll < 0.18 ? 'van' : roll < 0.24 ? 'lorry' : roll < 0.27 && rd.cls !== 'street' ? 'tractor' : 'car';
   makeVehicle(rd, kind);
+});
+// motorway traffic: a vehicle every few hundred metres each way, lorries keeping to the inside lane
+(W.motorways || []).forEach(rd => {
+  const n = Math.min(40, Math.round(rd.s[rd.s.length - 1] / (450 * M)));
+  for(let k = 0; k < n; k++){ const roll = rnd(); makeVehicle(rd, roll < 0.25 ? 'lorry' : roll < 0.32 ? 'van' : roll < 0.36 ? 'bus' : 'car'); }
 });
 // a few tractors working the farm lanes, for variety
 (W.roads || []).filter(rd => rd.cls === 'lane' && rd.s[rd.s.length - 1] > 50 * M).forEach(rd => { if(VEHICLES.length < CAP && rnd() < 0.06) makeVehicle(rd, 'tractor'); });
