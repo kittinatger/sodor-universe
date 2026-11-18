@@ -122,6 +122,14 @@
   #panel .actions button.active{background:linear-gradient(170deg,var(--gold),var(--gold2));color:#2a1d05;border-color:var(--gold);}
 
   #hint{position:fixed;left:calc(var(--side) / 2 + 50%);transform:translateX(-50%);top:calc(var(--bar) + var(--gap) * 2);z-index:6;font-size:11px;color:#a8c4d0;background:rgba(8,16,22,.72);border:1px solid var(--line);padding:7px 15px;border-radius:20px;pointer-events:none;transition:opacity .8s;backdrop-filter:blur(8px);white-space:nowrap;}
+  #followChip{position:fixed;left:calc(var(--side) / 2 + 50%);transform:translate(-50%,-8px);top:calc(var(--topH, var(--bar)) + var(--gap) * 2);z-index:30;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border-radius:24px;background:rgba(8,16,22,.86);border:1px solid var(--gold);box-shadow:0 6px 22px rgba(0,0,0,.45);backdrop-filter:blur(10px);font-size:12.5px;color:#e9f3f7;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;white-space:nowrap;max-width:calc(100vw - 24px);}
+  #followChip.on{opacity:1;pointer-events:auto;transform:translate(-50%,0);}
+  #followChip .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);flex:none;}
+  #followChip #followName{font-weight:700;overflow:hidden;text-overflow:ellipsis;}
+  #followChip button{flex:none;display:flex;align-items:center;gap:6px;background:linear-gradient(170deg,var(--gold),var(--gold2));color:#2a1d05;border:0;border-radius:18px;padding:7px 13px;font-size:12px;font-weight:800;cursor:pointer;}
+  #followChip button:hover{filter:brightness(1.1);}
+  #followChip kbd{font-size:10px;opacity:.65;font-weight:700;}
+  body.following #hint{opacity:0;}
   #loading{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 40%,#0c1b26,var(--bg));z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--accent);font-size:14px;letter-spacing:.3px;}
   #loading .spin{width:38px;height:38px;border:3px solid rgba(127,212,255,.15);border-top-color:var(--accent);border-radius:50%;animation:sp .9s cubic-bezier(.5,0,.5,1) infinite;margin-bottom:14px;}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -144,6 +152,7 @@
     #speedBtns .btn,#jumpBtns .btn{flex:1;padding:6px 2px;font-size:10.5px;min-width:0;}
     #roster{top:var(--topH,136px);left:var(--gap);right:var(--gap);width:auto;bottom:var(--sheet,8px);max-height:none;}
     #panel{left:var(--gap);right:var(--gap);width:auto;bottom:var(--gap);max-height:46vh;padding:15px 16px 14px;}
+    #followChip{left:50%;} #followChip kbd{display:none;}
     .ros-sub{display:none;}
   }
 </style>
@@ -219,6 +228,7 @@
   <div class="actions" id="pActions"></div>
 </div>
 
+<div id="followChip"><span class="dot"></span><span>Following <span id="followName">engine</span></span><button id="unfollowBtn" title="Stop following (Esc)">✕ Stop following <kbd>Esc</kbd></button></div>
 <div id="hint">Drag to orbit · right-drag or two fingers to pan · scroll or pinch to zoom · tap a station or engine</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1130,6 +1140,19 @@ function panBy(dx, dy){
   camCenter.z += (-dx*rz + dy*fz)*k;
 }
 // Orbiting and zooming keep following an engine (zoom sets how close); only panning lets it go.
+// "Following …" chip under the top bar: one tap (or Esc) lets go of the engine
+const followChip = document.getElementById('followChip'), followName = document.getElementById('followName');
+let chipFor = null;
+function stopFollowing(){ followTrain = null; document.querySelectorAll('#pActions button.active').forEach(b=>b.classList.remove('active')); syncFollowChip(); }
+function syncFollowChip(){
+  const m = followTrain ? followTrain.mesh : null;
+  if(m === chipFor) return;
+  chipFor = m;
+  if(m){ if(!followTrain.name) followTrain.name = (document.getElementById('pTitle').textContent || 'engine').trim(); followName.textContent = followTrain.name; }
+  followChip.classList.toggle('on', !!m); document.body.classList.toggle('following', !!m);
+}
+document.getElementById('unfollowBtn').onclick = stopFollowing;
+addEventListener('keydown', e=>{ if(e.key === 'Escape' && followTrain && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) stopFollowing(); });
 function userMoved(kind){ flight=null; if(kind === 'pan') followTrain=null; if(followTrain && kind === 'orbit') delete followTrain.phi; lastInteraction=performance.now(); }
 function zoomBy(f){ camDist *= f; if(followTrain) followTrain.dist = Math.max(0.012, Math.min(640, camDist)); }
 el.addEventListener('contextmenu', e=>e.preventDefault());
@@ -1271,6 +1294,7 @@ function animate(){
     camDist += ((followTrain.dist||0.14)-camDist)*Math.min(1, dt*1.5);
     if(followTrain.phi !== undefined){ camPhi += (followTrain.phi-camPhi)*Math.min(1, dt*2); if(Math.abs(followTrain.phi-camPhi) < 1e-3) delete followTrain.phi; }
   }
+  syncFollowChip();
   updateCam();
   { const t = Math.max(0, Math.min(1, (camDist-12)/108)); VK = 1 + (OVERVIEW_EX-1)*t*t*(3-2*t); relief.scale.y = VK; }
   applyLOD();
