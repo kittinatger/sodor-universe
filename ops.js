@@ -702,7 +702,10 @@ function goTidmouth(D){
   st.homeRho = Math.max(RH.R0 + 1, (st.end || RH.R1) - 1 - st.L);
   D.tid = st;
   m.unit.forEach(v => { const e = entryOf.get(v); if(e) e.parked = true; });      // drawn like the other engines on shed while it is away
-  const route = homeRoute(D, m.unit[0].group.position);
+  // an engine on the shared track network (track.js) is handed over at the foot of the shed lead
+  let route;
+  if(D.fromPt){ let k = 0, bd = Infinity; IN.P.forEach((p, i) => { const dd = p.distanceTo(D.fromPt); if(dd < bd){ bd = dd; k = i; } }); route = mkRoute(IN.P.slice(k)); }
+  else route = homeRoute(D, m.unit[0].group.position);
   if(nextAny(D) - simTime < 2 * tripMin(route.L) + 90){ st.vehs = []; st.guest = null; D.tid = 'none'; syncCulling(D); return; }   // too far to go home tonight
   st.route = route;
   RH.travel.push({kind: 'arrive', st, D, route, phase: 'drive', s: st.L, dir: 1, v: 0});

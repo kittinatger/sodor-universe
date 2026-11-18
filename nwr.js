@@ -1724,11 +1724,11 @@ const NONRAIL_INFO = [
 // ------------------------------------------------------------------ duties: who runs where
 // The Main Line is double track (lane +1 next to the platforms, lane -1 the far road).
 const RUNS = {
-  gordon:  {line: 'main', from: 'Tidmouth', to: 'Kellsthorpe Road', lane: 1, knap: 'up', speed: 30, passenger: true, stopsAt: ['Knapford', 'Wellsworth', 'Killdane'], consist: Array(6).fill('greenExpress'), job: 'the Express from Tidmouth to Kellsthorpe Road'},
-  rebecca: {line: 'main', from: 'Kellsthorpe Road', to: 'Barrow-in-Furness', lane: 1, speed: 30, passenger: true, stopsAt: ["Crovan's Gate", 'Vicarstown'], consist: Array(5).fill('greenExpress'), job: 'the Express on to Vicarstown and Barrow'},
-  henry:   {line: 'main', from: 'Knapford', to: 'Killdane', lane: -1, knap: 'down', fromShift: -63, speed: 24, consist: ['vanFish', 'vanFish', 'vanGrey', 'vanFish', 'vanBrown', 'vanFish', 'brakeVan'], job: 'the Flying Kipper fish train'},
-  james:   {line: 'main', from: 'Killdane', to: 'Lower Kellsthorpe', lane: -1, speed: 20, consist: Array(6).fill('jamesTruck').concat(['spiteful']), job: 'a goods train of his blue trucks'},
-  murdoch: {line: 'main', from: "Crovan's Gate", to: 'Vicarstown', lane: -1, speed: 18, consist: ['hector', 'truck', 'truckB', 'truck', 'truck', 'truckB', 'truck', 'truck', 'brakeVan'], job: 'the long goods train to Vicarstown'},
+  gordon:  {line: 'main', from: 'Tidmouth', to: 'Kellsthorpe Road', lane: 1, knap: 'up', speed: 30, passenger: true, stopsAt: ['Knapford', 'Wellsworth', 'Killdane'], consist: Array(6).fill('greenExpress'), track: true, job: 'the Express from Tidmouth to Kellsthorpe Road'},
+  rebecca: {line: 'main', from: 'Kellsthorpe Road', to: 'Barrow-in-Furness', lane: 1, speed: 30, passenger: true, stopsAt: ["Crovan's Gate", 'Vicarstown'], consist: Array(5).fill('greenExpress'), track: true, job: 'the Express on to Vicarstown and Barrow'},
+  henry:   {line: 'main', from: 'Knapford', to: 'Killdane', lane: -1, knap: 'down', fromShift: -63, speed: 24, consist: ['vanFish', 'vanFish', 'vanGrey', 'vanFish', 'vanBrown', 'vanFish', 'brakeVan'], track: true, job: 'the Flying Kipper fish train'},
+  james:   {line: 'main', from: 'Killdane', to: 'Lower Kellsthorpe', lane: -1, speed: 20, consist: Array(6).fill('jamesTruck').concat(['spiteful']), track: true, job: 'a goods train of his blue trucks'},
+  murdoch: {line: 'main', from: "Crovan's Gate", to: 'Vicarstown', lane: -1, speed: 18, consist: ['hector', 'truck', 'truckB', 'truck', 'truck', 'truckB', 'truck', 'truck', 'brakeVan'], track: true, job: 'the long goods train to Vicarstown'},
   thomas:  {line: 'ffarquhar', speed: 15, passenger: true, consist: ['annie', 'clarabel'], shedEnd: 'B', shedSide: 1, track: true, job: 'his branch line passenger train with Annie and Clarabel'},
   mavis:   {line: 'ffquarry', speed: 7, consist: ['stoneTruck', 'stoneTruck', 'stoneTruck', 'stoneTruck', 'brakeVan'], diesel: true, job: 'stone trains down the Quarry Tramroad from Anopha Quarry to Ffarquhar'},
   toby:    {line: 'toby', from: "Bluff's Cove", to: 'Ulfstead', speed: 9, passenger: true, consist: ['henrietta', 'hannah'], job: 'the Sodor Tramway with Henrietta and Hannah'},
@@ -1741,7 +1741,7 @@ const RUNS = {
   winston: {line: 'loop', speed: 10, consist: [], diesel: true, job: 'a track inspection run round the Loop Line'},
   emily:   {line: 'peelgodred', speed: 18, passenger: true, consist: ['emilyCoach', 'emilyCoach', 'emilyCoach'], job: 'passenger trains on the Peel Godred branch with her coaches'},
   paxton:  {line: 'bmq', speed: 10, consist: ['stoneTruck', 'stoneTruck', 'stoneTruck', 'stoneTruck', 'brakeVan'], diesel: true, job: 'stone trains from Blue Mountain Quarry'},
-  nia:     {line: 'main', from: 'Tidmouth', to: 'Wellsworth', lane: -1, knap: 'down', speed: 16, consist: ['thomasTruck', 'thomasTruck', 'stoneTruck', 'thomasTruck', 'stoneTruck', 'brakeVan'], job: 'goods trains between Tidmouth and Wellsworth'},
+  nia:     {line: 'main', from: 'Tidmouth', to: 'Wellsworth', lane: -1, knap: 'down', speed: 16, consist: ['thomasTruck', 'thomasTruck', 'stoneTruck', 'thomasTruck', 'stoneTruck', 'brakeVan'], track: true, job: 'goods trains between Tidmouth and Wellsworth'},
   percy:   {line: 'kirkronan', speed: 14, consist: ['vanRed', 'vanRed', 'vanGrey', 'brakeVan'], job: 'the mail train to Kirk Ronan'},
   stepney: {line: 'bluebell', speed: 11, passenger: true, consist: ['openTop', 'openTop', 'openTop'], job: 'heritage trains on the Bluebell line'},
   arthur:  {line: 'norramby', speed: 13, consist: ['milkTank', 'milkTank', 'oilTank', 'brakeVan'], job: 'goods trains on the Norramby branch'},
