@@ -1559,7 +1559,7 @@ const inClearZone = (x, z) => clearZones.some(c => (c.x - x) ** 2 + (c.z - z) **
 
 // Trees, regenerated around the camera target as you move: patchy woodland, none on the line.
 const trees = (function(){
-  const CAP = 3200;
+  const CAP = 10000;
   const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.18, 1, 5).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({color: 0x5a4030, roughness: 0.9}), CAP);
   // conifers: three tiers of branches; broadleaves: a crown of overlapping lobes, its surface roughened a little
   const mergeT = parts => { parts = parts.map(p => p.index ? p.toNonIndexed() : p); let n = 0; parts.forEach(p => n += p.attributes.position.count);
@@ -1581,9 +1581,12 @@ const trees = (function(){
     const step = 12 * METRE, n = Math.ceil(radius / step);
     let nt = 0, nc = 0, nb = 0;
     const ix0 = Math.floor(cx / step), iz0 = Math.floor(cz / step);
+    // close in, two more layers of trees fill the same cells (the first layer never moves, so nothing jumps)
+    const layers = radius < 0.22 ? 3 : radius < 0.36 ? 2 : 1;
+    for(let lay = 0; lay < layers; lay++)
     for(let i = -n; i <= n && nt < CAP; i++) for(let k = -n; k <= n && nt < CAP; k++){
-      const gi = ix0 + i, gk = iz0 + k, h1 = hash2(gi, gk);
-      const x = (gi + hash2(gk, gi)) * step, z = (gk + hash2(gi + 7, gk - 3)) * step;
+      const gi = ix0 + i + lay * 100003, gk = iz0 + k - lay * 70001, h1 = hash2(gi, gk);
+      const x = (ix0 + i + hash2(gk, gi)) * step, z = (iz0 + k + hash2(gi + 7, gk - 3)) * step;
       // world.js's land map says where the woods, hedgerows and gardens are; before it loads, plain noise
       const L = window.SODOR_LAND, dens = L ? L.trees(x, z) : (w => w * w * 1.6)(valueNoise(gi * 0.045, gk * 0.045));
       if(h1 > dens) continue;

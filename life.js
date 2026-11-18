@@ -119,6 +119,36 @@ function laneBusy(rd, s, dir){
   }
   return -1;
 }
+// ---- the road network: where one road's end meets another road, vehicles can turn from one onto the other
+// (both ways). Motorways only join other roads at their ends, never where they pass over or beside them.
+(function(){
+  const RS = W.roads || [], cell = 60 * M, grid = new Map(), key = (x, z) => Math.floor(x / cell) + ',' + Math.floor(z / cell);
+  RS.forEach(rd => { rd.jn = []; rd.pts.forEach((p, i) => { const k = key(p.x, p.z); if(!grid.has(k)) grid.set(k, []); grid.get(k).push({rd, i}); }); });
+  const link = (A, sA, Bd, sB) => { if(A.jn.some(j => j.to === Bd && Math.abs(j.s - sA) < 20 * M)) return; A.jn.push({s: sA, to: Bd, sTo: sB}); };
+  RS.forEach(A => {
+    const n = A.pts.length;
+    [0, n - 1].forEach(ia => {
+      const p = A.pts[ia], sA = A.s[ia], cx = Math.floor(p.x / cell), cz = Math.floor(p.z / cell);
+      let best = new Map();
+      for(let dx = -1; dx <= 1; dx++) for(let dz = -1; dz <= 1; dz++) (grid.get((cx + dx) + ',' + (cz + dz)) || []).forEach(({rd: B, i}) => {
+        if(B === A) return;
+        const q = B.pts[i], d = Math.hypot(q.x - p.x, q.z - p.z);
+        if(d > A.hw + B.hw + 10 * M) return;
+        const sB = B.s[i], endB = sB < 25 * M || sB > B.s[B.s.length - 1] - 25 * M;
+        if(B.cls === 'M' && !endB) return;                          // no turning onto a motorway part way along
+        const b = best.get(B); if(!b || d < b.d) best.set(B, {d, sB});
+      });
+      best.forEach(({sB}, B) => { link(A, sA, B, sB); link(B, sB, A, sA); });
+    });
+  });
+  RS.forEach(rd => rd.jn.sort((a, b) => a.s - b.s));
+})();
+const speedFor = (rd, kind) => (rd.cls === 'M' ? (kind === 'lorry' || kind === 'bus' ? 22 : 27 + rnd() * 6) : rd.cls === 'A' ? (kind === 'tractor' ? 4.5 : kind === 'lorry' || kind === 'bus' ? 11 : 13 + rnd() * 3)
+  : rd.cls === 'B' ? (kind === 'tractor' ? 4.5 : 10 + rnd() * 2) : rd.cls === 'lane' ? (kind === 'tractor' ? 4 : 6 + rnd() * 2) : (kind === 'tractor' ? 4 : 7.5 + rnd() * 2)) * M;
+const laneFor = (rd, kind) => rd.cls === 'M' ? rd.hw * (kind === 'lorry' || rnd() < 0.5 ? 0.68 : 0.32) : rd.hw * 0.42;
+function onto(v, rd, s, dir){
+  v.rd = rd; v.s = s; v._i = 0; v.dir = dir; v.vmax = speedFor(rd, v.kind); v.lane = laneFor(rd, v.kind); v.cool = 30 * M;
+}
 function makeVehicle(rd, kind){
   const colors = BODY, color = colors[Math.floor(rnd() * colors.length) % colors.length];
   let g, trailer = null;
@@ -128,27 +158,48 @@ function makeVehicle(rd, kind){
   else if(kind === 'tractor'){ g = tractorModel(0x3a6b2a); if(rnd() < 0.5){ trailer = trailerModel(); scene.add(trailer); trailer.scale.setScalar(M); } }
   else g = carModel(color, false);
   scene.add(g); g.scale.setScalar(M); g.frustumCulled = false; if(trailer) trailer.frustumCulled = false;
-  const len = g.userData.len * M, dir = rnd() < 0.5 ? 1 : -1, span = rd.s[rd.s.length - 1];
-  const v = {g, trailer, rd, kind, dir, len, _i: 0, s: Math.max(len, Math.min(span - len, rnd() * span)),
-    v: 0, vmax: (rd.cls === 'M' ? (kind === 'lorry' || kind === 'bus' ? 22 : 27 + rnd() * 6) : kind === 'bus' ? 7.5 : kind === 'lorry' ? 7.5 : kind === 'tractor' ? 4.5 : 8.5 + rnd() * 3) * M, pause: 0,
-    lane: rd.cls === 'M' ? rd.hw * (kind === 'lorry' || rnd() < 0.5 ? 0.68 : 0.32) : rd.hw * 0.42};
+  const len = g.userData.len * M, span = rd.s[rd.s.length - 1];
+  const v = {g, trailer, kind, len, v: 0, pause: 0, cool: 0};
+  onto(v, rd, Math.max(len, Math.min(span - len, rnd() * span)), rnd() < 0.5 ? 1 : -1);
   stepVehicle(v, 0);                   // place it at its spawn point now, not wherever (0,0,0) happens to be
   VEHICLES.push(v);
   return v;
 }
+// pick a way on at a junction: most of the time carry straight on along this road, sometimes turn off
+function turnAt(v, j, atEnd){
+  if(!atEnd && rnd() > 0.3) return false;
+  const B = j.to, spanB = B.s[B.s.length - 1];
+  if(spanB < Math.max(40 * M, 4 * v.len) || (v.kind === 'tractor' && B.cls === 'M') || ((v.kind === 'bus' || v.kind === 'lorry') && B.cls === 'lane')) return false;
+  const nearStart = j.sTo < 25 * M, nearEnd = j.sTo > spanB - 25 * M;
+  const dir = nearStart ? 1 : nearEnd ? -1 : rnd() < 0.5 ? 1 : -1;
+  onto(v, B, Math.max(v.len, Math.min(spanB - v.len, j.sTo + dir * 6 * M)), dir);
+  v.v = Math.min(v.v, 4 * M);
+  return true;
+}
 function stepVehicle(v, dt){
-  const rd = v.rd, span = rd.s[rd.s.length - 1];
+  let rd = v.rd, span = rd.s[rd.s.length - 1];
   if(v.pause > 0){ v.pause -= dt; v.v = Math.max(0, v.v - 3 * M * dt); }
   else {
     const stopAt = laneBusy(rd, v.s, v.dir);
     let target = v.vmax;
     if(stopAt >= 0){ const d = Math.abs(stopAt - v.s) - 7 * M; target = d < 0 ? 0 : Math.min(v.vmax, Math.sqrt(Math.max(0, 2 * 2.5 * M * d))); }
     const distToEnd = v.dir > 0 ? span - v.s : v.s;
-    if(distToEnd < 18 * M) target = Math.min(target, Math.max(0.3 * M, distToEnd / 18 * v.vmax));
+    const way = rd.jn.some(j => Math.abs(j.s - (v.dir > 0 ? span : 0)) < 30 * M);
+    if(distToEnd < 18 * M) target = Math.min(target, Math.max(way ? 3 * M : 0.3 * M, distToEnd / 18 * v.vmax));
     v.v += Math.sign(target - v.v) * Math.min(Math.abs(target - v.v), 2.5 * M * dt);
   }
-  v.s += v.dir * v.v * dt;
-  if(v.s <= v.len || v.s >= span - v.len){ v.s = Math.max(v.len, Math.min(span - v.len, v.s)); v.dir = -v.dir; v.v = 0; v.pause = 2 + rnd() * 5; }
+  const s0 = v.s, step = v.dir * v.v * dt;
+  v.s += step; v.cool -= Math.abs(step);
+  // junctions passed this step: maybe turn off here
+  let turned = false;
+  if(v.cool <= 0) for(const j of rd.jn){ if((j.s - s0) * v.dir > 0 && (j.s - v.s) * v.dir <= 0 && turnAt(v, j, false)){ turned = true; break; } }
+  if(!turned && ((v.dir < 0 && v.s <= v.len) || (v.dir > 0 && v.s >= span - v.len))){        // only when heading into the end
+    // at the end of the road: take any road that meets it here, else turn round
+    const endS = v.s <= v.len ? 0 : span, ways = rd.jn.filter(j => Math.abs(j.s - endS) < 30 * M);
+    if(ways.length && turnAt(v, ways[Math.floor(rnd() * ways.length)], true)) turned = true;
+    else { v.s = Math.max(v.len, Math.min(span - v.len, v.s)); v.dir = -v.dir; v.v = 0; v.pause = 2 + rnd() * 5; }
+  }
+  rd = v.rd;
   const fr = roadFrame(rd, v.s, {_i: v._i});
   v._i = fr._i;
   const side = v.dir > 0 ? 1 : -1;                     // keep left, relative to travel direction
@@ -162,7 +213,31 @@ function stepVehicle(v, dt){
     v.trailer.rotation.y = Math.atan2(v.dir * back.tx, v.dir * back.tz);
   }
 }
-
+// ---- traffic follows you: vehicles left far behind are moved onto the roads round wherever you are looking,
+// so close up the streets and lanes are always busy, wherever on the island that is
+const ROADBOX = (W.roads || []).map(rd => { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; rd.pts.forEach(p => { x0 = Math.min(x0, p.x); z0 = Math.min(z0, p.z); x1 = Math.max(x1, p.x); z1 = Math.max(z1, p.z); }); return {rd, x0, z0, x1, z1}; });
+let nearRoads = [], nearAt = null, nearLen = 0, nearReal = 0;
+function refreshNear(cx, cz, R){
+  nearRoads = []; nearLen = 0; nearReal = 0;
+  ROADBOX.forEach(b => { if(cx > b.x0 - R && cx < b.x1 + R && cz > b.z0 - R && cz < b.z1 + R && b.rd.s[b.rd.s.length - 1] > 40 * M){
+    const pts = b.rd.pts; let ok = false; for(let i = 0; i < pts.length && !ok; i += 3) if(Math.hypot(pts[i].x - cx, pts[i].z - cz) < R) ok = true;
+    if(ok){ const w = b.rd.s[b.rd.s.length - 1] * (b.rd.cls === 'M' ? 2.5 : b.rd.cls === 'A' ? 1.6 : b.rd.cls === 'lane' ? 0.35 : 1); nearRoads.push({rd: b.rd, w}); nearLen += w; nearReal += Math.min(b.rd.s[b.rd.s.length - 1], 2 * R) * (b.rd.cls === 'M' ? 2 : 1); } } });
+  nearAt = {x: cx, z: cz};
+}
+function relocate(v, cx, cz, R){
+  if(!nearRoads.length) return false;
+  for(let tries = 0; tries < 6; tries++){
+    let pick = rnd() * nearLen, r = nearRoads[0];
+    for(const n of nearRoads){ pick -= n.w; if(pick <= 0){ r = n; break; } }
+    const rd = r.rd; if(rd.s[rd.s.length - 1] < 4 * v.len || (v.kind === 'tractor' && rd.cls === 'M') || ((v.kind === 'bus' || v.kind === 'lorry') && rd.cls === 'lane')) continue;
+    const span = rd.s[rd.s.length - 1], s = v.len + rnd() * (span - 2 * v.len), fr = roadFrame(rd, s, {_i: 0});
+    const d = Math.hypot(fr.x - cx, fr.z - cz);
+    if(d > R || d < R * 0.25 && camDist < 0.6) continue;             // not popping up right under your nose
+    onto(v, rd, s, rnd() < 0.5 ? 1 : -1); v.v = v.vmax * 0.6; v.cool = 0; stepVehicle(v, 0); return true;
+  }
+  return false;
+}
+let relocT = 0;
 // A light scatter of traffic on the arterial roads — enough to feel alive without crowding the
 // island (over a thousand road segments exist; only a couple of hundred ever carry a vehicle).
 const CAP = 360;
@@ -182,6 +257,8 @@ arterial.forEach(rd => {
 });
 // a few tractors working the farm lanes, for variety
 (W.roads || []).filter(rd => rd.cls === 'lane' && rd.s[rd.s.length - 1] > 50 * M).forEach(rd => { if(VEHICLES.length < CAP && rnd() < 0.06) makeVehicle(rd, 'tractor'); });
+// a reserve of traffic that gathers round the camera (see relocate): cars mostly, some vans, lorries and buses
+for(let k = 0; k < 380 && arterial.length; k++){ const roll = rnd(); makeVehicle(arterial[Math.floor(rnd() * arterial.length)], roll < 0.1 ? 'van' : roll < 0.16 ? 'lorry' : roll < 0.2 ? 'bus' : roll < 0.23 ? 'tractor' : 'car'); }
 
 // ------------------------------------------------------------------ moored boats rocking, cranes at work
 (W.harbours || []).forEach(h => { if(h.boats) h.boats.forEach(b => { b.userData.bob = Math.random() * 10; b.userData.base = b.position.clone(); }); });
@@ -224,9 +301,18 @@ const _cp = new THREE.Vector3();
 frameHooks.push(dt => {
   const cp = camera.position, d = dt * Math.min(timeScale, 40);
   const vOn = camDist < 2.2, pOn = camDist < 1.1, bOn = camDist < 9;
+  // keep the roads round the view busy: about one vehicle to every 28 m of road in sight
+  if(vOn && (relocT -= dt) <= 0){
+    relocT = 0.35;
+    const R = Math.min(1.0, Math.max(0.3, camDist * 0.9)), cx = camCenter.x, cz = camCenter.z;
+    if(!nearAt || Math.hypot(cx - nearAt.x, cz - nearAt.z) > R * 0.3 || Math.abs(R - (nearAt.R || 0)) > R * 0.3){ refreshNear(cx, cz, R); nearAt.R = R; }
+    const inView = VEHICLES.filter(v => Math.hypot(v.g.position.x - cx, v.g.position.z - cz) < R * 1.3).length;
+    let want = Math.min(VEHICLES.length, Math.round(nearReal / (28 * M))) - inView, moved = 0;
+    for(const v of VEHICLES){ if(want <= 0 || moved > 24) break; if(Math.hypot(v.g.position.x - cx, v.g.position.z - cz) > R * 1.8 && relocate(v, cx, cz, R)){ want--; moved++; } }
+  }
   VEHICLES.forEach(v => {
     const near = vOn && cp.distanceTo(v.g.position) < 1.0;
-    v.g.visible = vOn && camDist < 2.2 && v.g.position.distanceTo(cp) < 1.4;
+    v.g.visible = vOn && Math.hypot(v.g.position.x - camCenter.x, v.g.position.z - camCenter.z) < Math.max(0.6, Math.min(1.4, camDist * 1.3));
     if(v.trailer) v.trailer.visible = v.g.visible;
     if(v.g.visible || near) stepVehicle(v, d);
   });
