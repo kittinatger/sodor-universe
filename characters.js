@@ -902,16 +902,8 @@ function makeRunner(o){
     else R.aA = MARGIN + off[last] + lenN;
     if(R.aA > R.aB) R.aA = R.aB = (R.aA + R.aB) / 2;
   }
-  R.stops = [];
-  if(o.passenger && R.aB > R.aA){
-    line.stops.forEach(k => {
-      const st = STATIONS[k];
-      if(o.stopsAt && !o.stopsAt.includes(st.name)) return;     // expresses only call at the big stations
-      const u = lineU(line, st.name), x = (u - o.uA) * sgn * L;
-      const a = x - len0 + Lc / 2;
-      if(a > R.aA + 20 * METRE && a < R.aB - 20 * METRE) R.stops.push(a);
-    });
-  }
+  R.stops = o.passenger ? stopsFor(R, o.stopsAt || 'all') : [];
+  R.vBase = o.vmax;
   R.a = R.aA + Math.random() * (R.aB - R.aA);
   R.dir = Math.random() < 0.5 ? 1 : -1;
   R.side = R.runRound ? (R.dir > 0 ? 'B' : 'A') : (o.side || 'B');
@@ -930,6 +922,19 @@ function makeRunner(o){
     return {lo, hi, k: Math.min(15 * METRE, (hi - lo) / 4)};
   });
   return R;
+}
+// Where the train stands at each station it calls at: 'all', 'none', or a list of station names.
+function stopsFor(R, which){
+  const out = [], line = R.line, o = R.o, len0 = R.cars[0].len / 2;
+  if(which === 'none' || !(R.aB > R.aA)) return out;
+  line.stops.forEach(k => {
+    const st = STATIONS[k];
+    if(Array.isArray(which) && !which.includes(st.name)) return;     // expresses only call at the big stations
+    const u = lineU(line, st.name), x = (u - o.uA) * R.sgn * R.L;
+    const a = x - len0 + R.Lc / 2;
+    if(a > R.aA + 20 * METRE && a < R.aB - 20 * METRE) out.push(a);
+  });
+  return out;
 }
 function loopLat(R, loop, x){
   if(!loop || x <= loop.lo || x >= loop.hi) return 0;
@@ -1042,7 +1047,7 @@ function stepRunner(R, dt){
     if(step >= d || d < 0.05 * METRE){
       step = d; R.a = target; R.v = 0;
       if(target === term){ R.lastStop = null; R.phase = 'dwell'; R.timer = 90; R.next = R.runRound ? 'rr' : 'turn'; }
-      else { R.lastStop = target; R.phase = 'dwell'; R.timer = 35; R.next = 'run'; }
+      else { R.lastStop = target; R.phase = 'dwell'; R.timer = R.stopDwell || 35; R.next = 'run'; }
       if(R.blockSys) R.blockSys.arrive(R, target, target === term);
     } else R.a += R.dir * step;
     carDx = unitDx = R.dir * step; moving = step > 0;
@@ -1648,7 +1653,7 @@ window.SODOR_SR = {ENGINES, SR_TRAINS, RUNNERS, statics, STOCK, COLORS: ENGINE_C
 // The model kit and train runner, shared with nwr.js.
 window.SODOR_KIT = {mat, add, box, cylZ, cylX, cylY, domeCap, arcZ, roof, bake, canvasTex, faceMat, plateMat, sidePlates, sidePlatesTex,
   glassMat, brassMat, bronzeMat, buildSteam, buildTender, wheelset, makeRunner, drawLoops, addMarker, RUNNERS, tagPick, lineU,
-  placeVeh, spin, puff, trackFrame, swapUnit, loopLat, markerMat, _p, _t, yards: [], roundhouse: null,
+  placeVeh, spin, puff, trackFrame, swapUnit, stopsFor, loopLat, markerMat, _p, _t, yards: [], roundhouse: null,
   nearTrack, clearArea, inClearZone, clearZones, ground, rosterRow, NG, STD, BLACK, BEAM_RED, BRASS, sceneryNear, trees, ribbon, MINI};
 // Arlesdale sidings: a short road beside the station, shunted by a Blister (ops.js YARDS).
 ENGINES.filter(E => E.yard && E.unit).forEach(E => {

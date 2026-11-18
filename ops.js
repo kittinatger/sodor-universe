@@ -79,6 +79,38 @@ function smoke(veh, moving, dt, st){
   [veh.chimneyAt, veh.chimneyAt2].forEach(c => { if(c){ _sp.copy(c); veh.group.localToWorld(_sp); K.puff(_sp); } });
 }
 
+// ------------------------------------------------------------------ the workings through the day
+const WORK_KIND = {
+  express:  {stops: 'run',  v: 1,    dwell: 40,  txt: 'the Express'},
+  fast:     {stops: 'none', v: 1.12, dwell: 35,  txt: 'a fast train, non-stop'},
+  stopping: {stops: 'all',  v: 0.92, dwell: 40,  txt: 'a stopping train, calling at every station'},
+  market:   {stops: 'all',  v: 0.85, dwell: 110, txt: 'a market train, with long stops'},
+  mail:     {stops: 'all',  v: 1,    dwell: 120, txt: 'the mail, loading bags at every station'},
+  pickup:   {stops: 'all',  v: 0.8,  dwell: 300, txt: 'a pick-up goods, shunting trucks at every station'},
+  through:  {stops: 'none', v: 1.1,  dwell: 35,  txt: 'a through goods, non-stop'},
+  heavy:    {stops: 'none', v: 0.75, dwell: 35,  txt: 'a heavy goods, slow and steady'},
+};
+const WORK_SHORT = {express: 'Express', fast: 'fast train', stopping: 'stopping train', market: 'market train', mail: 'mail', pickup: 'pick-up goods', through: 'through goods', heavy: 'heavy goods'};
+function parseWork(list){
+  if(!list || !list.length) return null;
+  return list.map(([t, kind, txt]) => ({t: hm(t), kind, k: WORK_KIND[kind] || WORK_KIND.stopping, txt: txt || (WORK_KIND[kind] || WORK_KIND.stopping).txt})).sort((a, b) => a.t - b.t);
+}
+// the working in force at sim minute t (the last one carries on past midnight)
+function workAt(W, t){
+  const tod = mod(t, 1440);
+  let w = W[W.length - 1];
+  W.forEach(x => { if(x.t <= tod) w = x; });
+  return w;
+}
+function applyWork(D, w){
+  const R = D.R, k = w.k, std = R.o.passenger ? (R.o.stopsAt || 'all') : 'none';
+  R.stops = K.stopsFor(R, k.stops === 'run' ? std : k.stops);
+  R.o.vmax = R.vBase * k.v;
+  R.stopDwell = k.dwell;
+  D.w = w;
+}
+const jobNow = D => D.w ? D.w.txt : D.job;
+
 // ------------------------------------------------------------------ the duties
 const DUTIES = [], byGroup = new Map();
 const entryOf = new Map(S.allNWR.map(e => [e.v, e]));
@@ -114,8 +146,10 @@ K.RUNNERS.filter(R => R.nwr).forEach(R => {
   addDuty({id: 'rex', rail: 'rex', R, rota: [member(tr.name, R.unit.map(m => m.v), tr.color, show, tr, true)], dd: DUT.rex || {}, job: 'passenger trains on the Arlesdale Railway', railName: 'Arlesdale Railway', keepPick: true});
 });
 
+
 function addDuty(o){
   const R = o.R, D = {id: o.id, rail: o.rail, railName: o.railName, R, rota: o.rota, shifts: parseShifts(o.dd.shifts), note: o.dd.note || '', job: o.job,
+    work: o.rail === 'nwr' ? parseWork((DUT.work || {})[o.id]) : null, w: null,
     cur: 0, state: 'run', mover: null, timer: 0, want: 0, turn: null, gauge: R.line.kind === 'standard' ? 'std' : R.line.kind === 'miniature' ? 'mini' : 'ng'};
   DUTIES.push(D);
   o.rota.forEach((m, i) => byGroup.set(m.unit[0].group, {D, i}));
@@ -308,6 +342,7 @@ function atShedEnd(D){
 function stepDuty(D, dt){
   const R = D.R, turn = onTurn(D.shifts, simTime), want = turn ? turn.idx : -1;
   D.turn = turn; D.want = want;
+  if(D.work){ const w = workAt(D.work, simTime); if(w !== D.w) applyWork(D, w); }
   switch(D.state){
     case 'run':
       if(want !== D.cur && atShedEnd(D)){ R.hold = true; D.state = 'uncouple'; D.timer = 50; }
@@ -656,11 +691,15 @@ function stepRoundhouse(dt){
 function dutyStatus(D, i){
   const at = D.endName ? ` at ${D.endName}` : '', now = simTime;
   const nt = nextTurn(D.shifts, i, now), next = nt ? when(nt.t, now) : 'not in the next fortnight';
-  const job = D.job;
+  const job = jobNow(D);
   if(D.state === 'fromShed' && D.coming === i) return `Coming off shed${at} to work ${job}.`;
   if(i === D.cur){
     if(D.state === 'run'){
-      if(D.want === i) return `On duty until ${fmtTime(D.turn.end)}: ${job}.`;
+      if(D.want === i){
+        let later = '';
+        if(D.work && D.work.length > 1){ const k = D.work.indexOf(D.w), nx = D.work[(k + 1) % D.work.length]; if(nx !== D.w) later = ` From ${fmtTime(nx.t)}: ${nx.txt}.`; }
+        return `On duty until ${fmtTime(D.turn.end)}, now working ${job}.${later}`;
+      }
       return `Finishing ${job}: the last trip back${at}, then on shed.`;
     }
     if(D.state === 'uncouple') return `Uncoupling from the train${at} to go on shed.`;
@@ -682,7 +721,8 @@ function statusOf(group){
   if(!e) return '';
   if(e.D){
     const D = e.D, base = dutyStatus(D, e.i);
-    return `${base} Rota: ${D.rota.map(m => m.name).join(' and ')} · ${shiftText(D.shifts)}.${D.note ? ' ' + D.note : ''}`;
+    const day = D.work ? ` The day's work: ${D.work.map(w => `${fmtTime(w.t)} ${w.txt}`).join('; ')}.` : '';
+    return `${base} Rota: ${D.rota.map(m => m.name).join(' and ')} · ${shiftText(D.shifts)}.${day}${D.note ? ' ' + D.note : ''}`;
   }
   if(e.Y){
     const r = e.rake, Y = e.Y;
@@ -707,7 +747,8 @@ if(list){
     if(D.railName !== lastRail){ lastRail = D.railName; const h = document.createElement('div'); h.className = 'leg-group'; h.textContent = D.railName; list.appendChild(h); }
     const d = document.createElement('div'); d.className = 'ros-item duty-row';
     d.innerHTML = '<span class="ros-dot"></span><div class="duty-txt"><div class="duty-main"></div><div class="duty-sub"></div></div>';
-    d.querySelector('.duty-sub').textContent = `${D.job.charAt(0).toUpperCase() + D.job.slice(1)} · ${shiftText(D.shifts)}`;
+    d.querySelector('.duty-sub').textContent = D.work ? `${shiftText(D.shifts)} · ${D.work.map(w => `${fmtTime(w.t)} ${WORK_SHORT[w.kind]}`).join(', ')}`
+      : `${D.job.charAt(0).toUpperCase() + D.job.slice(1)} · ${shiftText(D.shifts)}`;
     d.onclick = () => { const i = D.state === 'fromShed' ? D.coming : D.want >= 0 ? D.want : D.cur; D.rota[i].show(); };
     list.appendChild(d);
     rows.push({D, d, dot: d.querySelector('.ros-dot'), main: d.querySelector('.duty-main')});
@@ -717,7 +758,7 @@ if(list){
 function shortState(D){
   const m = D.rota[D.cur];
   switch(D.state){
-    case 'run': return D.want === D.cur ? [m, `${m.name} · on duty to ${fmtTime(D.turn.end)}`, 'on'] : [m, `${m.name} · last trip, then on shed`, 'off'];
+    case 'run': return D.want === D.cur ? [m, `${m.name} · ${D.w ? WORK_SHORT[D.w.kind] + ' to ' + fmtTime(D.turn.end) : 'on duty to ' + fmtTime(D.turn.end)}`, 'on'] : [m, `${m.name} · last trip, then on shed`, 'off'];
     case 'uncouple': case 'toShed': return [m, `${m.name} · going on shed`, 'off'];
     case 'fromShed': { const c = D.rota[D.coming]; return [c, `${c.name} · coming off shed`, 'on']; }
     case 'couple': return [m, `${m.name} · coupling on`, 'on'];

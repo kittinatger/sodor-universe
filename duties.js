@@ -81,3 +81,40 @@ window.SODOR_DUTIES = {
     wilfred: ['07:30', '18:00'], shane: ['08:00', '17:00'], eric: ['09:00', '18:30'], diesel9: ['06:00', '14:00'], diesel10cfr: ['12:00', '20:00'],
   },
 };
+
+// What each train does through the day. A working runs from its start time until the next one begins
+// (the last carries on round to the first), whichever engine on the rota is out. The kinds (ops.js):
+//   express   calls only at the train's usual stations     fast      runs non-stop end to end
+//   stopping  calls at every station                       market    every station, with long stops
+//   mail      every station, standing while bags are moved pickup    a goods shunting trucks at every station
+//   through   a goods running non-stop                     heavy     a slow, heavy goods, non-stop
+// The third item, when given, says what the working is.
+window.SODOR_DUTIES.work = {
+  gordon:  [['05:30', 'express', 'the early Express'], ['09:30', 'fast', 'the non-stop Express to Kellsthorpe Road'],
+            ['16:00', 'express', 'the evening Express'], ['19:30', 'stopping', 'the late stopping train, calling at every station (which Gordon thinks beneath him)']],
+  rebecca: [['06:00', 'stopping', 'the early commuter train, all stations to Barrow'], ['09:30', 'express', 'the Express on to Vicarstown and Barrow'],
+            ['17:00', 'stopping', 'the evening commuter train, all stations']],
+  henry:   [['21:30', 'fast', 'the Flying Kipper, racing the fish to market'], ['02:00', 'mail', 'the newspaper train, dropping papers at every station']],
+  james:   [['06:00', 'pickup', 'the morning pick-up goods, shunting trucks at every station'], ['10:00', 'through', 'the through goods'],
+            ['15:00', 'pickup', 'the afternoon pick-up goods']],
+  murdoch: [['07:00', 'heavy', 'the heavy stone train to Vicarstown'], ['12:00', 'through', 'the afternoon through goods'],
+            ['19:30', 'through', 'the night goods'], ['01:00', 'pickup', 'the early pick-up goods, collecting trucks for the morning']],
+  thomas:  [['06:00', 'stopping', "the workmen's train, all stations"], ['08:00', 'stopping', 'the school train'], ['09:30', 'market', 'the market train, with long stops for shoppers'],
+            ['12:00', 'fast', 'the fast midday train, non-stop to Knapford'], ['14:00', 'stopping', 'the afternoon branch train'], ['17:00', 'stopping', 'the evening commuter train']],
+  toby:    [['07:00', 'stopping', 'the morning tram'], ['11:00', 'market', 'the market tram, with long stops'], ['15:00', 'stopping', 'the afternoon tram']],
+  edward:  [['05:30', 'stopping', 'the early commuter train'], ['09:00', 'market', 'the market train, with long stops'],
+            ['13:30', 'stopping', 'the afternoon branch train'], ['17:00', 'fast', 'the evening fast train, non-stop']],
+  boco:    [['06:00', 'through', 'the tanker train to Brendam Docks'], ['12:00', 'pickup', 'the pick-up goods, collecting empties along the branch']],
+  duck:    [['05:45', 'stopping', 'the early commuter train'], ['09:00', 'fast', 'the fast train to Bluff\'s Cove'],
+            ['15:00', 'stopping', 'the school and commuter train'], ['18:30', 'market', 'the evening stopping train']],
+  oliver:  [['07:00', 'pickup', 'the morning pick-up goods with Toad'], ['12:00', 'through', 'the afternoon through goods to Arlesburgh']],
+  emily:   [['06:00', 'stopping', 'the early commuter train'], ['09:30', 'fast', 'the fast train, non-stop'],
+            ['15:00', 'stopping', 'the school train'], ['18:30', 'fast', 'the evening fast train']],
+  nia:     [['07:30', 'pickup', 'the pick-up goods, shunting at every station'], ['12:00', 'through', 'the through goods to Wellsworth'], ['16:00', 'pickup', 'the evening pick-up goods']],
+  percy:   [['20:30', 'mail', 'the mail train, loading bags at every station'], ['00:30', 'through', 'the overnight parcels, non-stop']],
+  daisy:   [['06:30', 'stopping', 'the early commuter service'], ['09:30', 'market', 'the market train, with long stops'],
+            ['12:30', 'fast', 'the fast midday service'], ['16:00', 'stopping', 'the evening commuter service']],
+  paxton:  [['06:00', 'heavy', 'the heavy stone train'], ['11:00', 'pickup', 'the pick-up goods'], ['20:00', 'through', 'the night stone train']],
+  arthur:  [['07:00', 'pickup', 'the morning pick-up goods'], ['13:00', 'through', 'the afternoon through goods']],
+  diesel10:[['07:00', 'pickup', 'the scrap pick-up, collecting trucks along the line'], ['22:00', 'heavy', 'the night scrap train']],
+};
