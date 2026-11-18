@@ -2062,8 +2062,8 @@ function buildRoundhouse(D){
   }
 
   // gravel apron with weed patches
-  box(G, WID, 0.04, LEN, GRAV, lx(WID / 2), 0.0, LEN / 2);
-  for(let k = 0; k < 18; k++) box(G, 4 + (k * 7) % 6, 0.02, 3 + (k * 5) % 5, mat(0x6f7a3a, 0.95), lx(24 + (k * 37) % 56), 0.025, 8 + (k * 53) % (LEN - 16));
+  box(G, WID, 0.04, LEN, GRAV, lx(WID / 2), 0.012, LEN / 2);            // top at 0.032, clear of the pad (0.02) and under the rails (0.05)
+  for(let k = 0; k < 18; k++) box(G, 4 + (k * 7) % 6, 0.01, 3 + (k * 5) % 5, mat(0x6f7a3a, 0.95), lx(24 + (k * 37) % 56), 0.039, 8 + (k * 53) % (LEN - 16));
 
   // turntable: brick-lined pit and a green girder bridge with its cabin
   cylY(G, R0, R0, 1.2, mat(0x6a6a66, 0.95), lx(cb), -0.6, ca, 40);

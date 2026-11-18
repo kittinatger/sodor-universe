@@ -319,8 +319,8 @@ function stepDuty(D, dt){
       if(stepMover(D, dt)){ D.mover = null; D.state = 'shed'; D.since = simTime; }
       break;
     case 'shed':
-      if(want < 0 && !D.tid && simTime - D.since > 60) goTidmouth(D);
-      if(want >= 0 && D.tid) leaveTidmouth(D);
+      if(want < 0 && !D.tid && simTime - D.since > 60 && nextAny(D) - simTime > 180) goTidmouth(D);
+      if(D.tid && (want >= 0 || nextAny(D) - simTime < (D.tid.route ? tripMin(D.tid.route.L) + 5 : 45))) leaveTidmouth(D);         // set off home in good time for the next turn
       if(want >= 0 && !D.tid){ D.coming = want; moveTo(D, want, parkQ(D, want), 0); D.state = 'fromShed'; if(want !== D.cur){ D.rota[want].unit.forEach(v => { const e = entryOf.get(v); if(e) e.parked = true; }); } }
       break;
     case 'fromShed':
@@ -402,7 +402,7 @@ const RH = K.roundhouse;
 if(RH){
   RH.phiB = Math.PI / 2;                                  // the bridge starts lying along the yard
   RH.hours = (DUT.yards || {}).tidmouth || ['05:00', '23:00'];
-  RH.wait = 4 * 60; RH.job = null; RH.queue = [];
+  RH.wait = 4 * 60; RH.job = null; RH.queue = []; RH.travel = [];
   RH.stalls.forEach(st => {
     st.off = []; st.L = 0;
     st.vehs.forEach(v => { st.off.push(st.L + v.len / 2); st.L += v.len + 0.15; });
@@ -448,32 +448,77 @@ function approach(st, target, dt, vmax = 1.3, acc = 0.15){
 // round to a stall of its own and back in. When its next turn begins it comes out the same way, onto the
 // table, round to face the lead, off along the shed road and away down the line to its duty's shed.
 const STEAM_TEAM = new Set(['thomas', 'gordon', 'james', 'percy', 'emily', 'rebecca', 'nia']);
-const ROUTE = RH && RH.inPath && RH.inPath.length > 2 ? (() => { const P = RH.inPath, S = [0]; for(let i = 1; i < P.length; i++) S.push(S[i - 1] + P[i].distanceTo(P[i - 1]) / M); return {P, S, L: S[S.length - 1]}; })() : null;
+const mkRoute = pts => { const P = [pts[0]], S = [0]; for(let i = 1; i < pts.length; i++){ const d = pts[i].distanceTo(P[P.length - 1]) / M; if(d < 0.3) continue; P.push(pts[i]); S.push(S[S.length - 1] + d); } return {P, S, L: S[S.length - 1]}; };
+const IN = RH && RH.inPath && RH.inPath.length > 2 ? mkRoute(RH.inPath) : null;       // Main Line south of the sheds to the turntable
+// The standard-gauge network: lines join where one ends beside another (a branch at its junction station).
+let NET = null;
+function nearOn(line, x, z){ const R = line.real; let bj = 0, bd = Infinity; for(let j = 0; j < R.n; j++){ const d = (R.x[j] - x) ** 2 + (R.z[j] - z) ** 2; if(d < bd){ bd = d; bj = j; } } return {u: bj / (R.n - 1), d: Math.sqrt(bd)}; }
+function net(){
+  if(NET) return NET;
+  const ids = Object.keys(LINES).filter(k => LINES[k].kind === 'standard' && LINES[k].real && LINES[k].real.n > 1), E = [];
+  ids.forEach(a => { const RA = LINES[a].real; [0, RA.n - 1].forEach(j => ids.forEach(b => {
+    if(b === a) return; const q = nearOn(LINES[b], RA.x[j], RA.z[j]);
+    if(q.d < 60 * M){ const ua = j / (RA.n - 1); E.push({a, ua, b, ub: q.u}, {a: b, ua: q.u, b: a, ub: ua}); }
+  })); });
+  return NET = {ids, E};
+}
+function hopsTo(src, dst){                                       // fewest junctions from one line to another
+  const prev = {[src]: null}, Q = [src];
+  while(Q.length){ const a = Q.shift(); if(a === dst) break; net().E.forEach(e => { if(e.a === a && !(e.b in prev)){ prev[e.b] = e; Q.push(e.b); } }); }
+  if(!(dst in prev)) return null;
+  const out = []; for(let c = dst; prev[c]; c = prev[c].a) out.unshift(prev[c].b);
+  return out;                                                    // the lines passed onto, in order
+}
+const _lp = new V3(), _lt = new V3();
+function linePts(line, u0, u1, lat, out){
+  const n = Math.max(1, Math.ceil(Math.abs(u1 - u0) * line.real.len / (6 * M)));
+  for(let i = 0; i <= n; i++){
+    const u = u0 + (u1 - u0) * i / n; realAt(line, u, _lp);
+    if(lat){ realDir(line, u, _lt); _lt.y = 0; _lt.normalize(); _lp.x += _lt.z * lat * M; _lp.z -= _lt.x * lat * M; }
+    out.push(_lp.clone());
+  }
+}
+// From an engine's own shed to the Tidmouth turntable: along its line, over each junction, up the Main Line.
+function homeRoute(D, from){
+  const line = D.R.line, lid = Object.keys(LINES).find(k => LINES[k] === line), P = [from.clone()];
+  const hops = lid === 'main' ? [] : lid ? hopsTo(lid, 'main') : null;
+  if(!hops) return mkRoute(IN.P);                                  // not joined to the Main Line: start south of Tidmouth
+  let cur = lid, u = nearOn(line, from.x, from.z).u;
+  hops.forEach(b => {
+    let best = null; net().E.forEach(e => { if(e.a === cur && e.b === b && (!best || Math.abs(e.ua - u) < Math.abs(best.ua - u))) best = e; });
+    linePts(LINES[cur], u, best.ua, cur === 'main' ? MAIN_LANE : 0, P); cur = b; u = best.ub;
+  });
+  linePts(LINES.main, u, nearOn(LINES.main, IN.P[0].x, IN.P[0].z).u, MAIN_LANE, P);
+  IN.P.forEach(p => P.push(p));
+  return mkRoute(P);
+}
 const _rp = new V3(), _rt = new V3();
-function routeAt(s, out, tan){                                  // s metres along the route, straight on past either end
-  const {P, S, L} = ROUTE;
+function routeAt(R, s, out, tan){                                 // s metres along the route, straight on past either end
+  const {P, S, L} = R;
   let lo = 1, hi = P.length - 1;
   if(s > 0 && s < L){ while(lo < hi){ const mid = (lo + hi) >> 1; if(S[mid] < s) lo = mid + 1; else hi = mid; } } else lo = s <= 0 ? 1 : P.length - 1;
   const a = P[lo - 1], b = P[lo], t = (s - S[lo - 1]) / ((S[lo] - S[lo - 1]) || 1);
   out.lerpVectors(a, b, t); tan.subVectors(b, a).normalize(); return out;
 }
-function placeRoute(st, sF, dir){                               // engine front at sF, running with (+1) or against (-1) the route
-  st.vehs.forEach((v, j) => { routeAt(sF - dir * st.off[j], _rp, _rt); v.group.position.copy(_rp); v.group.rotation.set(0, Math.atan2(dir * _rt.x, dir * _rt.z), 0); });
+function placeRoute(st, R, sF, dir){                              // engine front at sF, running with (+1) or against (-1) the route
+  st.vehs.forEach((v, j) => { routeAt(R, sF - dir * st.off[j], _rp, _rt); v.group.position.copy(_rp); v.group.rotation.set(0, Math.atan2(dir * _rt.x, dir * _rt.z), 0); });
 }
-function driveRoute(J, st, dt, toward){                         // move the front towards `toward`, easing to a stand
-  const d = toward - J.s, VMAX = 7, ACC = 0.3;
-  J.v = Math.min(VMAX, Math.sqrt(2 * ACC * Math.abs(d)) + 0.3, (J.v || 0) + ACC * dt);
+function driveRoute(J, st, dt, toward){                           // move the front towards `toward`, easing to a stand
+  const R = J.route, d = toward - J.s, yard = J.s > R.L - IN.L + 40, ACC = 0.4;
+  J.v = Math.min(yard ? 6 : 25, Math.sqrt(2 * ACC * Math.abs(d)) + 0.3, (J.v || 0) + ACC * dt);   // slower through the junction and the yard
   const step = Math.min(Math.abs(d), J.v * dt);
   J.s += Math.sign(d) * step;
-  placeRoute(st, J.s, J.dir);
+  placeRoute(st, R, J.s, J.dir);
   st.vehs.forEach(v => K.spin(v, -step * M, M));
   smoke(st.vehs[0], step > 0, dt, st);
   return Math.abs(toward - J.s) < 1e-3;
 }
+const tripMin = L => L / 21 / 60 + 8;                          // minutes to run light engine L metres, with the turntable
+function nextAny(D){ let t = Infinity; D.rota.forEach((m, i) => { const n = nextTurn(D.shifts, i, simTime); if(n) t = Math.min(t, n.t); }); return t; }
 function goTidmouth(D){
   const m = D.rota[D.cur];
   D.tid = 'none';
-  if(!RH || !ROUTE || !m.rec || !STEAM_TEAM.has(m.rec.id)) return;
+  if(!RH || !IN || !m.rec || !STEAM_TEAM.has(m.rec.id)) return;
   const st = RH.stalls.find(s => !s.vehs.length && !s.guest);
   if(!st) return;
   st.guest = D; st.vehs = m.unit; st.off = []; st.L = 0;
@@ -482,18 +527,38 @@ function goTidmouth(D){
   st.homeRho = Math.max(RH.R0 + 1, (st.end || RH.R1) - 1 - st.L);
   D.tid = st;
   m.unit.forEach(v => { const e = entryOf.get(v); if(e) e.parked = true; });      // drawn like the other engines on shed while it is away
-  RH.queue.push({kind: 'arrive', st, D});
+  const route = homeRoute(D, m.unit[0].group.position);
+  if(nextAny(D) - simTime < 2 * tripMin(route.L) + 90){ st.vehs = []; st.guest = null; D.tid = 'none'; syncCulling(D); return; }   // too far to go home tonight
+  st.route = route;
+  RH.travel.push({kind: 'arrive', st, D, route, phase: 'drive', s: st.L, dir: 1, v: 0});
 }
-// returns once the engine has left; until then the duty waits on shed
+// returns once the engine is back at its own shed; until then the duty waits on shed
 function leaveTidmouth(D){
   const st = D.tid;
   if(st && st !== 'none'){
-    const qi = RH.queue.findIndex(j => j.kind === 'arrive' && j.st === st);
-    if(qi >= 0){ RH.queue.splice(qi, 1); st.vehs = []; st.guest = null; D.tid = null; syncCulling(D); return; }      // never set off: it is still at its own shed
-    if(!D.leaving){ D.leaving = true; RH.queue.push({kind: 'leave', st, D}); }
+    if(D.leaving) return;
+    D.leaving = true;
+    const J = RH.travel.find(j => j.st === st);
+    if(J && !J.table){ J.kind = 'back'; return; }                  // still on the way: run straight back
+    RH.queue.push({kind: 'leave', st, D, route: st.route});
     return;
   }
   D.tid = null;
+}
+function homeAgain(J){ const st = J.st; st.vehs = []; st.guest = null; J.D.tid = null; J.D.leaving = false; syncCulling(J.D); }
+// the journeys along the line, which need no turntable until the last few metres
+function stepTravel(dt){
+  for(let k = RH.travel.length - 1; k >= 0; k--){
+    const J = RH.travel[k], st = J.st, R = J.route;
+    if(J.kind === 'back' || J.kind === 'leave'){                    // back to the engine's own shed (`back`: never got here, so tender first)
+      if(driveRoute(J, st, dt, J.kind === 'back' ? st.L : 0)){ RH.travel.splice(k, 1); homeAgain(J); }
+      continue;
+    }
+    if(!J.table && J.s >= R.L - 30 - 1e-3 && !RH.job){ RH.job = J; J.table = true; }
+    const there = driveRoute(J, st, dt, J.table ? R.L : R.L - 30);
+    const aligned = J.table && alignBridge(RH.phiL, dt, true);
+    if(there && aligned){ RH.phiB = RH.phiL; setBridge(); st.rho = RH.R0; J.phase = 'onto'; RH.travel.splice(k, 1); }
+  }
 }
 const angTo = (from, to) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
 // turn the bridge towards phi (either end will do when `either`); true once it lines up
@@ -508,14 +573,10 @@ function turnWith(st, phi, dt){
   RH.phiB += Math.sign(d) * Math.min(Math.abs(d), OMEGA * dt); setBridge(); placeStall(st, RH.phiB);
   return Math.abs(d) < 1e-4;
 }
-function stepVisit(J, dt){
+function stepVisit(J, dt){                                          // the turntable part of a visit; true when the table is free again
   const st = J.st;
   if(J.kind === 'arrive'){
-    if(!J.phase){ J.phase = 'drive'; J.s = 0; J.dir = 1; J.v = 4; }
-    if(J.phase === 'drive'){
-      const aligned = alignBridge(RH.phiL, dt, true);
-      if(driveRoute(J, st, dt, ROUTE.L) && aligned){ RH.phiB = RH.phiL; setBridge(); st.rho = RH.R0; J.phase = 'onto'; }
-    } else if(J.phase === 'onto'){
+    if(J.phase === 'onto'){
       if(approach(st, -st.L / 2, dt, 1.0)) J.phase = 'turn';
       placeStall(st, RH.phiL);
     } else if(J.phase === 'turn'){
@@ -524,19 +585,20 @@ function stepVisit(J, dt){
       if(approach(st, RH.working ? st.dayRho : st.homeRho, dt, 1.0)) return true;
       placeStall(st, st.phi);
     }
-  } else {
-    if(!J.phase) J.phase = 'align';
-    if(J.phase === 'align'){ if(alignBridge(st.phi, dt, true)){ RH.phiB = st.phi; setBridge(); J.phase = 'out'; } }
-    else if(J.phase === 'out'){
-      if(approach(st, -st.L / 2, dt, 1.0)) J.phase = 'turn';
-      placeStall(st, st.phi);
-    } else if(J.phase === 'turn'){
-      if(turnWith(st, RH.phiL + Math.PI, dt)){ RH.phiB = RH.phiL + Math.PI; J.phase = 'off'; }
-    } else if(J.phase === 'off'){
-      if(approach(st, -RH.R0, dt, 1.0)){ J.phase = 'drive'; J.s = ROUTE.L; J.dir = -1; J.v = 1; }
-      placeStall(st, RH.phiL + Math.PI);
-    } else if(J.phase === 'drive'){
-      if(driveRoute(J, st, dt, -st.L - 5)){ st.vehs = []; st.guest = null; J.D.tid = null; J.D.leaving = false; syncCulling(J.D); return true; }
+    return false;
+  }
+  if(!J.phase) J.phase = 'align';
+  if(J.phase === 'align'){ if(alignBridge(st.phi, dt, true)){ RH.phiB = st.phi; setBridge(); J.phase = 'out'; } }
+  else if(J.phase === 'out'){
+    if(approach(st, -st.L / 2, dt, 1.0)) J.phase = 'turn';
+    placeStall(st, st.phi);
+  } else if(J.phase === 'turn'){
+    if(turnWith(st, RH.phiL + Math.PI, dt)){ RH.phiB = RH.phiL + Math.PI; J.phase = 'off'; }
+  } else if(J.phase === 'off'){
+    placeStall(st, RH.phiL + Math.PI);
+    if(approach(st, -RH.R0, dt, 1.0)){
+      if(!J.route) J.route = mkRoute(IN.P.slice());               // no record of its way here: away down the Main Line
+      J.phase = 'drive'; J.s = J.route.L; J.dir = -1; J.v = 1; RH.travel.push(J); return true;
     }
   }
   return false;
@@ -555,7 +617,9 @@ function stepRoundhouse(dt){
     if(Math.abs(want - st.rho) > 1e-4){ approach(st, want, dt); placeStall(st, st.phi); }
   });
   if(!RH.job && RH.queue.length) RH.job = RH.queue.shift();
-  if(RH.job && RH.job.kind){ if(stepVisit(RH.job, dt)){ RH.job = null; RH.wait = 10 * 60; } return; }
+  stepTravel(dt);
+  if(RH.job && RH.job.kind){ if(RH.job.phase !== 'drive' && stepVisit(RH.job, dt)){ RH.job = null; RH.wait = 10 * 60; } return; }
+  if(!RH.job && RH.travel.some(j => j.kind === 'arrive' && j.s > j.route.L - 400)) return;      // keep the table free for an engine coming in
   if(!RH.job){
     if(!working) return;
     if((RH.wait -= dt) > 0) return;
@@ -602,9 +666,10 @@ function dutyStatus(D, i){
     if(D.state === 'couple') return `Coupled on${at}, about to start ${job}.`;
     if(D.state === 'shed' && D.tid && D.tid !== 'none'){
       const J = RH.job && RH.job.st === D.tid ? RH.job : null;
-      if(D.leaving) return J ? `Leaving Tidmouth Sheds to work ${job}.` : `Waiting for the turntable at Tidmouth Sheds before ${job}.`;
-      if(J && J.kind === 'arrive' && J.phase !== 'in') return `Running home to Tidmouth Sheds: up the Main Line, onto the shed road and the turntable.`;
-      if(RH.queue.some(q => q.st === D.tid)) return `On shed${at}, about to run home to Tidmouth Sheds.`;
+      if(D.leaving) return J || RH.travel.some(q => q.st === D.tid) ? `Leaving Tidmouth Sheds, running back light engine to work ${job}.` : `Waiting for the turntable at Tidmouth Sheds before ${job}.`;
+      const T = RH.travel.find(q => q.st === D.tid);
+      if(T && T.kind === 'arrive') return `Running home light engine to Tidmouth Sheds, along the line and up the Main Line.`;
+      if(J && J.kind === 'arrive' && J.phase !== 'in') return `Coming onto the turntable at Tidmouth Sheds.`;
       return `Home at Tidmouth Sheds with the Steam Team until ${next}.`;
     }
   }
