@@ -29,6 +29,7 @@ window.SODOR_DUTIES = {
     emily:    {shifts: [['06:00', '13:00', '0'], ['15:00', '22:00', '0']]},
     paxton:   {rota: ['paxton', 'norman'], shifts: [['06:00', '17:00', '0', '1111110'], ['20:00', '04:00', '1', '1111100']],
                note: 'Paxton brings the stone down by day and Norman runs the night trains.'},
+    nia:      {shifts: [['07:30', '18:30', '0']], note: 'Nia works the goods between Tidmouth and Wellsworth by day and sleeps at Tidmouth Sheds.'},
     percy:    {shifts: [['20:30', '04:30', '0', '1111110']], note: 'Percy takes the mail to Kirk Ronan overnight.'},
     stepney:  {shifts: [['10:00', '17:00', '0', '0010011']], note: 'Heritage trains run on Wednesdays and at weekends.'},
     arthur:   {shifts: [['07:00', '19:00', '0', '1111110']]},

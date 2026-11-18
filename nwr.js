@@ -1740,6 +1740,7 @@ const RUNS = {
   winston: {line: 'loop', speed: 10, consist: [], diesel: true, job: 'a track inspection run round the Loop Line'},
   emily:   {line: 'peelgodred', speed: 18, passenger: true, consist: ['emilyCoach', 'emilyCoach', 'emilyCoach'], job: 'passenger trains on the Peel Godred branch with her coaches'},
   paxton:  {line: 'bmq', speed: 10, consist: ['stoneTruck', 'stoneTruck', 'stoneTruck', 'stoneTruck', 'brakeVan'], diesel: true, job: 'stone trains from Blue Mountain Quarry'},
+  nia:     {line: 'main', from: 'Tidmouth', to: 'Wellsworth', lane: -1, knap: 'down', speed: 16, consist: ['thomasTruck', 'thomasTruck', 'stoneTruck', 'thomasTruck', 'stoneTruck', 'brakeVan'], job: 'goods trains between Tidmouth and Wellsworth'},
   percy:   {line: 'kirkronan', speed: 14, consist: ['vanRed', 'vanRed', 'vanGrey', 'brakeVan'], job: 'the mail train to Kirk Ronan'},
   stepney: {line: 'bluebell', speed: 11, passenger: true, consist: ['openTop', 'openTop', 'openTop'], job: 'heritage trains on the Bluebell line'},
   arthur:  {line: 'norramby', speed: 13, consist: ['milkTank', 'milkTank', 'oilTank', 'brakeVan'], job: 'goods trains on the Norramby branch'},
@@ -1753,7 +1754,7 @@ const RUNS = {
 };
 // Depots and works, and who is stabled there. Order: by road.
 const DEPOTS = [
-  {key: 'tidmouth', label: 'Tidmouth Sheds', station: 'Tidmouth', line: 'main', kind: 'roundhouse', engines: ['nia'], stock: [['snow']],
+  {key: 'tidmouth', label: 'Tidmouth Sheds', station: 'Tidmouth', line: 'main', kind: 'roundhouse', engines: [], stock: [],
    siteFn: () => { const L = LINES.main, len = 210, wid = 84, lat = 12, u = 240 * METRE / L.real.len, p = realAt(L, u, new THREE.Vector3()), t = realDir(L, u, new THREE.Vector3()); t.y = 0; t.normalize();
      const n = new THREE.Vector3(t.z, 0, -t.x), o = p.clone().addScaledVector(n, lat * METRE).addScaledVector(t, -len * METRE / 2); o.y = 0; return {o, t, n, len: len * METRE, wid: wid * METRE, side: 1}; }},      // the rest of the Steam Team come home here at night (ops.js)
   // Knapford Yards lies alongside the station on the west, its six roads fed by a ladder off the

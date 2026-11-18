@@ -448,6 +448,7 @@ function approach(st, target, dt, vmax = 1.3, acc = 0.15){
 // round to a stall of its own and back in. When its next turn begins it comes out the same way, onto the
 // table, round to face the lead, off along the shed road and away down the line to its duty's shed.
 const STEAM_TEAM = new Set(['thomas', 'gordon', 'james', 'percy', 'emily', 'rebecca', 'nia']);
+const BERTH = {thomas: 0, gordon: 1, james: 2, percy: 3, emily: 4, rebecca: 5, nia: 6};        // each engine's own stall, left to right
 const mkRoute = pts => { const P = [pts[0]], S = [0]; for(let i = 1; i < pts.length; i++){ const d = pts[i].distanceTo(P[P.length - 1]) / M; if(d < 0.3) continue; P.push(pts[i]); S.push(S[S.length - 1] + d); } return {P, S, L: S[S.length - 1]}; };
 const IN = RH && RH.inPath && RH.inPath.length > 2 ? mkRoute(RH.inPath) : null;       // Main Line south of the sheds to the turntable
 // The standard-gauge network: lines join where one ends beside another (a branch at its junction station).
@@ -519,7 +520,7 @@ function goTidmouth(D){
   const m = D.rota[D.cur];
   D.tid = 'none';
   if(!RH || !IN || !m.rec || !STEAM_TEAM.has(m.rec.id)) return;
-  const st = RH.stalls.find(s => !s.vehs.length && !s.guest);
+  const own = RH.stalls[BERTH[m.rec.id]], st = own && !own.vehs.length && !own.guest ? own : RH.stalls.find(s => !s.vehs.length && !s.guest);
   if(!st) return;
   st.guest = D; st.vehs = m.unit; st.off = []; st.L = 0;
   st.vehs.forEach(v => { st.off.push(st.L + v.len / 2); st.L += v.len + 0.15; });
@@ -582,8 +583,9 @@ function stepVisit(J, dt){                                          // the turnt
     } else if(J.phase === 'turn'){
       if(turnWith(st, st.phi, dt)){ RH.phiB = st.phi; J.phase = 'in'; }
     } else if(J.phase === 'in'){
-      if(approach(st, RH.working ? st.dayRho : st.homeRho, dt, 1.0)) return true;
-      placeStall(st, st.phi);
+      const done = approach(st, RH.working ? st.dayRho : st.homeRho, dt, 1.0);
+      placeStall(st, st.phi);                                    // place before finishing: a fast clock can finish in one step
+      if(done) return true;
     }
     return false;
   }
