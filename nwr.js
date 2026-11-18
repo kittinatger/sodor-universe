@@ -33,7 +33,7 @@ function bakeVC(group, shadow = true){
     const rough = metal ? 0.35 : m.roughness < 0.5 ? 0.42 : m.roughness < 0.8 ? 0.65 : 0.92;
     const key = tex ? m : rough + '|' + metal + '|' + m.side;
     const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(m4.multiplyMatrices(inv, o.matrixWorld));
-    if(!tex){
+    if(!tex && !(m.vertexColors && g.attributes.color)){                // already baked colours are kept as they are
       const n = g.attributes.position.count, c = new Float32Array(n * 3);
       for(let i = 0; i < n; i++){ c[i * 3] = m.color.r; c[i * 3 + 1] = m.color.g; c[i * 3 + 2] = m.color.b; }
       g.setAttribute('color', new THREE.BufferAttribute(c, 3));

@@ -148,6 +148,9 @@ instanced(hutGeo, huts);
 // ------------------------------------------------------------------ boats cruising off the harbours
 const cruisers = [];
 function boatModel(kind){
+  if(window.SODOR_VEH){ const g = window.SODOR_VEH.boat(kind, [0x2a4a7a, 0xc8262b, 0x2f6a4a, 0xf2f0ea, 0x1a1a1a, 0xe2a91f][Math.floor(rnd() * 6)]), L = g.userData.len;
+    const wake = new THREE.Mesh(new THREE.PlaneGeometry(L * 0.3, L * 1.8).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false})); wake.position.set(0, 0.06, -L * 1.4); g.add(wake);
+    g.scale.setScalar(M); root.add(g); g.visible = false; return g; }
   const g = new THREE.Group(), hullC = [0x2a4a7a, 0xc8262b, 0x2f6a4a, 0xf2f0ea, 0x1a1a1a][Math.floor(rnd() * 5)];
   const L = kind === 'yacht' ? 10 : kind === 'launch' ? 8 : 13;
   box(g, 3.0, 1.4, L, mat(hullC, 0.6), 0, 0.3, 0);

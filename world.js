@@ -1191,6 +1191,7 @@ lap('railBridgesBanks');
 const harbours = [];
 const boatGroup = new THREE.Group(); scene.add(boatGroup);
 function boat(g, len, col){
+  if(window.SODOR_VEH){ const m = window.SODOR_VEH.boat(len > 11 ? 'fishing' : hash(len, col) < 0.5 ? 'launch' : 'yacht', col, len); m.rotation.y = Math.PI / 2; g.add(m); return; }   // bows along +x here
   const hull = new THREE.Shape(); hull.moveTo(-len / 2, -len * 0.11); hull.lineTo(len * 0.32, -len * 0.11); hull.lineTo(len / 2, 0); hull.lineTo(len * 0.32, len * 0.11); hull.lineTo(-len / 2, len * 0.11); hull.closePath();
   const hg = new THREE.ExtrudeGeometry(hull, {depth: len * 0.12, bevelEnabled: false}); hg.rotateX(-Math.PI / 2); hg.translate(0, -len * 0.05, 0);
   add(g, hg, mat(col, 0.6)); box(g, len * 0.8, len * 0.01, len * 0.2, mat(0xb4b0a4, 0.8), -len * 0.04, len * 0.07, 0);
@@ -1198,6 +1199,7 @@ function boat(g, len, col){
   cylY(g, len * 0.012, len * 0.012, len * 0.3, mat(0x5a4a3a, 0.7), len * 0.15, len * 0.2, 0, 6);
 }
 function ship(g, len, hullCol, deckCol){
+  if(window.SODOR_VEH){ const m = window.SODOR_VEH.ship(len, hullCol, deckCol); m.rotation.y = Math.PI / 2; g.add(m); return; }
   const hull = new THREE.Shape(); hull.moveTo(-len / 2, -len * 0.08); hull.lineTo(len * 0.36, -len * 0.08); hull.lineTo(len / 2, 0); hull.lineTo(len * 0.36, len * 0.08); hull.lineTo(-len / 2, len * 0.08); hull.closePath();
   const hg = new THREE.ExtrudeGeometry(hull, {depth: len * 0.09, bevelEnabled: false}); hg.rotateX(-Math.PI / 2); hg.translate(0, -len * 0.035, 0);
   add(g, hg, mat(hullCol, 0.6)); box(g, len * 0.86, len * 0.006, len * 0.155, mat(deckCol, 0.7), -len * 0.02, len * 0.058, 0);

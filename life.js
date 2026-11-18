@@ -152,7 +152,15 @@ function onto(v, rd, s, dir){
 function makeVehicle(rd, kind){
   const colors = BODY, color = colors[Math.floor(rnd() * colors.length) % colors.length];
   let g, trailer = null;
-  if(kind === 'bus') g = rnd() < 0.6 ? deckerModel(0xc8262b) : busModel(0x2a6a4a);
+  const V = window.SODOR_VEH;
+  if(V){                                    // the shaped models from vehicles.js
+    if(kind === 'bus') g = rnd() < 0.6 ? V.decker(0xc8262b) : V.bus([0x2a6a4a, 0x2a4a7a, 0xe2a91f][Math.floor(rnd() * 3)]);
+    else if(kind === 'lorry') g = V.lorry(BODY[Math.floor(rnd() * BODY.length)], rd.cls === 'M' ? rnd() < 0.7 : rnd() < 0.3);
+    else if(kind === 'van') g = V.van([0xf2f0ea, 0xf2f0ea, 0xc8262b, 0x2a4a7a, 0x2e8b6e, 0xe2a91f][Math.floor(rnd() * 6)]);
+    else if(kind === 'tractor'){ g = V.tractor([0xb3201c, 0x2e7a3a, 0x2a5aa0, 0x8a8d91][Math.floor(rnd() * 4)]); if(rnd() < 0.5){ trailer = V.trailer(); scene.add(trailer); trailer.scale.setScalar(M); } }
+    else g = rnd() < 0.05 ? V.taxi() : V.car(color);
+  }
+  else if(kind === 'bus') g = rnd() < 0.6 ? deckerModel(0xc8262b) : busModel(0x2a6a4a);
   else if(kind === 'lorry') g = lorryModel(BODY[Math.floor(rnd() * BODY.length)], rd.cls === 'M' ? rnd() < 0.7 : rnd() < 0.3);
   else if(kind === 'van') g = carModel(color, true);
   else if(kind === 'tractor'){ g = tractorModel(0x3a6b2a); if(rnd() < 0.5){ trailer = trailerModel(); scene.add(trailer); trailer.scale.setScalar(M); } }
