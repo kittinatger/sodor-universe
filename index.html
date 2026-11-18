@@ -700,9 +700,14 @@ const KNAP = {
     if(!best) return null;
     for(let k = 1; k <= 12; k++){ const a = best.a*k/12; pts.push(E0.clone().addScaledVector(n, B.side*best.R*(1-Math.cos(a))).addScaledVector(t, best.R*Math.sin(a))); }
     for(let J = best.J; J < rp.length; J++) pts.push(rp[J]);
-    const c = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), len = c.getLength();
-    c.arcLengthDivisions = Math.max(1000, Math.ceil(len/TRACK_STEP));
-    return {pts: c.getSpacedPoints(Math.max(4, Math.ceil(len/TRACK_STEP))), len, stationLen: (this.EXIT-this.BUF)*METRE};
+    const c = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+    c.arcLengthDivisions = Math.max(1000, Math.ceil(c.getLength()/TRACK_STEP*8)); c.updateArcLengths();     // fine arc lengths, so the samples are evenly spaced
+    // resample a dense run of the curve by its own measured length, so the samples are exactly evenly spaced
+    const dense = c.getSpacedPoints(Math.ceil(c.getLength()/TRACK_STEP)*8), S = [0];
+    for(let i = 1; i < dense.length; i++) S.push(S[i-1] + dense[i].distanceTo(dense[i-1]));
+    const len = S[S.length-1], N = Math.max(4, Math.ceil(len/TRACK_STEP)), out = [];
+    for(let k = 0, i = 1; k <= N; k++){ const s = len*k/N; while(i < dense.length-1 && S[i] < s) i++; const t = (s - S[i-1])/((S[i]-S[i-1]) || 1); out.push(dense[i-1].clone().lerp(dense[i], Math.min(1, Math.max(0, t)))); }
+    return {pts: out, len, stationLen: (this.EXIT-this.BUF)*METRE};
   },
 };
 const _kd = new THREE.Vector3();
