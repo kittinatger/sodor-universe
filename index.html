@@ -6,153 +6,145 @@
 <title>Island of Sodor — Live Operations</title>
 <style>
   :root{
-    --bg:#060d13; --panel:rgba(12,22,31,.72); --panel2:rgba(16,28,38,.86); --edge:rgba(130,180,205,.16); --edge-hi:rgba(150,205,230,.3);
-    --accent:#7fd4ff; --accent-dim:#4a93b8; --gold:#ffcf6e; --gold-dim:#b8914a; --ink:#eef5f8; --muted:#7f97a3; --faint:#53707c;
-    --danger:#ff9068; --ok:#8fe0a8; --radius:14px; --radius-sm:9px;
-    --shadow:0 10px 34px -8px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.04) inset;
+    --bg:#060d13; --glass:rgba(10,20,29,.78); --glass2:rgba(14,27,38,.9); --line:rgba(140,190,215,.14); --line-hi:rgba(160,210,235,.3);
+    --accent:#7fd4ff; --accent2:#3aa8e0; --gold:#ffcf6e; --gold2:#d9a548; --ink:#eef5f8; --muted:#8aa2ad; --faint:#58737f;
+    --danger:#ff9068; --ok:#8fe0a8; --r:16px; --r2:11px; --bar:56px; --side:318px; --gap:12px;
+    --shadow:0 18px 44px -14px rgba(0,0,0,.7), 0 1px 0 rgba(255,255,255,.05) inset;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;overflow:hidden;background:var(--bg);font-family:'Segoe UI',system-ui,Arial,sans-serif;color:var(--ink);height:100%;-webkit-font-smoothing:antialiased;}
+  html,body{margin:0;padding:0;overflow:hidden;background:var(--bg);font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;color:var(--ink);height:100%;-webkit-font-smoothing:antialiased;}
   #canvas-wrap{position:fixed;inset:0;touch-action:none;}
   #canvas-wrap canvas{display:block;touch-action:none;}
-  ::-webkit-scrollbar{width:7px;height:7px;}
-  ::-webkit-scrollbar-track{background:transparent;}
-  ::-webkit-scrollbar-thumb{background:rgba(140,190,215,.22);border-radius:6px;}
-  ::-webkit-scrollbar-thumb:hover{background:rgba(140,190,215,.4);}
+  ::-webkit-scrollbar{width:7px;height:7px;} ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:rgba(140,190,215,.2);border-radius:6px;} ::-webkit-scrollbar-thumb:hover{background:rgba(140,190,215,.38);}
+  button{font-family:inherit;}
+  .glass{background:linear-gradient(170deg,var(--glass2),var(--glass));border:1px solid var(--line);box-shadow:var(--shadow);backdrop-filter:blur(16px) saturate(1.35);-webkit-backdrop-filter:blur(16px) saturate(1.35);}
 
-  .box{position:relative;z-index:10;pointer-events:auto;flex:none;background:linear-gradient(175deg,var(--panel2),var(--panel));border:1px solid var(--edge);border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);transition:opacity .25s;}
-  .box h1,.box h2{font-family:inherit;}
+  /* ================= top bar ================= */
+  #topbar{position:fixed;top:var(--gap);left:var(--gap);right:var(--gap);height:var(--bar);z-index:30;border-radius:var(--r);display:flex;align-items:center;gap:14px;padding:0 10px 0 16px;}
+  .brand{display:flex;align-items:center;gap:10px;min-width:0;flex:none;}
+  .brand .mark{width:30px;height:30px;border-radius:9px;background:radial-gradient(circle at 30% 30%,#9fe2ff,#2f86c0 60%,#164a6c);box-shadow:0 0 14px -2px rgba(127,212,255,.6);display:grid;place-items:center;flex:none;}
+  .brand .mark svg{width:17px;height:17px;}
+  .brand .t1{font-weight:800;font-size:14px;letter-spacing:1.2px;line-height:1.05;white-space:nowrap;}
+  .brand .t2{font-size:9.5px;color:var(--accent);letter-spacing:1.1px;text-transform:uppercase;font-weight:700;white-space:nowrap;opacity:.85;}
+  .live{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);margin-right:5px;animation:pulse 2s ease-in-out infinite;vertical-align:1px;}
+  @keyframes pulse{50%{opacity:.35}}
+  .sep{width:1px;height:28px;background:var(--line);flex:none;}
+  #clock{display:flex;flex-direction:column;align-items:flex-start;min-width:118px;flex:none;}
+  #clock .row1{display:flex;align-items:baseline;gap:8px;}
+  #clkTime{font-size:22px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums;letter-spacing:.5px;text-shadow:0 0 16px rgba(255,207,110,.28);line-height:1;}
+  #clkDay{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;}
+  #clkPhase{font-size:9.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.9px;font-weight:700;margin-top:3px;white-space:nowrap;}
+  .seg{display:flex;gap:3px;background:rgba(0,0,0,.25);padding:3px;border-radius:10px;border:1px solid var(--line);flex:none;}
+  .seg .btn{border:none;background:transparent;color:var(--muted);padding:7px 10px;font-size:11.5px;font-weight:700;border-radius:7px;cursor:pointer;letter-spacing:.2px;transition:all .15s;min-width:34px;}
+  .seg .btn:hover{color:var(--ink);background:rgba(255,255,255,.06);}
+  .seg .btn.on{background:linear-gradient(170deg,var(--gold),var(--gold2));color:#2a1d05;box-shadow:0 2px 10px -3px rgba(255,207,110,.6);}
+  .bar-spacer{flex:1;}
+  .ibtn{display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--ink);padding:8px 11px;border-radius:10px;font-size:11.5px;font-weight:600;cursor:pointer;transition:all .15s;flex:none;white-space:nowrap;}
+  .ibtn:hover{background:rgba(255,255,255,.09);border-color:var(--line-hi);}
+  .ibtn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  #menuBtn{display:flex;}
+  #camctl{display:flex;gap:6px;flex:none;}
 
-  /* ---- HUD (top-left stats) ---- */
-  /* ---- the two docks: every panel stacks in a column down one side, so nothing can overlap ---- */
-  .dock{position:fixed;top:14px;bottom:var(--sheet,14px);z-index:10;display:flex;flex-direction:column;gap:10px;pointer-events:none;}
-  #dockL{left:14px;width:264px;} #dockR{right:14px;width:200px;}
-  .dock > .grow{flex:0 1 auto;min-height:0;overflow:auto;}
-  .dock > .foot{margin-top:auto;}
-  #hud{padding:16px 18px;}
-  #hud h1{font-size:15px;margin:0 0 2px;color:var(--ink);letter-spacing:.6px;font-weight:700;display:flex;align-items:center;gap:8px;}
-  #hud h1::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--accent);box-shadow:0 0 8px 1px var(--accent);flex-shrink:0;}
-  #hud .sub{font-size:10.5px;color:var(--accent-dim);margin-bottom:12px;text-transform:uppercase;letter-spacing:.8px;font-weight:600;}
-  .stat-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:6px 0;border-top:1px solid var(--edge);color:var(--muted);}
-  .stat-row:first-of-type{border-top:none;padding-top:0;}
-  .stat-row b{color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.2px;}
+  /* ================= side panel ================= */
+  #roster{position:fixed;top:calc(var(--gap) * 2 + var(--bar));left:var(--gap);max-height:calc(100vh - var(--bar) - var(--gap) * 3);width:var(--side);z-index:25;border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden;transition:transform .25s ease,opacity .25s ease;}
+  #roster.collapsed{transform:translateX(calc(-100% - 20px));opacity:0;pointer-events:none;}
+  #rosterHead{display:flex;align-items:center;gap:4px;padding:10px 10px 0;margin:0;flex:none;}
+  #mainTabs{display:flex;gap:3px;flex:1;background:rgba(0,0,0,.25);padding:3px;border-radius:11px;border:1px solid var(--line);}
+  #mainTabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;border:none;background:transparent;color:var(--muted);padding:7px 0 6px;border-radius:8px;cursor:pointer;font-size:9.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;transition:all .15s;}
+  #mainTabs button svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  #mainTabs button:hover{color:var(--ink);}
+  #mainTabs button.on{background:linear-gradient(170deg,#24475b,#16303d);color:var(--gold);box-shadow:0 1px 0 rgba(255,255,255,.07) inset,0 3px 8px -2px rgba(0,0,0,.4);}
+  #rosterArrow{width:32px;height:32px;display:grid;place-items:center;border-radius:9px;color:var(--muted);cursor:pointer;flex:none;font-size:14px;border:1px solid transparent;}
+  #rosterArrow:hover{color:var(--ink);border-color:var(--line);}
+  #rosterBody{flex:1;min-height:0;display:flex;flex-direction:column;}
+  .pane{flex:1;min-height:0;overflow:auto;padding:12px 14px 14px;display:none;font-size:12px;}
+  .pane.on{display:block;}
+  .pane h4{margin:2px 0 10px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--accent);font-weight:800;display:flex;justify-content:space-between;align-items:center;}
+  .pane h4 small{color:var(--faint);font-weight:700;letter-spacing:.5px;}
 
-  /* ---- shared toggle header (legend / roster) ---- */
-  #legend h2,#roster h2{font-size:11px;margin:0;color:var(--accent);cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;}
-  #legend h2:hover,#roster h2:hover{color:#bfeaff;}
-  #legendArrow,#rosterArrow{color:var(--faint);font-size:10px;transition:transform .2s;}
+  /* overview */
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+  .stat{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:12px;padding:10px 11px;}
+  .stat b{display:block;font-size:20px;color:var(--gold);font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.2px;line-height:1.1;}
+  .stat span{display:block;font-size:10px;color:var(--muted);margin-top:3px;font-weight:600;letter-spacing:.3px;}
+  .stat.wide{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;}
+  .stat.wide b{font-size:14px;}
+  .help{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:rgba(127,212,255,.04);color:var(--muted);font-size:11px;line-height:1.6;}
+  .help kbd{display:inline-block;padding:0 5px;border-radius:4px;border:1px solid var(--line-hi);color:var(--ink);font-family:inherit;font-size:10px;margin:0 1px;}
+  #credit{font-size:9.5px;color:var(--faint);margin-top:12px;letter-spacing:.2px;}
 
-  /* ---- legend ---- */
-  #legend{padding:12px 15px;font-size:11px;}
-  #legend:not(.collapsed) h2{margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid var(--edge);}
-  #legend.collapsed #legendList{display:none;}
-  .leg-item{display:flex;align-items:center;gap:7px;padding:4px 2px;cursor:pointer;border-radius:6px;transition:background .15s,color .15s;}
-  .leg-item:hover{color:var(--gold);background:rgba(255,255,255,.05);}
-  .leg-swatch{width:15px;height:4px;border-radius:2px;flex-shrink:0;box-shadow:0 0 5px currentColor;}
-  .leg-item.dim{opacity:.32;}
-  .leg-group{font-size:9.5px;color:var(--faint);margin:10px 0 4px;text-transform:uppercase;letter-spacing:1px;font-weight:700;}
-  .leg-group:first-child{margin-top:0;}
-  .leg-swatch.dashed{background-image:repeating-linear-gradient(90deg,transparent 0 3px,rgba(6,13,19,.95) 3px 5px);}
-
-  /* ---- roster / duties ---- */
-  #roster{padding:12px 14px;font-size:12px;}
-  #roster:not(.collapsed) h2{margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid var(--edge);}
-  #roster.collapsed #rosterBody{display:none;}
-  #rosterTabs{display:flex;gap:4px;margin-bottom:8px;background:rgba(0,0,0,.22);padding:3px;border-radius:9px;}
-  #rosterTabs button{flex:1;padding:6px 0;background:transparent;border:none;color:var(--muted);border-radius:7px;cursor:pointer;font-size:10.5px;font-weight:600;letter-spacing:.2px;transition:all .15s;}
+  /* lists: duties, fleet, lines */
+  #rosterTabs{display:flex;gap:3px;margin-bottom:9px;background:rgba(0,0,0,.22);padding:3px;border-radius:9px;}
+  #rosterTabs button{flex:1;padding:6px 0;background:transparent;border:none;color:var(--muted);border-radius:7px;cursor:pointer;font-size:10.5px;font-weight:700;transition:all .15s;}
   #rosterTabs button:hover{color:var(--ink);}
-  #rosterTabs button.on{background:linear-gradient(175deg,#2a4e63,#1a3542);color:var(--gold);box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 2px 6px rgba(0,0,0,.3);}
-  #rosterSearch{width:100%;box-sizing:border-box;margin-bottom:6px;padding:7px 10px;background:rgba(0,0,0,.25);border:1px solid var(--edge);border-radius:8px;color:var(--ink);font-size:12px;outline:none;transition:border-color .15s;}
-  #rosterSearch:focus{border-color:var(--accent-dim);}
+  #rosterTabs button.on{background:rgba(255,207,110,.14);color:var(--gold);}
+  #rosterSearch{width:100%;margin-bottom:8px;padding:8px 11px;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:9px;color:var(--ink);font-size:12px;outline:none;transition:border-color .15s;}
+  #rosterSearch:focus{border-color:var(--accent2);}
   #rosterSearch::placeholder{color:var(--faint);}
   .ros-item.hide,.leg-group.hide{display:none;}
-  .ros-item{display:flex;align-items:center;gap:9px;padding:6px 6px;border-radius:8px;cursor:pointer;transition:background .15s;}
-  .ros-item:hover{background:rgba(127,212,255,.08);}
-  .ros-item:active{background:rgba(127,212,255,.15);}
-  .ros-dot{width:11px;height:11px;border-radius:4px;flex-shrink:0;border:1px solid rgba(255,255,255,.3);box-shadow:0 0 6px -1px currentColor;}
-  .ros-name{color:var(--ink);font-weight:500;}
+  .ros-item{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;cursor:pointer;transition:background .15s;}
+  .ros-item:hover{background:rgba(127,212,255,.08);} .ros-item:active{background:rgba(127,212,255,.15);}
+  .ros-dot{width:12px;height:12px;border-radius:4px;flex-shrink:0;border:1px solid rgba(255,255,255,.3);box-shadow:0 0 7px -1px currentColor;}
+  .ros-name{color:var(--ink);font-weight:600;}
   .ros-sub{color:var(--muted);font-size:10px;margin-left:auto;text-align:right;}
-
-  /* ---- duties board ---- */
-  .duty-head{font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5;padding-bottom:8px;border-bottom:1px solid var(--edge);}
+  .leg-group{font-size:9.5px;color:var(--faint);margin:14px 2px 5px;text-transform:uppercase;letter-spacing:1.1px;font-weight:800;}
+  .leg-group:first-child{margin-top:2px;}
+  .duty-head{font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5;padding:9px 11px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.03);}
   .duty-head b{display:block;color:var(--gold);font-size:13px;font-variant-numeric:tabular-nums;margin-bottom:2px;}
-  .duty-row{align-items:flex-start;}
-  .duty-row .ros-dot{margin-top:3px;}
-  .duty-txt{min-width:0;}
-  .duty-main{color:var(--ink);font-weight:500;}
-  .duty-sub{color:var(--muted);font-size:10px;line-height:1.4;margin-top:1px;}
-  .duty-row[data-state=shed] .duty-main{color:var(--faint);}
-  .duty-row[data-state=off] .duty-main{color:var(--danger);}
-  .duty-row[data-state=on] .duty-main{color:var(--ok);}
+  .duty-row{align-items:flex-start;} .duty-row .ros-dot{margin-top:3px;}
+  .duty-txt{min-width:0;} .duty-main{color:var(--ink);font-weight:600;}
+  .duty-sub{color:var(--muted);font-size:10px;line-height:1.45;margin-top:2px;}
+  .duty-row[data-state=shed] .duty-main{color:var(--faint);} .duty-row[data-state=off] .duty-main{color:var(--danger);} .duty-row[data-state=on] .duty-main{color:var(--ok);}
+  .leg-item{display:flex;align-items:center;gap:9px;padding:6px 8px;cursor:pointer;border-radius:8px;transition:background .15s,color .15s;font-size:12px;}
+  .leg-item:hover{color:var(--gold);background:rgba(255,255,255,.05);}
+  .leg-swatch{width:20px;height:5px;border-radius:3px;flex-shrink:0;box-shadow:0 0 6px currentColor;}
+  .leg-swatch.dashed{background-image:repeating-linear-gradient(90deg,transparent 0 3px,rgba(6,13,19,.95) 3px 5px);}
+  .leg-item.dim{opacity:.32;}
+  .legbtns{display:flex;gap:6px;margin-bottom:8px;}
+  .legbtns button{flex:1;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);border-radius:8px;padding:6px 0;font-size:10.5px;font-weight:700;cursor:pointer;}
+  .legbtns button:hover{color:var(--ink);border-color:var(--line-hi);}
 
-  /* ---- camera control ---- */
-  #camctl{padding:10px 12px;font-size:11px;}
-  #camctl label{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--accent);margin-bottom:10px;font-size:11.5px;font-weight:500;}
-  #camctl input[type=checkbox]{accent-color:var(--accent-dim);width:14px;height:14px;cursor:pointer;}
-  #camctl .row{display:flex;gap:6px;margin-top:6px;}
-
-  .btn{width:100%;padding:7px 0;background:rgba(255,255,255,.04);border:1px solid var(--edge);color:var(--ink);border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;letter-spacing:.2px;transition:all .15s;}
-  .btn:hover{background:rgba(255,255,255,.09);border-color:var(--edge-hi);}
-  .btn:active{transform:scale(.96);}
-  .btn.on{background:linear-gradient(175deg,var(--gold),var(--gold-dim));color:#241a06;border-color:var(--gold);box-shadow:0 2px 8px -2px rgba(255,207,110,.5);}
-
-  /* ---- clock / speed control ---- */
-  #speedctl{padding:13px 15px;font-size:11px;}
-  .clk{display:flex;align-items:baseline;justify-content:space-between;color:var(--accent);}
-  .clk span{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
-  .clk b{font-size:24px;color:var(--gold);font-variant-numeric:tabular-nums;letter-spacing:.5px;text-shadow:0 0 16px rgba(255,207,110,.25);}
-  .clk-phase{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;margin:2px 0 8px;font-weight:600;}
-  .row.seg{display:flex;gap:4px;margin-top:5px;}
-  .row.seg .btn{padding:6px 0;font-size:11px;}
-  .clk-note{font-size:10px;color:var(--faint);margin-top:8px;line-height:1.4;}
-
-  /* ---- info panel ---- */
-  /* the info panel sits in the gap between the docks */
-  #panel{position:fixed;bottom:14px;left:292px;right:228px;max-width:560px;max-height:calc(100vh - 28px);overflow:auto;margin:0 auto;padding:18px 20px;display:none;box-shadow:0 16px 44px -10px rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.06) inset;border-color:var(--edge-hi);background:linear-gradient(175deg,rgba(18,32,43,.97),rgba(10,19,27,.97));z-index:20;opacity:0;transform:translateY(8px);transition:opacity .22s ease,transform .22s ease;}
-  #camctl,#speedctl{transition:opacity .2s ease,transform .2s ease;}
+  /* ================= info card ================= */
+  #panel{position:fixed;right:var(--gap);bottom:var(--gap);width:400px;max-height:calc(100vh - var(--bar) - var(--gap) * 3);overflow:auto;padding:18px 20px 16px;display:none;z-index:28;border-radius:var(--r);border-color:var(--line-hi);opacity:0;transform:translateY(10px);transition:opacity .2s ease,transform .2s ease;}
   #panel.show{display:block;animation:panelIn .22s ease forwards;}
   @keyframes panelIn{to{opacity:1;transform:translateY(0);}}
-  #panel h3{margin:0 0 4px;font-size:18px;color:var(--gold);font-weight:700;letter-spacing:.2px;}
-  #panel .ptype{font-size:10.5px;color:var(--accent);text-transform:uppercase;letter-spacing:1.3px;margin-bottom:9px;font-weight:700;opacity:.85;}
-  #panel p{font-size:13px;line-height:1.6;color:#d7e4ea;margin:0 0 8px;}
-  #panel .closebtn{position:absolute;top:10px;right:14px;cursor:pointer;color:var(--muted);font-size:18px;padding:6px;line-height:1;border-radius:7px;transition:all .15s;}
+  #panel::before{content:'';position:absolute;left:0;top:18px;bottom:18px;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(var(--gold),var(--accent));}
+  #panel h3{margin:0 0 6px;font-size:19px;color:var(--ink);font-weight:800;letter-spacing:.2px;padding-right:30px;}
+  #panel .ptype{font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:1.3px;margin-bottom:6px;font-weight:800;}
+  #panel p{font-size:12.5px;line-height:1.65;color:#d2e0e6;margin:0 0 8px;}
+  #panel .closebtn{position:absolute;top:12px;right:12px;cursor:pointer;color:var(--muted);font-size:15px;width:30px;height:30px;display:grid;place-items:center;border-radius:9px;transition:all .15s;border:1px solid var(--line);}
   #panel .closebtn:hover{color:var(--ink);background:rgba(255,255,255,.08);}
-  #panel .meta{font-size:11px;color:var(--ok);margin-top:6px;font-weight:600;letter-spacing:.2px;}
+  #panel .meta{font-size:11px;color:var(--ok);margin-top:6px;font-weight:700;letter-spacing:.2px;}
   #panel .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
-  #panel .actions button{background:rgba(255,255,255,.05);border:1px solid var(--edge-hi);color:var(--gold);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;}
+  #panel .actions button{background:rgba(255,255,255,.05);border:1px solid var(--line-hi);color:var(--gold);border-radius:9px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;}
   #panel .actions button:hover{background:rgba(255,255,255,.1);}
-  #panel .actions button.active{background:linear-gradient(175deg,var(--gold),var(--gold-dim));color:#241a06;border-color:var(--gold);}
+  #panel .actions button.active{background:linear-gradient(170deg,var(--gold),var(--gold2));color:#2a1d05;border-color:var(--gold);}
 
-  #credit{font-size:9.5px;color:var(--faint);pointer-events:none;letter-spacing:.2px;padding:0 4px;flex:none;}
-  #hint{position:fixed;left:calc(50% + 32px);transform:translateX(-50%);top:14px;max-width:calc(100vw - 540px);text-align:center;z-index:6;font-size:11px;color:#a8c4d0;background:rgba(8,16,22,.7);border:1px solid var(--edge);padding:6px 14px;border-radius:20px;pointer-events:none;transition:opacity .8s;backdrop-filter:blur(8px);letter-spacing:.1px;}
-
+  #hint{position:fixed;left:calc(var(--side) / 2 + 50%);transform:translateX(-50%);top:calc(var(--bar) + var(--gap) * 2);z-index:6;font-size:11px;color:#a8c4d0;background:rgba(8,16,22,.72);border:1px solid var(--line);padding:7px 15px;border-radius:20px;pointer-events:none;transition:opacity .8s;backdrop-filter:blur(8px);white-space:nowrap;}
   #loading{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 40%,#0c1b26,var(--bg));z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--accent);font-size:14px;letter-spacing:.3px;}
   #loading .spin{width:38px;height:38px;border:3px solid rgba(127,212,255,.15);border-top-color:var(--accent);border-radius:50%;animation:sp .9s cubic-bezier(.5,0,.5,1) infinite;margin-bottom:14px;}
   @keyframes sp{to{transform:rotate(360deg)}}
 
-  /* phones and narrow windows: slimmer docks, and the info panel becomes a bottom sheet that pushes the docks up */
-  @media (max-width: 1050px){ #hint{display:none;} }
+  /* ================= narrower screens ================= */
+  @media (max-width: 1240px){ .brand .t2{display:none;} #hint{display:none;} #camctl .lbl{display:none;} }
+  @media (max-width: 960px) and (min-width: 761px){ .brand .t1{display:none;} }
+  @media (max-width: 900px) and (min-width: 761px){ #jumpBtns{display:none;} }
   @media (max-width: 760px){
-    .dock{top:10px;gap:7px;bottom:var(--sheet,10px);}
-    #dockL{left:10px;width:158px;} #dockR{right:10px;width:150px;}
-    #hud{padding:9px 11px;border-radius:11px;}
-    #hud h1{font-size:12.5px;gap:5px;}
-    #hud .sub{font-size:9px;margin-bottom:7px;}
-    .stat-row{font-size:10.5px;padding:4px 0;}
-    #camctl{padding:7px 8px;border-radius:11px;}
-    #camctl .btn{font-size:10px;padding:6px 0;}
-    #speedctl{padding:8px 10px;border-radius:11px;}
-    .clk b{font-size:19px;}
-    .clk span{font-size:10px;}
-    .row.seg .btn{font-size:9.5px;padding:5px 0;}
-    .clk-note{display:none;}
-    .duty-sub{display:none;}
-    #legend{padding:9px 10px;border-radius:11px;}
-    #roster{padding:9px 10px;border-radius:11px;}
+    :root{--gap:8px;--bar:auto;--side:100%;}
+    #topbar{height:auto;flex-wrap:wrap;padding:8px 8px 8px 10px;gap:8px 10px;row-gap:8px;}
+    .brand .t1{font-size:12.5px;} .brand .mark{width:26px;height:26px;}
+    .sep{display:none;}
+    #clock{min-width:0;margin-left:auto;align-items:flex-end;} #clkTime{font-size:19px;} #clkPhase{display:none;}
+    #menuBtn{display:flex;order:4;padding:7px 9px;}
+    .bar-spacer{display:none;}
+    .brand .t1{font-size:11.5px;letter-spacing:.9px;}
+    #clock{order:2;} #camctl{order:3;gap:4px;} #camctl .ibtn{padding:7px 8px;} #camctl .lbl{display:none;}
+    #speedBtns{order:5;flex:1 1 40%;} #jumpBtns{display:flex;order:6;flex:1 1 52%;}
+    #speedBtns .btn,#jumpBtns .btn{flex:1;padding:6px 2px;font-size:10.5px;min-width:0;}
+    #roster{top:var(--topH,136px);left:var(--gap);right:var(--gap);width:auto;bottom:var(--sheet,8px);max-height:none;}
+    #panel{left:var(--gap);right:var(--gap);width:auto;bottom:var(--gap);max-height:46vh;padding:15px 16px 14px;}
     .ros-sub{display:none;}
-    #rosterTabs button{font-size:9.5px;padding:5px 0;}
-    #credit{display:none;}
-    #panel{left:10px;right:10px;bottom:10px;max-width:none;max-height:44vh;padding:14px 16px;}
   }
 </style>
 </head>
@@ -160,52 +152,65 @@
 <div id="loading"><div class="spin"></div>Building the Island of Sodor…</div>
 <div id="canvas-wrap"></div>
 
-<div id="dockL" class="dock">
-<div id="hud" class="box">
-  <h1>ISLAND OF SODOR</h1>
-  <div class="sub">North Western Railway — Live Operations</div>
-  <div class="stat-row"><span>Trains working</span><b id="statTrains">-</b></div>
-  <div class="stat-row"><span>Stations</span><b id="statStations">-</b></div>
-  <div class="stat-row"><span>Towns · level crossings</span><b id="statTowns">-</b></div>
-  <div class="stat-row"><span>Tunnels</span><b id="statTunnels">-</b></div>
-  <div class="stat-row"><span>Lines</span><b id="statLines">-</b></div>
-  <div class="stat-row"><span>Time of day</span><b id="statTime">06:00</b></div>
+<div id="topbar" class="glass">
+  <div class="brand">
+    <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#e9f8ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15V8a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v7"/><path d="M5 15h14v2a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 21l2-2M16 21l-2-2M8 9h8"/></svg></div>
+    <div><div class="t1">ISLAND OF SODOR</div><div class="t2"><span class="live"></span>North Western Railway · live</div></div>
+  </div>
+  <div class="sep"></div>
+  <div id="clock"><div class="row1"><b id="clkTime">07:00</b><span id="clkDay">Monday</span></div><div id="clkPhase">Morning</div></div>
+  <div class="seg" id="speedBtns"><button class="btn" data-s="0" title="Pause">❚❚</button><button class="btn on" data-s="1">1×</button><button class="btn" data-s="10">10×</button><button class="btn" data-s="60">60×</button></div>
+  <div class="seg" id="jumpBtns"><button class="btn" data-t="06:15">Dawn</button><button class="btn" data-t="12:30">Noon</button><button class="btn" data-t="19:50">Dusk</button><button class="btn" data-t="23:30">Night</button></div>
+  <div class="bar-spacer"></div>
+  <div id="camctl">
+    <button class="ibtn" id="topBtn" title="Look straight down"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg><span class="lbl">Top-down</span></button>
+    <button class="ibtn" id="lowBtn" title="Drop to a low angle"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg><span class="lbl">Low angle</span></button>
+  </div>
+  <button class="ibtn" id="menuBtn" title="Show the panel"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
 </div>
-<div id="roster" class="box grow">
-  <h2 id="rosterHead"><span>ROSTER</span><span id="rosterArrow">▾</span></h2>
+
+<div id="roster" class="glass">
+  <div id="rosterHead">
+    <div id="mainTabs">
+      <button data-pane="paneOverview" class="on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Overview</button>
+      <button data-pane="paneDuties"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Duties</button>
+      <button data-pane="paneFleet"><svg viewBox="0 0 24 24"><path d="M5 15V8a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v7z"/><path d="M5 15h14v2a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 21l2-2M16 21l-2-2"/></svg>Fleet</button>
+      <button data-pane="paneLines"><svg viewBox="0 0 24 24"><path d="M4 18c4-9 12-3 16-12"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="6" r="2"/></svg>Lines</button>
+    </div>
+    <div id="rosterArrow" title="Hide the panel">‹</div>
+  </div>
   <div id="rosterBody">
-    <div id="rosterTabs"><button data-tab="dutyList" class="on">Duties</button><button data-tab="nwrList">NWR</button><button data-tab="rosterList">Skarloey</button><button data-tab="cfrList">Culdee Fell</button></div>
-    <input id="rosterSearch" type="search" placeholder="Find an engine, coach or crane" autocomplete="off" style="display:none">
-    <div id="dutyList"></div>
-    <div id="nwrList" style="display:none"></div>
-    <div id="rosterList" style="display:none"></div>
-    <div id="cfrList" style="display:none"></div>
+    <div class="pane on" id="paneOverview">
+      <h4>The island now</h4>
+      <div class="stats">
+        <div class="stat"><b id="statTrains">-</b><span>Trains working</span></div>
+        <div class="stat"><b id="statStations">-</b><span>Stations</span></div>
+        <div class="stat"><b id="statTowns">-</b><span>Towns · level crossings</span></div>
+        <div class="stat"><b id="statTunnels">-</b><span>Tunnels</span></div>
+        <div class="stat"><b id="statLines">-</b><span>Lines</span></div>
+        <div class="stat"><b id="statTime">06:00</b><span>Clock · speed</span></div>
+      </div>
+      <h4>Getting about</h4>
+      <div class="help">Drag to orbit · <kbd>right-drag</kbd> or two fingers to pan · scroll or pinch to zoom · tap a station, engine or train to open it, then <b>Follow</b> to ride along.<br><span id="clkNote">Time runs faster as you zoom out.</span></div>
+      <div id="credit">Coastline: CC BY-SA 2.5 Island of Sodor outline map</div>
+    </div>
+    <div class="pane" id="paneDuties"><h4>Today's work <small>tap for the engine</small></h4><div id="dutyList"></div></div>
+    <div class="pane" id="paneFleet">
+      <div id="rosterTabs"><button data-tab="nwrList" class="on">NWR</button><button data-tab="rosterList">Skarloey</button><button data-tab="cfrList">Culdee Fell</button></div>
+      <input id="rosterSearch" type="search" placeholder="Find an engine, coach or crane" autocomplete="off">
+      <div id="nwrList"></div>
+      <div id="rosterList" style="display:none"></div>
+      <div id="cfrList" style="display:none"></div>
+    </div>
+    <div class="pane" id="paneLines">
+      <h4>Railway lines <small>tap to show or hide</small></h4>
+      <div class="legbtns"><button id="linesAll">Show all</button><button id="linesNone">Hide all</button></div>
+      <div id="legend"><div id="legendHead"><span id="legendArrow"></span></div><div id="legendList"></div></div>
+    </div>
   </div>
 </div>
-<div id="credit" class="foot">Coastline: CC BY-SA 2.5 Island of Sodor outline map</div>
-</div>
 
-<div id="dockR" class="dock">
-<div id="camctl" class="box">
-  <div class="row">
-    <button class="btn" id="topBtn">Top-down</button>
-    <button class="btn" id="lowBtn">Low angle</button>
-  </div>
-</div>
-<div id="legend" class="box grow">
-  <h2 id="legendHead"><span>RAILWAY LINES</span><span id="legendArrow">▾</span></h2>
-  <div id="legendList"></div>
-</div>
-<div id="speedctl" class="box foot">
-  <div class="clk"><span id="clkDay">Monday</span><b id="clkTime">07:00</b></div>
-  <div class="clk-phase" id="clkPhase">Morning</div>
-  <div class="row seg" id="speedBtns"><button class="btn" data-s="0" title="Pause">❚❚</button><button class="btn on" data-s="1">1×</button><button class="btn" data-s="10">10×</button><button class="btn" data-s="60">60×</button></div>
-  <div class="row seg" id="jumpBtns"><button class="btn" data-t="06:15">Dawn</button><button class="btn" data-t="12:30">Noon</button><button class="btn" data-t="19:50">Dusk</button><button class="btn" data-t="23:30">Night</button></div>
-  <div class="clk-note" id="clkNote">Time runs faster as you zoom out</div>
-</div>
-</div>
-
-<div id="panel" class="box">
+<div id="panel" class="glass">
   <span class="closebtn" id="closeBtn">✕</span>
   <div class="ptype" id="pType">Station</div>
   <h3 id="pTitle">—</h3>
@@ -1032,11 +1037,22 @@ function addPanelButton(label, onClick){
   b.textContent = label; b.onclick = onClick; pActions.appendChild(b); return b;
 }
 document.getElementById('closeBtn').onclick = ()=>{ panel.classList.remove('show'); document.body.classList.remove('panel-open'); fitDocks(); };
-// on a phone the info panel spans the bottom, so the docks end just above it
+// on a phone the side panel is a drawer under the top bar, and ends above the info card when that is open
 function fitDocks(){
-  const open = panel.classList.contains('show') && innerWidth <= 760;
-  document.body.style.setProperty('--sheet', open ? (panel.offsetHeight + 20) + 'px' : (innerWidth <= 760 ? '10px' : '14px'));
+  const phone = innerWidth <= 760, open = panel.classList.contains('show') && phone;
+  const tb = document.getElementById('topbar').getBoundingClientRect();
+  document.body.style.setProperty('--topH', (tb.bottom + 8) + 'px');
+  document.body.style.setProperty('--sheet', open ? (panel.offsetHeight + 16) + 'px' : '8px');
 }
+if(window.ResizeObserver) new ResizeObserver(fitDocks).observe(document.getElementById('topbar'));
+// the side panel's tabs, its show / hide button, and the lines' show all / hide all
+document.querySelectorAll('#mainTabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#mainTabs button').forEach(x => { x.classList.toggle('on', x === b); document.getElementById(x.dataset.pane).classList.toggle('on', x === b); });
+  if(b.dataset.pane === 'paneDuties' && window.SODOR_OPS) window.SODOR_OPS.updateBoard();
+});
+document.getElementById('menuBtn').onclick = () => { const r = document.getElementById('roster'); r.classList.toggle('collapsed'); document.getElementById('rosterArrow').textContent = '‹'; fitDocks(); };
+document.getElementById('linesAll').onclick = () => document.querySelectorAll('#legendList .leg-item.dim').forEach(i => i.click());
+document.getElementById('linesNone').onclick = () => document.querySelectorAll('#legendList .leg-item:not(.dim)').forEach(i => i.click());
 if(window.ResizeObserver) new ResizeObserver(fitDocks).observe(panel);
 addEventListener('resize', fitDocks);
 
@@ -1273,7 +1289,7 @@ updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
-<script src="characters.js?v=19"></script>
+<script src="characters.js?v=20"></script>
 <script src="arlesdale.js?v=2"></script>
 <script src="duties.js?v=5"></script>
 <script src="nwr.js?v=18"></script>

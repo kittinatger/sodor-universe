@@ -1640,11 +1640,8 @@ ENGINES.filter(E => E.rail === 'ar' && (E.train || E.unit)).forEach(E => rosterR
 grp('Cranes, incline and lorry');
 const STATIC_COLORS = {Owen: 0xe8731e, Merrick: 0xa0142c, Colin: 0x2f7a3a, Madge: 0x2f6b3a};
 statics.forEach(c => rosterRow(c.name, c.kind, hex(STATIC_COLORS[c.name]), () => showStatic(c)));
-document.getElementById('rosterHead').onclick = () => {
-  roster.classList.toggle('collapsed');
-  document.getElementById('rosterArrow').textContent = roster.classList.contains('collapsed') ? '▸' : '▾';
-};
-if(innerWidth < 760){ roster.classList.add('collapsed'); document.getElementById('rosterArrow').textContent = '▸'; }
+document.getElementById('rosterArrow').onclick = () => roster.classList.add('collapsed');      // the top bar's menu button brings it back
+if(innerWidth < 760) roster.classList.add('collapsed');
 
 document.getElementById('statTrains').textContent = TRAINS.length + SR_TRAINS.length;
 window.SODOR_SR = {ENGINES, SR_TRAINS, RUNNERS, statics, STOCK, COLORS: ENGINE_COLORS, show: showEngine, BLOCK};
