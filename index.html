@@ -165,8 +165,6 @@
 </div>
 
 <div id="camctl" class="box">
-  <label><input type="checkbox" id="autoOrbitChk" checked> Auto-orbit when idle</label>
-  <button class="btn" id="overviewBtn">Reset view</button>
   <div class="row">
     <button class="btn" id="topBtn">Top-down</button>
     <button class="btn" id="lowBtn">Low angle</button>
@@ -1064,7 +1062,7 @@ function fitDist(){
 }
 let camTheta = 0, camPhi = 0.92, camDist = fitDist();
 const camCenter = new THREE.Vector3(0,0,8);
-let flight = null, followTrain = null, lastInteraction = 0, autoOrbit = true;
+let flight = null, followTrain = null, lastInteraction = 0;
 function clampCam(){
   if(!isFinite(camDist)) camDist = fitDist();        // a page opened at zero size (hidden tab) must not stick at NaN
   camPhi = Math.max(0.05, Math.min(1.42, camPhi));
@@ -1085,10 +1083,8 @@ function flyTo(x, y, z, dist, theta, phi){
   lastInteraction = performance.now();
 }
 function shortestTheta(target){ return camTheta + Math.atan2(Math.sin(target-camTheta), Math.cos(target-camTheta)); }
-document.getElementById('overviewBtn').onclick = ()=>{ followTrain=null; flyTo(0,0,8,fitDist(),shortestTheta(0),0.92); };
 document.getElementById('topBtn').onclick = ()=>{ followTrain=null; flyTo(0,0,0,fitDist()*0.8,shortestTheta(0),0.05); };
-document.getElementById('lowBtn').onclick = ()=>{ followTrain=null; flyTo(camCenter.x,camCenter.y,camCenter.z,Math.min(camDist,90),undefined,1.32); };
-document.getElementById('autoOrbitChk').onchange = e=>{ autoOrbit = e.target.checked; };
+document.getElementById('lowBtn').onclick = ()=>{ if(followTrain){ followTrain.phi = 1.32; return; } flyTo(camCenter.x,camCenter.y,camCenter.z,Math.min(camDist,90),undefined,1.32); };
 
 // Pointer controls: one finger/left = orbit, right/shift or two fingers = pan, wheel/pinch = zoom.
 const pointers = new Map();
@@ -1101,7 +1097,9 @@ function panBy(dx, dy){
   camCenter.x += (-dx*rx + dy*fx)*k;
   camCenter.z += (-dx*rz + dy*fz)*k;
 }
-function userMoved(){ flight=null; followTrain=null; lastInteraction=performance.now(); }
+// Orbiting and zooming keep following an engine (zoom sets how close); only panning lets it go.
+function userMoved(kind){ flight=null; if(kind === 'pan') followTrain=null; if(followTrain && kind === 'orbit') delete followTrain.phi; lastInteraction=performance.now(); }
+function zoomBy(f){ camDist *= f; if(followTrain) followTrain.dist = Math.max(0.012, Math.min(640, camDist)); }
 el.addEventListener('contextmenu', e=>e.preventDefault());
 el.addEventListener('pointerdown', e=>{
   el.setPointerCapture(e.pointerId);
@@ -1120,15 +1118,17 @@ el.addEventListener('pointermove', e=>{
   if(tapStart && Math.hypot(e.clientX-tapStart.x, e.clientY-tapStart.y) > 6) tapStart = null;
   if(pointers.size===1){
     if(Math.abs(dx)+Math.abs(dy)===0) return;
-    userMoved();
-    if((e.buttons & 2) || e.shiftKey) panBy(dx, dy);
+    const pan = (e.buttons & 2) || e.shiftKey;
+    userMoved(pan ? 'pan' : 'orbit');
+    if(pan) panBy(dx, dy);
     else { camTheta -= dx*0.005; camPhi -= dy*0.005; }
   } else if(pointers.size===2){
     const [a,b] = [...pointers.values()];
     const d = Math.hypot(a.x-b.x, a.y-b.y), mid = {x:(a.x+b.x)/2, y:(a.y+b.y)/2};
-    userMoved();
-    if(pinchDist>0) camDist *= pinchDist/d;
-    panBy(mid.x-pinchMid.x, mid.y-pinchMid.y);
+    // following: two fingers only zoom (and twist round), so the engine stays in the middle
+    userMoved(followTrain ? 'zoom' : 'pan');
+    if(pinchDist>0) zoomBy(pinchDist/d);
+    if(!followTrain) panBy(mid.x-pinchMid.x, mid.y-pinchMid.y);
     pinchDist = d; pinchMid = mid;
   }
 });
@@ -1141,8 +1141,8 @@ function endPointer(e){
 el.addEventListener('pointerup', endPointer);
 el.addEventListener('pointercancel', e=>{ pointers.delete(e.pointerId); tapStart=null; pinchDist=0; });
 el.addEventListener('wheel', e=>{
-  e.preventDefault(); userMoved();
-  camDist *= Math.exp(e.deltaY*0.0012);
+  e.preventDefault(); userMoved('zoom');
+  zoomBy(Math.exp(e.deltaY*0.0012));
 }, {passive:false});
 
 // ===================== HUD =====================
@@ -1231,10 +1231,13 @@ function animate(){
     camPhi = flight.sP + (flight.eP-flight.sP)*e;
     if(k>=1) flight = null;
   } else if(followTrain){
-    camCenter.lerp(followTrain.mesh.position, Math.min(1, dt*2.5));
-    camDist += ((followTrain.dist||0.14)-camDist)*Math.min(1, dt*1.2);
-  } else if(autoOrbit && performance.now()-lastInteraction > 5000){
-    camTheta += dt*0.035;
+    // locked to the engine every frame however fast it runs; the gap left when following began eases away
+    const p = followTrain.mesh.position;
+    if(!followTrain.off) followTrain.off = camCenter.clone().sub(p);
+    followTrain.off.multiplyScalar(Math.exp(-dt*3));
+    camCenter.copy(p).add(followTrain.off);
+    camDist += ((followTrain.dist||0.14)-camDist)*Math.min(1, dt*1.5);
+    if(followTrain.phi !== undefined){ camPhi += (followTrain.phi-camPhi)*Math.min(1, dt*2); if(Math.abs(followTrain.phi-camPhi) < 1e-3) delete followTrain.phi; }
   }
   updateCam();
   { const t = Math.max(0, Math.min(1, (camDist-12)/108)); VK = 1 + (OVERVIEW_EX-1)*t*t*(3-2*t); relief.scale.y = VK; }
