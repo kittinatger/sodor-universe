@@ -1510,7 +1510,7 @@ function valueNoise(x, z){
   return (a * (1 - sx) + b * sx) * (1 - sz) + (c * (1 - sx) + d * sx) * sz;
 }
 
-window.BESPOKE = new Set(['Knapford', 'Ffarquhar', 'Anopha Quarry']);
+window.BESPOKE = new Set(['Knapford', 'Ffarquhar', 'Anopha Quarry', 'Tidmouth']);
 const sceneryNear = new THREE.Group(); scene.add(sceneryNear);   // platforms, buildings, houses
 const WALLS = [0xe8dcc0, 0xd9cfb4, 0x9a4a32, 0xa39c8e, 0xf0ece0, 0x8a5a3e], ROOFS = [0x4a4f58, 0x5a5f66, 0x8a3a2a, 0x6b3a2a];
 

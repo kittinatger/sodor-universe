@@ -1753,7 +1753,9 @@ const RUNS = {
 };
 // Depots and works, and who is stabled there. Order: by road.
 const DEPOTS = [
-  {key: 'tidmouth', label: 'Tidmouth Sheds', station: 'Tidmouth', line: 'main', kind: 'roundhouse', engines: ['nia'], stock: [['snow']]},      // the rest of the Steam Team come home here at night (ops.js)
+  {key: 'tidmouth', label: 'Tidmouth Sheds', station: 'Tidmouth', line: 'main', kind: 'roundhouse', engines: ['nia'], stock: [['snow']],
+   siteFn: () => { const L = LINES.main, len = 124, wid = 92, lat = 18, u = 215 * METRE / L.real.len, p = realAt(L, u, new THREE.Vector3()), t = realDir(L, u, new THREE.Vector3()); t.y = 0; t.normalize();
+     const n = new THREE.Vector3(t.z, 0, -t.x), o = p.clone().addScaledVector(n, lat * METRE).addScaledVector(t, -len * METRE / 2); o.y = 0; return {o, t, n, len: len * METRE, wid: wid * METRE, side: 1}; }},      // the rest of the Steam Team come home here at night (ops.js)
   // Knapford Yards lies alongside the station on the west, its six roads fed by a ladder off the
   // down Main Line (drawn by knapford.js); siteFn puts it there instead of searching for a site.
   {key: 'knapford', label: 'Knapford Yards', station: 'Knapford', line: 'main', kind: 'yard', len: 200,
@@ -1888,11 +1890,11 @@ function siteKit(site){
     lx: b => sx * b,
   };
   // straight standard-gauge road between local (a0,b0) and (a1,b1), in metres
-  kit.road = (a0, b0, a1, b1, kind = 'standard') => {
+  kit.road = (a0, b0, a1, b1, kind = 'standard', y0 = 0.05, y1 = 0.05) => {
     const half = BED_M[kind] / 2, x0 = sx * b0, x1 = sx * b1, len = Math.hypot(a1 - a0, x1 - x0);
     const g = new THREE.PlaneGeometry(2 * half, len); g.rotateX(-Math.PI / 2);
     const uv = g.attributes.uv; for(let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * len / (kind === 'standard' ? 0.75 : 0.9));
-    const m = new THREE.Mesh(g, roadMat(kind)); m.position.set((x0 + x1) / 2, 0.05, (a0 + a1) / 2); m.rotation.y = Math.atan2(x1 - x0, a1 - a0);
+    const m = new THREE.Mesh(g, roadMat(kind)); m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (a0 + a1) / 2); m.rotation.order = 'YXZ'; m.rotation.y = Math.atan2(x1 - x0, a1 - a0); m.rotation.x = -Math.atan2(y1 - y0, len);
     m.receiveShadow = true; G.add(m);
   };
   // place a row of vehicles from local (a,b) going along local direction (da,db); each faces back toward the start
@@ -2021,7 +2023,7 @@ function buildRoundhouse(D){
   const ids = D.engines, units = vehiclesFor(ids, D).concat((D.stock || []).map(s => vehiclesFor(s, D)).flat());
   while(units.length < 8) units.push([]);               // spare stalls stand empty
   const n = units.length, R0 = 12, PITCH = 5.6;
-  const site = findSite(D.station, D.line, 124, 92, {lats: [14, 22, 32, 45, 60]});
+  const site = (D.siteFn && D.siteFn()) || findSite(D.station, D.line, 124, 92, {lats: [14, 22, 32, 45, 60]});
   const kit = siteKit(site), G = kit.G, lx = kit.lx, sx = kit.sx;
   const ca = 66, cb = 16;                               // turntable centre (local along, across)
   const BF = cb + 30, BB = BF + 30, BM = (BF + BB) / 2;  // shed front, back and middle (across)
@@ -2211,17 +2213,29 @@ function buildRoundhouse(D){
     let bj = 0, bd = Infinity;
     for(let j = 0; j < R.n; j++){ const d = (R.x[j] - c.x) ** 2 + (R.z[j] - c.z) ** 2; if(d < bd){ bd = d; bj = j; } }
     const bMain = ((R.x[bj] - site.o.x) * n.x + (R.z[bj] - site.o.z) * n.z) / M, bLane = bMain + MAIN_LANE, SB = bMain + 7.5;
-    const bez = (P0, P1, P2, P3, k = 12) => { let prev = P0; for(let i = 1; i <= k; i++){ const t = i / k, s = 1 - t;
+    // the yard stands on a terrace above the Main Line, so the shed road falls to the line's level between a = 132 and the junction
+    let bj2 = 0, bd2 = Infinity; const jp = kit.pt(202, bLane);
+    for(let j = 0; j < R.n; j++){ const d = (R.x[j] - jp.x) ** 2 + (R.z[j] - jp.z) ** 2; if(d < bd2){ bd2 = d; bj2 = j; } }
+    const dyJ = (R.y[bj2] - kit.base) / M - 0.1, RA = 132, RB = 202, yFn = a => 0.05 + (dyJ - 0.05) * Math.max(0, Math.min(1, (a - RA) / (RB - RA)));
+    const BANK = mat(0x7a756a, 0.95), yg = dyJ - 0.5;
+    const strip = (a0, b0, a1, b1) => {                                                    // a road strip on the slope, with its bank beneath
+      const y0 = yFn(a0), y1 = yFn(a1); kit.road(a0, b0, a1, b1, 'standard', y0, y1);
+      const ym = (y0 + y1) / 2, hh = ym - yg - 0.1; if(hh < 0.2) return;
+      const len = Math.hypot(a1 - a0, lx(b1) - lx(b0)), bk = box(G, 5.6, hh, len, BANK, lx((b0 + b1) / 2), ym - 0.12 - hh / 2, (a0 + a1) / 2);
+      bk.rotation.order = 'YXZ'; bk.rotation.y = Math.atan2(lx(b1) - lx(b0), a1 - a0); bk.rotation.x = -Math.atan2(y1 - y0, len);
+    };
+    const bez = (P0, P1, P2, P3, k = 12, sl = false) => { let prev = P0; for(let i = 1; i <= k; i++){ const t = i / k, s = 1 - t;
       const a = s*s*s*P0[0] + 3*s*s*t*P1[0] + 3*s*t*t*P2[0] + t*t*t*P3[0], b = s*s*s*P0[1] + 3*s*s*t*P1[1] + 3*s*t*t*P2[1] + t*t*t*P3[1];
-      kit.road(prev[0], prev[1], a, b); prev = [a, b]; } };
+      if(sl) strip(prev[0], prev[1], a, b); else kit.road(prev[0], prev[1], a, b); prev = [a, b]; } };
     // the points face away from Tidmouth station, so the junction is clear of its platforms
     const into = (a, b0) => bez([a, b0], [a, SB + 2.5], [a + 9, SB], [a + 22, SB]);    // a road swinging into the shed road
-    kit.road(-4, SB, 150, SB);                                                           // the shed road, its headshunt towards Tidmouth
+    kit.road(-4, SB, RA, SB);                                                            // the shed road, its headshunt towards Tidmouth
     buffer(-3.4, SB, yawAB(1, 0));
+    for(let a = RA; a < 150; a += 6) strip(a, SB, Math.min(150, a + 6), SB);
     into(ca, cb - R0);                                                                   // turntable lead
     CA.forEach(a => into(a, 2));                                                         // carriage shed roads
     into(YA, 2); into(YA + 8, 2);                                                        // coal and water roads
-    bez([150, SB], [166, SB], [182, bLane], [202, bLane], 14);                         // the junction with the Main Line
+    bez([150, SB], [166, SB], [182, bLane], [202, bLane], 14, true);                   // the junction with the Main Line
     // a ground frame for the points, and the shunt signal at the junction
     box(G, 2.4, 2.2, 3, mat(0x8a4a32, 0.85), lx(SB + 4.5), 1.1, 140);
     gable(G, 2.6, 3.2, 2.2, mat(0x30333a, 0.75), lx(SB + 4.5), 140);

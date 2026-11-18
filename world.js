@@ -112,6 +112,7 @@ const towns = [];
     let c = null;
     for(const s of [1, -1]){ const p = new V3(st.x, 0, st.z).addScaledVector(n, s * OFF[cls] * M); if(!wet(p.x, p.z) && !inTaken(p.x, p.z)){ c = p; break; } }
     if(!c) c = new V3(st.x, 0, st.z);
+    if(st.name === 'Tidmouth' && window.TIDMOUTH && window.TIDMOUTH.centre) c = window.TIDMOUTH.centre.clone();     // the city sits on the hill between the forecourt and the harbour
     towns.push({name: st.name, st, cls, R, x: c.x, z: c.z, axis: d, n, seed: Math.floor(hash(st.x, st.z) * 1e9), inst: {}, roads: [], group: null});
   });
 })();
@@ -203,7 +204,7 @@ towns.forEach(t => {
     if(pts.length > 6) t.roads.push(registerRoad({pts, hw: ROAD_W[streetCls] * M, cls: streetCls, town: t}));
   }
   // station road: from the station forecourt to the centre
-  const fore = new V3(t.st.x, 0, t.st.z).addScaledVector(t.n, 22 * M);
+  const fore = t.name === 'Tidmouth' && window.TIDMOUTH && window.TIDMOUTH.fore ? window.TIDMOUTH.fore.clone() : new V3(t.st.x, 0, t.st.z).addScaledVector(t.n, 22 * M);
   if(Math.hypot(fore.x - t.x, fore.z - t.z) > 35 * M && !wet(fore.x, fore.z)){
     const pts = cut(polyFrom([{x: fore.x, z: fore.z}, {x: (fore.x + t.x) / 2, z: (fore.z + t.z) / 2}, {x: t.x, z: t.z}]), p => wet(p.x, p.z));
     if(pts.length > 3) t.roads.push(registerRoad({pts, hw: ROAD_W.street * M, cls: 'street', town: t, stationRoad: true}));
