@@ -20,11 +20,16 @@
   ::-webkit-scrollbar-thumb{background:rgba(140,190,215,.22);border-radius:6px;}
   ::-webkit-scrollbar-thumb:hover{background:rgba(140,190,215,.4);}
 
-  .box{position:fixed;z-index:10;background:linear-gradient(175deg,var(--panel2),var(--panel));border:1px solid var(--edge);border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);transition:opacity .25s;}
+  .box{position:relative;z-index:10;pointer-events:auto;flex:none;background:linear-gradient(175deg,var(--panel2),var(--panel));border:1px solid var(--edge);border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);transition:opacity .25s;}
   .box h1,.box h2{font-family:inherit;}
 
   /* ---- HUD (top-left stats) ---- */
-  #hud{top:14px;left:14px;padding:16px 18px;width:264px;}
+  /* ---- the two docks: every panel stacks in a column down one side, so nothing can overlap ---- */
+  .dock{position:fixed;top:14px;bottom:var(--sheet,14px);z-index:10;display:flex;flex-direction:column;gap:10px;pointer-events:none;}
+  #dockL{left:14px;width:264px;} #dockR{right:14px;width:200px;}
+  .dock > .grow{flex:0 1 auto;min-height:0;overflow:auto;}
+  .dock > .foot{margin-top:auto;}
+  #hud{padding:16px 18px;}
   #hud h1{font-size:15px;margin:0 0 2px;color:var(--ink);letter-spacing:.6px;font-weight:700;display:flex;align-items:center;gap:8px;}
   #hud h1::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--accent);box-shadow:0 0 8px 1px var(--accent);flex-shrink:0;}
   #hud .sub{font-size:10.5px;color:var(--accent-dim);margin-bottom:12px;text-transform:uppercase;letter-spacing:.8px;font-weight:600;}
@@ -38,7 +43,7 @@
   #legendArrow,#rosterArrow{color:var(--faint);font-size:10px;transition:transform .2s;}
 
   /* ---- legend ---- */
-  #legend{top:14px;right:14px;padding:12px 15px;font-size:11px;max-height:70vh;overflow:auto;width:190px;}
+  #legend{padding:12px 15px;font-size:11px;}
   #legend:not(.collapsed) h2{margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid var(--edge);}
   #legend.collapsed #legendList{display:none;}
   .leg-item{display:flex;align-items:center;gap:7px;padding:4px 2px;cursor:pointer;border-radius:6px;transition:background .15s,color .15s;}
@@ -50,7 +55,7 @@
   .leg-swatch.dashed{background-image:repeating-linear-gradient(90deg,transparent 0 3px,rgba(6,13,19,.95) 3px 5px);}
 
   /* ---- roster / duties ---- */
-  #roster{top:298px;left:14px;padding:12px 14px;width:264px;max-height:calc(100vh - 384px);overflow:auto;font-size:12px;}
+  #roster{padding:12px 14px;font-size:12px;}
   #roster:not(.collapsed) h2{margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid var(--edge);}
   #roster.collapsed #rosterBody{display:none;}
   #rosterTabs{display:flex;gap:4px;margin-bottom:8px;background:rgba(0,0,0,.22);padding:3px;border-radius:9px;}
@@ -81,7 +86,7 @@
   .duty-row[data-state=on] .duty-main{color:var(--ok);}
 
   /* ---- camera control ---- */
-  #camctl{top:14px;right:218px;padding:13px 15px;font-size:11px;width:168px;}
+  #camctl{padding:10px 12px;font-size:11px;}
   #camctl label{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--accent);margin-bottom:10px;font-size:11.5px;font-weight:500;}
   #camctl input[type=checkbox]{accent-color:var(--accent-dim);width:14px;height:14px;cursor:pointer;}
   #camctl .row{display:flex;gap:6px;margin-top:6px;}
@@ -92,7 +97,7 @@
   .btn.on{background:linear-gradient(175deg,var(--gold),var(--gold-dim));color:#241a06;border-color:var(--gold);box-shadow:0 2px 8px -2px rgba(255,207,110,.5);}
 
   /* ---- clock / speed control ---- */
-  #speedctl{bottom:14px;right:14px;padding:13px 15px;font-size:11px;width:194px;}
+  #speedctl{padding:13px 15px;font-size:11px;}
   .clk{display:flex;align-items:baseline;justify-content:space-between;color:var(--accent);}
   .clk span{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
   .clk b{font-size:24px;color:var(--gold);font-variant-numeric:tabular-nums;letter-spacing:.5px;text-shadow:0 0 16px rgba(255,207,110,.25);}
@@ -102,7 +107,8 @@
   .clk-note{font-size:10px;color:var(--faint);margin-top:8px;line-height:1.4;}
 
   /* ---- info panel ---- */
-  #panel{bottom:14px;left:14px;right:14px;max-width:540px;margin:0 auto;padding:18px 20px;display:none;box-shadow:0 16px 44px -10px rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.06) inset;border-color:var(--edge-hi);background:linear-gradient(175deg,rgba(18,32,43,.97),rgba(10,19,27,.97));z-index:20;opacity:0;transform:translateY(8px);transition:opacity .22s ease,transform .22s ease;}
+  /* the info panel sits in the gap between the docks */
+  #panel{position:fixed;bottom:14px;left:292px;right:228px;max-width:560px;max-height:calc(100vh - 28px);overflow:auto;margin:0 auto;padding:18px 20px;display:none;box-shadow:0 16px 44px -10px rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.06) inset;border-color:var(--edge-hi);background:linear-gradient(175deg,rgba(18,32,43,.97),rgba(10,19,27,.97));z-index:20;opacity:0;transform:translateY(8px);transition:opacity .22s ease,transform .22s ease;}
   #camctl,#speedctl{transition:opacity .2s ease,transform .2s ease;}
   #panel.show{display:block;animation:panelIn .22s ease forwards;}
   @keyframes panelIn{to{opacity:1;transform:translateY(0);}}
@@ -117,35 +123,36 @@
   #panel .actions button:hover{background:rgba(255,255,255,.1);}
   #panel .actions button.active{background:linear-gradient(175deg,var(--gold),var(--gold-dim));color:#241a06;border-color:var(--gold);}
 
-  #credit{position:fixed;left:14px;bottom:8px;z-index:5;font-size:9.5px;color:var(--faint);pointer-events:none;letter-spacing:.2px;}
-  #hint{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:6;font-size:11px;color:#a8c4d0;background:rgba(8,16,22,.7);border:1px solid var(--edge);padding:6px 14px;border-radius:20px;pointer-events:none;transition:opacity .8s;backdrop-filter:blur(8px);letter-spacing:.1px;}
+  #credit{font-size:9.5px;color:var(--faint);pointer-events:none;letter-spacing:.2px;padding:0 4px;flex:none;}
+  #hint{position:fixed;left:calc(50% + 32px);transform:translateX(-50%);top:14px;max-width:calc(100vw - 540px);text-align:center;z-index:6;font-size:11px;color:#a8c4d0;background:rgba(8,16,22,.7);border:1px solid var(--edge);padding:6px 14px;border-radius:20px;pointer-events:none;transition:opacity .8s;backdrop-filter:blur(8px);letter-spacing:.1px;}
 
   #loading{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 40%,#0c1b26,var(--bg));z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--accent);font-size:14px;letter-spacing:.3px;}
   #loading .spin{width:38px;height:38px;border:3px solid rgba(127,212,255,.15);border-top-color:var(--accent);border-radius:50%;animation:sp .9s cubic-bezier(.5,0,.5,1) infinite;margin-bottom:14px;}
   @keyframes sp{to{transform:rotate(360deg)}}
 
+  /* phones and narrow windows: slimmer docks, and the info panel becomes a bottom sheet that pushes the docks up */
+  @media (max-width: 1050px){ #hint{display:none;} }
   @media (max-width: 760px){
-    #hud{padding:9px 11px;width:154px;border-radius:11px;}
+    .dock{top:10px;gap:7px;bottom:var(--sheet,10px);}
+    #dockL{left:10px;width:158px;} #dockR{right:10px;width:150px;}
+    #hud{padding:9px 11px;border-radius:11px;}
     #hud h1{font-size:12.5px;gap:5px;}
-    #hud h1::before{font-size:12px;}
     #hud .sub{font-size:9px;margin-bottom:7px;}
     .stat-row{font-size:10.5px;padding:4px 0;}
-    #camctl{top:auto;bottom:14px;right:auto;left:14px;width:144px;padding:9px 10px;border-radius:11px;}
-    #speedctl{width:154px;padding:8px 10px;border-radius:11px;}
+    #camctl{padding:7px 8px;border-radius:11px;}
+    #camctl .btn{font-size:10px;padding:6px 0;}
+    #speedctl{padding:8px 10px;border-radius:11px;}
     .clk b{font-size:19px;}
     .clk span{font-size:10px;}
     .row.seg .btn{font-size:9.5px;padding:5px 0;}
     .clk-note{display:none;}
     .duty-sub{display:none;}
-    #legend{width:144px;padding:9px 10px;max-height:45vh;border-radius:11px;}
-    #roster{top:276px;width:154px;padding:9px 10px;max-height:calc(100vh - 432px);border-radius:11px;}
+    #legend{padding:9px 10px;border-radius:11px;}
+    #roster{padding:9px 10px;border-radius:11px;}
     .ros-sub{display:none;}
     #rosterTabs button{font-size:9.5px;padding:5px 0;}
     #credit{display:none;}
-    #hint{bottom:auto;top:14px;left:auto;right:auto;transform:none;display:none;}
-    #panel{left:10px;right:10px;bottom:10px;padding:14px 16px;}
-    /* the info panel spans the bottom here, so step the other bottom controls out of its way while it's open */
-    body.panel-open #camctl,body.panel-open #speedctl{display:none;}
+    #panel{left:10px;right:10px;bottom:10px;max-width:none;max-height:44vh;padding:14px 16px;}
   }
 </style>
 </head>
@@ -153,6 +160,7 @@
 <div id="loading"><div class="spin"></div>Building the Island of Sodor…</div>
 <div id="canvas-wrap"></div>
 
+<div id="dockL" class="dock">
 <div id="hud" class="box">
   <h1>ISLAND OF SODOR</h1>
   <div class="sub">North Western Railway — Live Operations</div>
@@ -163,20 +171,7 @@
   <div class="stat-row"><span>Lines</span><b id="statLines">-</b></div>
   <div class="stat-row"><span>Time of day</span><b id="statTime">06:00</b></div>
 </div>
-
-<div id="camctl" class="box">
-  <div class="row">
-    <button class="btn" id="topBtn">Top-down</button>
-    <button class="btn" id="lowBtn">Low angle</button>
-  </div>
-</div>
-
-<div id="legend" class="box">
-  <h2 id="legendHead"><span>RAILWAY LINES</span><span id="legendArrow">▾</span></h2>
-  <div id="legendList"></div>
-</div>
-
-<div id="roster" class="box">
+<div id="roster" class="box grow">
   <h2 id="rosterHead"><span>ROSTER</span><span id="rosterArrow">▾</span></h2>
   <div id="rosterBody">
     <div id="rosterTabs"><button data-tab="dutyList" class="on">Duties</button><button data-tab="nwrList">NWR</button><button data-tab="rosterList">Skarloey</button><button data-tab="cfrList">Culdee Fell</button></div>
@@ -187,13 +182,27 @@
     <div id="cfrList" style="display:none"></div>
   </div>
 </div>
+<div id="credit" class="foot">Coastline: CC BY-SA 2.5 Island of Sodor outline map</div>
+</div>
 
-<div id="speedctl" class="box">
+<div id="dockR" class="dock">
+<div id="camctl" class="box">
+  <div class="row">
+    <button class="btn" id="topBtn">Top-down</button>
+    <button class="btn" id="lowBtn">Low angle</button>
+  </div>
+</div>
+<div id="legend" class="box grow">
+  <h2 id="legendHead"><span>RAILWAY LINES</span><span id="legendArrow">▾</span></h2>
+  <div id="legendList"></div>
+</div>
+<div id="speedctl" class="box foot">
   <div class="clk"><span id="clkDay">Monday</span><b id="clkTime">07:00</b></div>
   <div class="clk-phase" id="clkPhase">Morning</div>
   <div class="row seg" id="speedBtns"><button class="btn" data-s="0" title="Pause">❚❚</button><button class="btn on" data-s="1">1×</button><button class="btn" data-s="10">10×</button><button class="btn" data-s="60">60×</button></div>
   <div class="row seg" id="jumpBtns"><button class="btn" data-t="06:15">Dawn</button><button class="btn" data-t="12:30">Noon</button><button class="btn" data-t="19:50">Dusk</button><button class="btn" data-t="23:30">Night</button></div>
   <div class="clk-note" id="clkNote">Time runs faster as you zoom out</div>
+</div>
 </div>
 
 <div id="panel" class="box">
@@ -206,7 +215,6 @@
 </div>
 
 <div id="hint">Drag to orbit · right-drag or two fingers to pan · scroll or pinch to zoom · tap a station or engine</div>
-<div id="credit">Coastline: CC BY-SA 2.5 Island of Sodor outline map</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="terrain.js?v=6"></script>
@@ -1017,12 +1025,20 @@ function openPanel(kind,title,desc,meta){
   pActions.innerHTML = '';
   panel.classList.add('show');
   document.body.classList.add('panel-open');
+  requestAnimationFrame(fitDocks);
 }
 function addPanelButton(label, onClick){
   const b = document.createElement('button');
   b.textContent = label; b.onclick = onClick; pActions.appendChild(b); return b;
 }
-document.getElementById('closeBtn').onclick = ()=>{ panel.classList.remove('show'); document.body.classList.remove('panel-open'); };
+document.getElementById('closeBtn').onclick = ()=>{ panel.classList.remove('show'); document.body.classList.remove('panel-open'); fitDocks(); };
+// on a phone the info panel spans the bottom, so the docks end just above it
+function fitDocks(){
+  const open = panel.classList.contains('show') && innerWidth <= 760;
+  document.body.style.setProperty('--sheet', open ? (panel.offsetHeight + 20) + 'px' : (innerWidth <= 760 ? '10px' : '14px'));
+}
+if(window.ResizeObserver) new ResizeObserver(fitDocks).observe(panel);
+addEventListener('resize', fitDocks);
 
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function pick(clientX, clientY){
