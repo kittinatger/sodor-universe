@@ -1808,6 +1808,7 @@ function tagStock(v, ctx){
 Object.keys(RUNS).forEach(id => {
   const rec = byId[id], run = RUNS[id], line = LINES[run.line];
   if(!rec || !line) return;
+  if(line.kind === 'standard') run.track = true;       // every standard-gauge train is worked on the shared track network (track.js)
   const unit = engineUnit(rec);
   const cars = run.consist.length ? run.consist.map(k => scaleAdd(makeStock(k))) : [dummy()];
   let uA = run.from ? K.lineU(line, run.from) : (run.fromU || 0), uB = run.to ? K.lineU(line, run.to) : (run.toU === undefined ? 1 : run.toU);
