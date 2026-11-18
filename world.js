@@ -801,7 +801,7 @@ const stationGroup = new THREE.Group(); scene.add(stationGroup);
 (function(){
   STATIONS.forEach(st => {
     if(st.kind === 'closed' || !MAJOR.has(st.name)) return;
-    if(st.name === 'Knapford') return;                  // Knapford is a bespoke model, built separately below
+    if(BESPOKE.has(st.name)) return;                  // Knapford and Ffarquhar are bespoke models, built separately
     const line = LINES[st.lines[0]]; if(!line || line.kind !== 'standard') return;
     const p = realAt(line, st.trackU, new V3()), d = realDir(line, st.trackU, new V3()); d.y = 0; d.normalize();
     const n = new V3(d.z, 0, -d.x), main = line.id === 'main', off = (3.6 / 2 + 0.6 + 2 + (main ? MAIN_LANE : 0)) * M;
@@ -1079,7 +1079,7 @@ const lampGeo = mergeGeos([[new THREE.CylinderGeometry(0.07, 0.1, 5, 6), 0, 2.5,
     }
     // semaphore signals guarding each station, one each way
     line.stops.forEach(k => {
-      const st = STATIONS[k]; if(st.kind === 'closed' || st.name === 'Knapford') return;      // Knapford has its own gantries
+      const st = STATIONS[k]; if(st.kind === 'closed' || BESPOKE.has(st.name)) return;      // these have their own signals
       const u0 = realU(line, st);
       for(const e of [-1, 1]){
         const u = u0 + e * 110 * M / R.len; if(u <= 0.002 || u >= 0.998 || inTunnel(line, u)) continue;
@@ -1274,7 +1274,7 @@ if(glowOK){
   // platform lamps at every open station
   const _a = new V3(), _d = new V3();
   STATIONS.forEach(st => {
-    const line = LINES[st.lines[0]]; if(!line || st.kind === 'closed' || st.name === 'Knapford') return;
+    const line = LINES[st.lines[0]]; if(!line || st.kind === 'closed' || BESPOKE.has(st.name)) return;
     const std = line.kind === 'standard', lenM = std ? (MAJOR.has(st.name) ? 140 : 90) : line.kind === 'miniature' ? 22 : 40;
     const wM = std ? 4 : 2.8, off = ((std ? 3.6 : 2.3) / 2 + 0.6 + wM - 0.4 + (line.id === 'main' ? MAIN_LANE : 0)) * M;
     for(let s = -lenM / 2 + 6; s <= lenM / 2 - 6; s += 18){

@@ -1510,6 +1510,7 @@ function valueNoise(x, z){
   return (a * (1 - sx) + b * sx) * (1 - sz) + (c * (1 - sx) + d * sx) * sz;
 }
 
+window.BESPOKE = new Set(['Knapford', 'Ffarquhar', 'Anopha Quarry']);
 const sceneryNear = new THREE.Group(); scene.add(sceneryNear);   // platforms, buildings, houses
 const WALLS = [0xe8dcc0, 0xd9cfb4, 0x9a4a32, 0xa39c8e, 0xf0ece0, 0x8a5a3e], ROOFS = [0x4a4f58, 0x5a5f66, 0x8a3a2a, 0x6b3a2a];
 
@@ -1519,7 +1520,7 @@ const WALLS = [0xe8dcc0, 0xd9cfb4, 0x9a4a32, 0xa39c8e, 0xf0ece0, 0x8a5a3e], ROOF
   const _a = new THREE.Vector3(), _d = new THREE.Vector3();
   STATIONS.forEach((st, si) => {
     const line = LINES[st.lines[0]];
-    if(!line || st.name === 'Knapford') return;            // Knapford is built by knapford.js
+    if(!line || BESPOKE.has(st.name)) return;            // Knapford, Ffarquhar and Anopha Quarry are built by their own files
     const std = line.kind === 'standard', closed = st.kind === 'closed';
     const lenM = std ? (MAJOR.has(st.name) ? 140 : 90) : line.kind === 'miniature' ? 22 : line.kind === 'industrial' ? 20 : 40;
     const wM = std ? 4 : 2.8, off = ((std ? 3.6 : 2.3) / 2 + 0.6 + wM / 2 + (line.id === 'main' ? MAIN_LANE : 0)) * METRE;

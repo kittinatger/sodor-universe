@@ -1728,7 +1728,8 @@ const RUNS = {
   henry:   {line: 'main', from: 'Knapford', to: 'Killdane', lane: -1, knap: 'down', fromShift: -63, speed: 24, consist: ['vanFish', 'vanFish', 'vanGrey', 'vanFish', 'vanBrown', 'vanFish', 'brakeVan'], job: 'the Flying Kipper fish train'},
   james:   {line: 'main', from: 'Killdane', to: 'Lower Kellsthorpe', lane: -1, speed: 20, consist: Array(6).fill('jamesTruck').concat(['spiteful']), job: 'a goods train of his blue trucks'},
   murdoch: {line: 'main', from: "Crovan's Gate", to: 'Vicarstown', lane: -1, speed: 18, consist: ['hector', 'truck', 'truckB', 'truck', 'truck', 'truckB', 'truck', 'truck', 'brakeVan'], job: 'the long goods train to Vicarstown'},
-  thomas:  {line: 'ffarquhar', speed: 15, passenger: true, consist: ['annie', 'clarabel'], job: 'his branch line passenger train with Annie and Clarabel'},
+  thomas:  {line: 'ffarquhar', speed: 15, passenger: true, consist: ['annie', 'clarabel'], shedEnd: 'B', shedSide: 1, job: 'his branch line passenger train with Annie and Clarabel'},
+  mavis:   {line: 'ffquarry', speed: 7, consist: ['stoneTruck', 'stoneTruck', 'stoneTruck', 'stoneTruck', 'brakeVan'], diesel: true, job: 'stone trains down the Quarry Tramroad from Anopha Quarry to Ffarquhar'},
   toby:    {line: 'toby', from: "Bluff's Cove", to: 'Ulfstead', speed: 9, passenger: true, consist: ['henrietta', 'hannah'], job: 'the Sodor Tramway with Henrietta and Hannah'},
   flora:   {line: 'toby', from: 'Ulfstead', to: 'Maron', speed: 9, passenger: true, consist: ['floraTram'], job: 'the Sodor Tramways service with her tram coach'},
   edward:  {line: 'brendam', from: 'Wellsworth', to: 'Lower Suddery', speed: 16, passenger: true, consist: ['oldSlow'], job: 'the branch passenger train with Old Slow Coach'},
@@ -1771,7 +1772,14 @@ const DEPOTS = [
   {key: 'arlesburgh', label: 'Arlesburgh Yard', station: 'Arlesburgh', line: 'littlewest', kind: 'yard', roads: [['ryan', 'dexter'], ['jibRunner', 'judy', 'jibRunner', 'jerome', 'toolVan']]},
   {key: 'brendam', label: 'Brendam Docks', station: 'Brendam Docks', line: 'brendam', kind: 'docks', roads: [['porter', 'vanBrown', 'vanGrey']]},
   {key: 'clayworks', label: 'China Clay Works', station: 'China Clay Works', line: 'chinaclay', kind: 'clay', roads: [['timothy', 'clayTruck', 'clayTruck'], ['derek'], ['marion']]},
-  {key: 'ffarquhar', label: 'Ffarquhar Quarry and Sheds', station: 'Ffarquhar', line: 'ffarquhar', kind: 'quarry', roads: [['mavis', 'stoneTruck', 'stoneTruck'], ['glynn', 'coffeepot2', 'coffeepot3'], ['thomasTruck', 'thomasTruck']]},
+  // Ffarquhar Yards, north of the station (ffarquhar.js lays out the rest); Mavis works the Quarry Tramroad
+  {key: 'ffarquhar', label: 'Ffarquhar Yards', station: 'Ffarquhar', line: 'ffarquhar', kind: 'yard', len: 140, noHut: true,
+   roads: [['glynn', 'coffeepot2', 'coffeepot3'], ['thomasTruck', 'thomasTruck', 'stoneTruck', 'stoneTruck']],
+   siteFn: () => {
+     const line = LINES.ffarquhar, u = 1 - 235 * M / line.real.len, p = realAt(line, u, new THREE.Vector3()), t = realDir(line, u, new THREE.Vector3());
+     t.y = 0; t.normalize(); const n = new THREE.Vector3(t.z, 0, -t.x), o = p.clone().addScaledVector(n, 13 * M); o.y = 0;
+     return {o, t, n, len: 140 * M, wid: 14 * M, side: 1};
+   }},
   {key: 'steamworks', label: 'Sodor Steamworks', station: "Crovan's Gate", line: 'main', kind: 'works', color: 0x8a4a32, roads: [['hiro'], []], victor: true},
   {key: 'rescue', label: 'Sodor Search and Rescue Centre', station: 'Sodor Search and Rescue Centre', line: 'rescue', kind: 'rescue', roads: [['flynn'], ['rocky']]},
   {key: 'harbour', label: 'Knapford Harbour (visitors from Misty Island)', station: 'Knapford Harbour', line: 'harbour', kind: 'harbour', roads: [['bash', 'logs'], ['dash', 'logs'], ['ferdinand']]},
@@ -1812,7 +1820,8 @@ Object.keys(RUNS).forEach(id => {
   // through Knapford a Main Line train follows its own platform road rather than its lane
   const latFn = run.knap && line.id === 'main' && KNAP.line ? KNAP.profile(run.knap, uA, sgn) : null;
   const R = K.makeRunner({line, uA, uB, unit, cars, scale: M, gap: 0.12 * M, vmax: run.speed * M, passenger: !!run.passenger, stopsAt: run.stopsAt,
-    loopW: loopW * M, lane: lane * M, bedM: 3.6, diesel: !!run.diesel || rec.cat === 'Diesel', noRunRound: !run.consist.length || !!run.noRunRound, latFn});
+    loopW: loopW * M, lane: lane * M, bedM: 3.6, diesel: !!run.diesel || rec.cat === 'Diesel', noRunRound: !run.consist.length || !!run.noRunRound, latFn,
+    shedEnd: run.shedEnd, shedSide: run.shedSide});
   R.rec = rec; rec.runner = R; rec.run = run;
   if(run.lane !== 1) K.drawLoops(R);
   K.addMarker(R, rec.dot, () => pickHandler(rec));
@@ -1982,7 +1991,7 @@ function buildDepot(D){
   if(D.kind === 'cement'){ for(let k = 0; k < 3; k++){ cylY(G, 3, 3, 14, mat(0xb4b7ba, 0.7), ex, 7, 8 + k * 7.5, 20); add(G, new THREE.ConeGeometry(3, 2, 20), mat(0x8a8d91, 0.7), ex, 15, 8 + k * 7.5); } }
   if(D.kind === 'rescue'){ building(G, ex, len * 0.5, 14, 22, 8, 0xeeeeee, 0xc8201e); cylY(G, 1.6, 1.6, 16, mat(0xc8201e, 0.6), ex + lx(5), 8, len * 0.5 + 12, 16); }
   if(D.kind === 'harbour'){ box(G, 14, 1.0, len, mat(0x7a6a52, 0.9), ex, 0.5, len / 2); for(let k = 0; k < 4; k++) for(let j = 0; j < 3; j++) cylZ(G, 0.35, 0.35, 8, mat(0x7a5a38, 0.9), ex - 2 + j * 0.75, 1.4 + (k % 2) * 0.6, 6 + k * 9, 10); }
-  if(D.kind === 'yard') building(G, lx(-6), 8, 5, 7, 4, 0x8a4a32, 0x3a3f46);
+  if(D.kind === 'yard' && !D.noHut) building(G, lx(-6), 8, 5, 7, 4, 0x8a4a32, 0x3a3f46);
   if(D.victor) buildVictor(kit, 3 + roads.length * SITE_STEP + 1, len - shedLen - 22);
   if(D.key === 'steamworks'){ const kv = kevinModel(); kv.position.set(lx(3 + roads.length * SITE_STEP + 7), 0, 10); G.add(kv); nonRail('kevin', G, kv); }
   finishSite(D, kit);
