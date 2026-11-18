@@ -120,6 +120,7 @@ const lc = s => s ? s.charAt(0).toLowerCase() + s.slice(1) : s;
 function member(name, unit, color, show, rec, diesel){ return {name, unit, color, show, rec, diesel}; }
 
 NWR.NWR_RUNNERS.forEach(R => {
+  if(R.track) return;                                       // worked on the shared track network (track.js)
   const rec = R.rec, dd = DUT.nwr[rec.id] || {};
   const first = member(rec.name, R.unit.map(m => m.v), rec.dot, () => NWR.show(rec), rec, rec.cat === 'Diesel' || !!rec.run.diesel);
   const rota = (dd.rota || [rec.id]).map((id, i) => {
@@ -860,6 +861,8 @@ function dutyStatus(D, i){
   return `On shed${at}. Next turn: ${next}.`;
 }
 function statusOf(group){
+  const TK = window.SODOR_TRACK;
+  if(TK){ const s = TK.statusOf(group); if(s) return s; }
   const e = byGroup.get(group);
   if(!e) return '';
   if(e.D){
@@ -897,6 +900,17 @@ if(list){
     rows.push({D, d, dot: d.querySelector('.ros-dot'), main: d.querySelector('.duty-main')});
   });
   rows.head = head;
+  // the trains worked on the shared track network
+  const TK = window.SODOR_TRACK;
+  if(TK) TK.board.forEach(B => {
+    if(B.railName !== lastRail){ lastRail = B.railName; const h = document.createElement('div'); h.className = 'leg-group'; h.textContent = B.railName; list.appendChild(h); }
+    const d = document.createElement('div'); d.className = 'ros-item duty-row';
+    d.innerHTML = '<span class="ros-dot"></span><div class="duty-txt"><div class="duty-main"></div><div class="duty-sub"></div></div>';
+    d.querySelector('.duty-sub').textContent = B.sub();
+    d.onclick = () => B.show();
+    list.appendChild(d);
+    rows.push({B, d, dot: d.querySelector('.ros-dot'), main: d.querySelector('.duty-main')});
+  });
 }
 function shortState(D){
   const m = D.rota[D.cur];
@@ -918,12 +932,15 @@ let boardT = 0;
 function updateBoard(){
   let running = 0, shed = 0, moving = 0;
   DUTIES.forEach(D => { if(D.state === 'run') running++; else if(D.state === 'shed') shed++; else moving++; });
+  const TK = window.SODOR_TRACK, tkn = TK ? TK.board.length : 0;
+  if(TK) TK.board.forEach(B => { if(B.working()) running++; else shed++; });
   const shunting = YARDS.reduce((n, Y) => n + Y.rakes.filter(r => r.rec && r.working).length, 0) + (RH && RH.working ? RH.stalls.filter(s => s.engine).length : 0);
-  if(statEl) statEl.textContent = `${running} of ${DUTIES.length}`;
+  if(statEl) statEl.textContent = `${running} of ${DUTIES.length + tkn}`;
   if(!list || list.style.display === 'none') return;
   const d = Math.floor(simTime / 1440);
   rows.head.innerHTML = `<b>${DAYS[mod(d, 7)]} ${fmtTime(simTime)}</b><span>${running} trains working · ${moving} going on or off shed · ${shed} on shed · ${shunting} engines at work in the depots</span>`;
   rows.forEach(r => {
+    if(r.B){ const [text, cls] = r.B.short(); r.dot.style.background = hex(r.B.color()); if(r.main.textContent !== text) r.main.textContent = text; r.d.dataset.state = cls; return; }
     const [m, text, cls] = shortState(r.D);
     r.dot.style.background = hex(m.color);
     if(r.main.textContent !== text) r.main.textContent = text;
@@ -970,6 +987,6 @@ frameHooks.push(dt => {
 // the duties are stepped by the train runner itself, before each of its sub-steps
 const step = dt => DUTIES.forEach(D => { stepDuty(D, dt); if(D.mover && D.state !== 'toShed' && D.state !== 'fromShed') D.mover = null; });
 
-window.SODOR_OPS = {DUTIES, YARDS, RH, SHEDS, statusOf, step, onTurn, nextTurn, stat, updateBoard};
+window.SODOR_OPS = {DUTIES, YARDS, RH, SHEDS, statusOf, step, onTurn, nextTurn, stat, updateBoard, goTidmouth, leaveTidmouth};
 console.log(`Operations: ${DUTIES.length} duties with ${SHEDS.length} engine sheds (${DUTIES.filter(D => D.shedScore > 0).length} on imperfect ground), ${YARDS.length} depot roads, built in ${Math.round(performance.now() - t0)} ms (sheds ${Math.round(tSheds)} ms)`);
 })();

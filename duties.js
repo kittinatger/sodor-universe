@@ -121,7 +121,7 @@ window.SODOR_DUTIES.work = {
   murdoch: [['07:00', 'heavy', 'the heavy coal train to Vicarstown', 'main'], ['12:00', 'through', 'the afternoon van train', 'vans'],
             ['19:30', 'through', 'the night goods', 'vans'], ['01:00', 'pickup', 'the early pick-up goods, collecting trucks for the morning', 'mixed']],
   thomas:  [['06:00', 'stopping', "the workmen's train, all stations", 'main'], ['08:00', 'stopping', 'the school train', 'main'], ['09:30', 'market', 'the market train, with long stops for shoppers', 'main'],
-            ['12:00', 'pickup', 'the branch goods with his trucks', 'trucks'], ['14:00', 'stopping', 'the afternoon branch train', 'main'], ['17:00', 'stopping', 'the evening commuter train', 'main']],
+            ['12:00', 'pickup', 'the branch goods with his trucks', 'trucks'], ['15:30', 'stopping', 'the afternoon branch train', 'main'], ['17:00', 'stopping', 'the evening commuter train', 'main']],
   toby:    [['07:00', 'stopping', 'the morning tram', 'main'], ['11:00', 'pickup', 'the quarry stone trucks', 'stone'], ['15:00', 'stopping', 'the afternoon tram', 'main']],
   edward:  [['05:30', 'stopping', 'the early commuter train', 'local'], ['09:00', 'market', 'the market train with Old Slow Coach', 'main'],
             ['13:30', 'pickup', 'the branch goods', 'trucks'], ['17:00', 'fast', 'the evening fast train', 'local']],

@@ -1729,7 +1729,7 @@ const RUNS = {
   henry:   {line: 'main', from: 'Knapford', to: 'Killdane', lane: -1, knap: 'down', fromShift: -63, speed: 24, consist: ['vanFish', 'vanFish', 'vanGrey', 'vanFish', 'vanBrown', 'vanFish', 'brakeVan'], job: 'the Flying Kipper fish train'},
   james:   {line: 'main', from: 'Killdane', to: 'Lower Kellsthorpe', lane: -1, speed: 20, consist: Array(6).fill('jamesTruck').concat(['spiteful']), job: 'a goods train of his blue trucks'},
   murdoch: {line: 'main', from: "Crovan's Gate", to: 'Vicarstown', lane: -1, speed: 18, consist: ['hector', 'truck', 'truckB', 'truck', 'truck', 'truckB', 'truck', 'truck', 'brakeVan'], job: 'the long goods train to Vicarstown'},
-  thomas:  {line: 'ffarquhar', speed: 15, passenger: true, consist: ['annie', 'clarabel'], shedEnd: 'B', shedSide: 1, job: 'his branch line passenger train with Annie and Clarabel'},
+  thomas:  {line: 'ffarquhar', speed: 15, passenger: true, consist: ['annie', 'clarabel'], shedEnd: 'B', shedSide: 1, track: true, job: 'his branch line passenger train with Annie and Clarabel'},
   mavis:   {line: 'ffquarry', speed: 7, consist: ['stoneTruck', 'stoneTruck', 'stoneTruck', 'stoneTruck', 'brakeVan'], diesel: true, job: 'stone trains down the Quarry Tramroad from Anopha Quarry to Ffarquhar'},
   toby:    {line: 'toby', from: "Bluff's Cove", to: 'Ulfstead', speed: 9, passenger: true, consist: ['henrietta', 'hannah'], job: 'the Sodor Tramway with Henrietta and Hannah'},
   flora:   {line: 'toby', from: 'Ulfstead', to: 'Maron', speed: 9, passenger: true, consist: ['floraTram'], job: 'the Sodor Tramways service with her tram coach'},
@@ -1776,14 +1776,7 @@ const DEPOTS = [
   {key: 'arlesburgh', label: 'Arlesburgh Yard', station: 'Arlesburgh', line: 'littlewest', kind: 'yard', roads: [['ryan', 'dexter'], ['jibRunner', 'judy', 'jibRunner', 'jerome', 'toolVan']]},
   {key: 'brendam', label: 'Brendam Docks', station: 'Brendam Docks', line: 'brendam', kind: 'docks', roads: [['porter', 'vanBrown', 'vanGrey']]},
   {key: 'clayworks', label: 'China Clay Works', station: 'China Clay Works', line: 'chinaclay', kind: 'clay', roads: [['timothy', 'clayTruck', 'clayTruck'], ['derek'], ['marion']]},
-  // Ffarquhar Yards, north of the station (ffarquhar.js lays out the rest); Mavis works the Quarry Tramroad
-  {key: 'ffarquhar', label: 'Ffarquhar Yards', station: 'Ffarquhar', line: 'ffarquhar', kind: 'yard', len: 140, noHut: true,
-   roads: [['glynn', 'coffeepot2', 'coffeepot3'], ['thomasTruck', 'thomasTruck', 'stoneTruck', 'stoneTruck']],
-   siteFn: () => {
-     const line = LINES.ffarquhar, u = 1 - 235 * M / line.real.len, p = realAt(line, u, new THREE.Vector3()), t = realDir(line, u, new THREE.Vector3());
-     t.y = 0; t.normalize(); const n = new THREE.Vector3(t.z, 0, -t.x), o = p.clone().addScaledVector(n, 13 * M); o.y = 0;
-     return {o, t, n, len: 140 * M, wid: 14 * M, side: 1};
-   }},
+  // Ffarquhar Yards (Glynn, the coffee pots and the yard's wagons) are laid out and worked by track.js
   {key: 'steamworks', label: 'Sodor Steamworks', station: "Crovan's Gate", line: 'main', kind: 'works', color: 0x8a4a32, roads: [['hiro'], []], victor: true},
   {key: 'rescue', label: 'Sodor Search and Rescue Centre', station: 'Sodor Search and Rescue Centre', line: 'rescue', kind: 'rescue', roads: [['flynn'], ['rocky']]},
   {key: 'harbour', label: 'Knapford Harbour (visitors from Misty Island)', station: 'Knapford Harbour', line: 'harbour', kind: 'harbour', roads: [['bash', 'logs'], ['dash', 'logs'], ['ferdinand']]},
@@ -1830,7 +1823,8 @@ Object.keys(RUNS).forEach(id => {
   // spare rakes for the train's other workings (duties.js); ops.js keeps them in sidings by the shed
   R.rakes = {main: cars};
   const RK = ((window.SODOR_DUTIES || {}).rakes || {})[id];
-  if(RK && R.runRound && run.consist.length){
+  if(run.track) R.track = true;                        // driven by track.js on the shared track network
+  if(RK && R.runRound && run.consist.length && !run.track){
     const maxL = R.Lc;
     Object.entries(RK).forEach(([name, keys]) => {
       const vs = [];
@@ -1846,7 +1840,7 @@ Object.keys(RUNS).forEach(id => {
       R.rakes[name] = vs;
     });
   }
-  if(run.lane !== 1){
+  if(run.lane !== 1 && !run.track){
     K.drawLoops(R);
     // the run-round loops for each spare rake, so the engine always runs round on track
     const keep = R.cars;
@@ -2464,6 +2458,8 @@ function row(name, sub, color, onClick, list = nwrList){
   d.querySelector('.ros-name').textContent = name; d.querySelector('.ros-sub').textContent = sub;
   d.onclick = onClick; list.appendChild(d); rosterRows.push({row: d, text: (name + ' ' + sub).toLowerCase()});
 }
+// Glynn and the coffee pots live in Ffarquhar Yards, built by track.js after this file
+['glynn', 'coffeepot2', 'coffeepot3'].forEach(id => { const r = byId[id]; if(r && !r.home){ r.home = {label: 'Ffarquhar Yards'}; engineUnit(r); tagEngine(r); } });
 const shown = rec => rec.veh && (rec.runner || rec.home || rec.relief);
 const subOf = r => {
   if(r.runner) return LINES[r.run.line].name.replace(/ (Branch )?Line$/, '');
@@ -2546,7 +2542,7 @@ frameHooks.push(() => {
   depotLabels.forEach(s => { s.visible = camDist < 4 && camDist > 0.12 && cp.distanceTo(s.position) < 3.2; });
 });
 
-window.SODOR_NWR = {FLEET, RUNS, DEPOTS, NWR_RUNNERS, STOCK_STD, byId, show: x => pickHandler(x), RELIEF};
+window.SODOR_NWR = {FLEET, RUNS, DEPOTS, NWR_RUNNERS, STOCK_STD, byId, show: x => pickHandler(x), RELIEF, makeStock, engineUnit, tagEngine, tagStock};
 // The standard-gauge kit, depot builders and roster, shared with cfr.js.
 window.SODOR_STD = {bakeVC, faceMat, faceOn, letter, nameplate, lining, hazard, wheelS, rodsS, addWheels, finish, chimneyS, halfDrumX, gable, lamp, buffers,
   findSite, siteKit, shedOver, building, heap, label, bakeSite, depotGroup, depotLabels, allNWR, taken, roadMat, frameOnLine, rosterGroup: group, rosterRow: row, STYLES, rrect,

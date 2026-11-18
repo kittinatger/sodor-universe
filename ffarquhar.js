@@ -123,26 +123,37 @@ const STONE = 0x8d8a82, BRICK = 0x9b4a34, TILE = 0x8a4a3a, SLATE = 0x4a4f58, GRE
   for(const z of [-3, 3]) box(gs, 0.1, 3.2, 2.8, mat(0x6a4a30, 0.8), -4.56, 1.6, z);
   const md = site(LF, 112, -5.2, 0); box(md, 3, 1.0, 12, mat(0x9a4a32, 0.85), 0, 0.5, 0);
   for(let k = 0; k < 8; k++) cylY(md, 0.22, 0.25, 0.7, mat(0xc8ccd0, 0.4, 0.6), -0.6 + (k % 2) * 0.6, 1.35, -4 + k, 8);
-  const cd = site(LF, 150, -6.2, 0); box(cd, 4, 1.0, 12, mat(STONE, 0.9), 0, 0.5, 0);
+  const cd = site(LF, 150, -16.6, 0); box(cd, 4, 1.0, 12, mat(STONE, 0.9), 0, 0.5, 0);      // beside the goods siding (track.js)
   for(let z = -6; z <= 6; z += 1.5) for(const x of [-1.9, 1.9]) box(cd, 0.1, 1.2, 0.1, mat(0xe8e8e2, 0.7), x, 1.6, z);
   for(const x of [-1.9, 1.9]) box(cd, 0.06, 0.06, 12, mat(0xe8e8e2, 0.7), x, 2.1, 0);
 }
 
 // ======================================================================= Ffarquhar Yards (north side)
 {
-  // the carriage shed: long and wooden, two roads, for Annie, Clarabel, Henrietta and Daisy
-  const cs = site(LF, 95, 36, 30);
+  // the carriage shed: long and wooden, two roads (track.js lays the yard's track: the ladder, the
+  // carriage roads, the engine shed roads and the coal road)
+  const cs = site(LF, 130, 36, 30);
   for(const x of [-4.8, 4.8]) box(cs, 0.3, 5, 60, mat(0x6a4a30, 0.85), x, 2.5, 0);
   box(cs, 9.9, 5, 0.3, mat(0x6a4a30, 0.85), 0, 2.5, -30);
   roofP(cs, 10.6, 61, 5, mat(SLATE, 0.75), 0, 0);
   for(let z = -26; z < 30; z += 4) for(const x of [-4.98, 4.98]) box(cs, 0.04, 0.9, 1.6, glassMat(), x, 3.2, z);
-  rails(LF, [[128, 33.8], [64, 33.8]]); rails(LF, [[128, 38.2], [64, 38.2]]);
-  rails(LF, ease(175, 4.6, 128, 33.8)); rails(LF, ease(160, 33.8, 128, 38.2, 6));
-  // coal staithes and the oil depot
-  const co = site(LF, 172, 46, 12);
+  // the engine shed: two roads, brick, for Thomas and Rosie
+  const es = site(LF, 166, 19.3, 16);
+  for(const x of [-4.9, 4.9]) box(es, 0.4, 5.4, 28, mat(BRICK, 0.85), x, 2.7, 0);
+  box(es, 10.2, 5.4, 0.4, mat(BRICK, 0.85), 0, 2.7, -14);
+  box(es, 10.2, 1.2, 0.4, mat(BRICK, 0.85), 0, 4.8, 14);
+  roofP(es, 10.8, 28.8, 5.4, mat(SLATE, 0.75), 0, 0);
+  box(es, 1, 0.6, 24, mat(0x3a3f46, 0.7), 0, 7.6, 0);                          // smoke vent along the ridge
+  for(let z = -11; z < 12; z += 4) for(const x of [-5.12, 5.12]) box(es, 0.04, 1.0, 1.4, glassMat(), x, 3.4, z);
+  // the water tower beside the shed
+  const wt = site(LF, 186, 27, 0);
+  for(const x of [-1.2, 1.2]) for(const z of [-1.2, 1.2]) box(wt, 0.3, 4.5, 0.3, mat(0x3a3a3a, 0.7), x, 2.25, z);
+  box(wt, 3.4, 2.2, 3.4, mat(0x2f5a3a, 0.6), 0, 5.6, 0);
+  // coal staithes beside the coal road, and the oil depot
+  const co = site(LF, 172, 49, 12);
   for(let k = 0; k < 4; k++){ box(co, 4, 1.8, 0.4, mat(BRICK, 0.85), 0, 0.9, -6 + k * 4); heap(co, 0, -4 + k * 4, 1.6, 1.4, 0x18181a); }
   box(co, 0.4, 1.8, 16, mat(BRICK, 0.85), -2, 0.9, 0);
-  const oil = site(LF, 212, 46, 12);
+  const oil = site(LF, 212, 54, 12);
   for(const x of [-2, 2]){ const t = add(oil, new THREE.CylinderGeometry(1.6, 1.6, 9, 16).rotateX(Math.PI / 2), mat(0xdedcd6, 0.4, 0.3), x, 2.6, 0); for(const z of [-3, 3]) box(oil, 0.4, 1.2, 0.4, mat(0x3a3a3a, 0.7), x, 0.6, z); }
   box(oil, 7, 0.3, 11, mat(0x7a7a74, 0.9), 0, 0.15, 0);
   // the stone yard: cutting and curing sheds beside the start of the Quarry Tramroad, with cut blocks
@@ -157,7 +168,7 @@ const STONE = 0x8d8a82, BRICK = 0x9b4a34, TILE = 0x8a4a3a, SLATE = 0x4a4f58, GRE
   const jib = box(cr, 0.3, 0.3, 8, mat(0x3a3a3a, 0.6, 0.3), 0, 5, 3.4); jib.rotation.x = -0.45;
   // the quarrymen's cottages, between the tramroad and the yard, and the stationmaster's house
   for(let k = 0; k < 4; k++) house(site(LF, 40 + k * 9, 70, k ? 0 : 30), 0, 0, 7, 8, 5.8, STONE, SLATE, {chimneys: [0]});
-  house(site(LF, 250, 26, 14), 0, 0, 8, 9, 6, BRICK, TILE, {chimneys: [-2.5, 2.5]});
+  house(site(LF, 300, 34, 14), 0, 0, 8, 9, 6, BRICK, TILE, {chimneys: [-2.5, 2.5]});
 }
 function heap(g, x, z, r, h, c){ add(g, new THREE.ConeGeometry(r, h, 9), mat(c, 0.95), x, h / 2, z); }
 
