@@ -1987,6 +1987,7 @@ function buildDepot(D){
   if(!LINES[D.line]) return;
   if(D.kind === 'roundhouse') return buildRoundhouse(D);
   if(D.kind === 'docks') return buildDocks(D);
+  if(D.kind === 'rescue') return buildRescue(D);
   const roads = D.roads.map(ids => vehiclesFor(ids, D));
   const rowLen = roads.map(r => r.flat().reduce((s, v) => s + v.len + 0.15, 2));
   const yardLen = Math.max(30, ...rowLen);
@@ -2020,6 +2021,342 @@ function buildDepot(D){
   if(D.key === 'steamworks'){ const kv = kevinModel(); kv.position.set(lx(3 + roads.length * SITE_STEP + 7), 0, 10); G.add(kv); nonRail('kevin', G, kv); }
   finishSite(D, kit);
 }
+// ------------------------------------------------------------------ the Sodor Search and Rescue Centre
+// A waterfront complex on a quay below the cliffs: the headquarters (grey clapboard, red doors and trim,
+// a balcony round the upper floor and the name board on the roof), a raised deck with the green girder
+// ramp down to the yard, a water tower and water crane, a turntable, the yard roads where Flynn and Rocky
+// stand, a goods shed, the boathouse on its pier with a slipway into the sea, and the helipad pier with its
+// hangar and control tower. The site is found on the shore nearest the station, facing the sea.
+const RESCUE_ANIM = [];
+function rescueSite(D, LEN, WID){
+  const line = LINES[D.line]; if(!line || !line.real) return null;
+  const P = realAt(line, K.lineU(line, D.station), new THREE.Vector3());
+  let best = null;
+  for(let r = 80; r <= 1100; r += 30) for(let k = 0; k < 40; k++){
+    const ang = k / 40 * Math.PI * 2, x = P.x + Math.cos(ang) * r * M, z = P.z + Math.sin(ang) * r * M, h = heightAt(x, z);
+    if(h < 0.3 * M || h > 3.5 * M) continue;
+    let sd = 0, lo = Infinity;
+    for(let q = 0; q < 24; q++){ const a2 = q / 24 * Math.PI * 2, hh = heightAt(x + Math.cos(a2) * 45 * M, z + Math.sin(a2) * 45 * M); if(hh < lo){ lo = hh; sd = a2; } }
+    if(lo > -1.5 * M) continue;
+    const Ld = new THREE.Vector3(-Math.cos(sd), 0, -Math.sin(sd));           // inland
+    let t = new THREE.Vector3(-Ld.z, 0, Ld.x);
+    if(new THREE.Vector3(t.z, 0, -t.x).dot(Ld) < 0) t.negate();              // so that the site's b axis runs inland on its +x
+    const o = new THREE.Vector3(x, 0, z).addScaledVector(t, -LEN * M / 2);
+    let hmax = -Infinity, ok = true, wet = 0;
+    for(let a = 0; a <= LEN && ok; a += 10) for(let b = 0; b <= WID; b += 10){
+      const px = o.x + t.x * a * M + Ld.x * b * M, pz = o.z + t.z * a * M + Ld.z * b * M, hh = heightAt(px, pz);
+      hmax = Math.max(hmax, hh); if(hh < 0) wet++;
+      if(K.nearTrack(px, pz, 10 * M) || taken.some(s => (s.x - px) ** 2 + (s.z - pz) ** 2 < s.r * s.r)){ ok = false; break; }
+    }
+    // the sea must lie off the front for the piers
+    for(const a of [45, 115]){ const px = o.x + t.x * a * M - Ld.x * 22 * M, pz = o.z + t.z * a * M - Ld.z * 22 * M; if(heightAt(px, pz) > -0.5 * M) ok = false; }
+    if(!ok) continue;
+    const score = hmax / M * 2 + wet * 3 + r * 0.004;
+    if(!best || score < best.score) best = {score, site: {o, t, n: Ld, len: LEN * M, wid: WID * M, side: 1}};
+  }
+  return best && best.site;
+}
+function boardTex(w, h, base, line, every){
+  return canvasTex(256, 256, (g, W, H) => { g.fillStyle = base; g.fillRect(0, 0, W, H);
+    for(let y = 0; y < H; y += every){ g.fillStyle = line; g.fillRect(0, y, W, 2); g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(0, y + 2, W, 2); }
+    let s = 5; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for(let k = 0; k < 500; k++){ g.fillStyle = `rgba(0,0,0,${rnd() * 0.05})`; g.fillRect(rnd() * W, rnd() * H, 1 + rnd() * 6, 1); } });
+}
+const RESCUE_MAT = {};
+function rmat(key, make){ return RESCUE_MAT[key] || (RESCUE_MAT[key] = make()); }
+function clapMat(color, rep = [4, 2]){ return rmat('clap' + color + rep, () => { const t = boardTex(256, 256, color, 'rgba(40,40,44,0.35)', 16); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); return new THREE.MeshStandardMaterial({map: t, roughness: 0.85}); }); }
+function plankMat(rep = [6, 6]){ return rmat('plank' + rep, () => { const t = boardTex(256, 256, '#8a5a36', 'rgba(30,18,10,0.5)', 21); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); return new THREE.MeshStandardMaterial({map: t, roughness: 0.9}); }); }
+function signTex(text, bg, ink, w = 1024, h = 128){
+  return canvasTex(w, h, (g, W, H) => { g.fillStyle = ink; g.fillRect(0, 0, W, H); g.fillStyle = bg; g.fillRect(8, 8, W - 16, H - 16);
+    g.fillStyle = ink; g.font = `bold ${H * 0.55}px Georgia`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, W / 2, H / 2 + 2); });
+}
+function emblemTex(){
+  return canvasTex(128, 128, (g, W, H) => { g.fillStyle = '#c8201e'; g.fillRect(0, 0, W, H); g.fillStyle = '#f4f0e8'; g.fillRect(8, 8, W - 16, H - 16); g.fillStyle = '#c8201e'; g.fillRect(14, 14, W - 28, H - 28);
+    g.fillStyle = '#f4f0e8'; g.font = 'bold 40px Georgia'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('S', W / 2 - 22, H / 2); g.fillText('S', W / 2, H / 2); g.fillText('R', W / 2 + 22, H / 2);
+    g.beginPath(); g.moveTo(W / 2, 22); g.lineTo(W / 2 + 10, 34); g.lineTo(W / 2 - 10, 34); g.fill(); });
+}
+function helipadTex(){
+  return canvasTex(512, 512, (g, W, H) => {
+    g.fillStyle = '#8e8e88'; g.fillRect(0, 0, W, H);
+    let s = 9; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for(let k = 0; k < 6000; k++){ const v = 120 + rnd() * 40 | 0; g.fillStyle = `rgba(${v},${v},${v - 4},0.5)`; g.fillRect(rnd() * W, rnd() * H, 2, 2); }
+    const b = 34; for(let x = -H; x < W + H; x += 44){ g.fillStyle = (x / 44) % 2 ? '#e0b62e' : '#c83a26'; g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 22, 0); g.lineTo(x + 22 - H, H); g.lineTo(x - H, H); g.fill(); }
+    g.fillStyle = '#8e8e88'; g.fillRect(b, b, W - 2 * b, H - 2 * b);
+    for(let k = 0; k < 3000; k++){ const v = 120 + rnd() * 40 | 0; g.fillStyle = `rgba(${v},${v},${v - 4},0.5)`; g.fillRect(b + rnd() * (W - 2 * b), b + rnd() * (H - 2 * b), 2, 2); }
+    g.strokeStyle = '#e8c234'; g.lineWidth = 22; g.beginPath(); g.arc(W / 2, H / 2, W * 0.33, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#e8c234'; const u = W / 512; g.fillRect(W / 2 - 70 * u, H / 2 - 80 * u, 30 * u, 160 * u); g.fillRect(W / 2 + 40 * u, H / 2 - 80 * u, 30 * u, 160 * u); g.fillRect(W / 2 - 40 * u, H / 2 - 15 * u, 80 * u, 30 * u);
+  });
+}
+function plane(G, w, h, m, x, y, z, rx = 0, ry = 0){ const me = add(G, new THREE.PlaneGeometry(w, h), m, x, y, z); me.rotation.set(rx, ry, 0, 'YXZ'); return me; }
+function railing(p, x0, z0, x1, z1, y, col = 0x9a3a2a, h = 1.05){
+  const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 1.6)), ry = Math.atan2(x1 - x0, z1 - z0), R = mat(col, 0.6);
+  const rail = box(p, 0.08, 0.08, len, R, (x0 + x1) / 2, y + h, (z0 + z1) / 2); rail.rotation.y = ry;
+  const mid = box(p, 0.05, 0.05, len, R, (x0 + x1) / 2, y + h * 0.5, (z0 + z1) / 2); mid.rotation.y = ry;
+  for(let k = 0; k <= n; k++){ const f = k / n; box(p, 0.08, h, 0.08, R, x0 + (x1 - x0) * f, y + h / 2, z0 + (z1 - z0) * f); }
+}
+// a timber pier on piles, deck top at y, spanning local x0..x1, z0..z1
+function pier(p, x0, x1, z0, z1, y, floorY){
+  const w = x1 - x0, d = z1 - z0;
+  const deck = box(p, w, 0.35, d, plankMat([w / 4, d / 4]), (x0 + x1) / 2, y - 0.18, (z0 + z1) / 2);
+  const PILE = mat(0x5a4632, 0.9), BRACE = mat(0x6a5440, 0.9), ph = y - floorY;
+  for(let x = x0 + 0.6; x <= x1 - 0.5; x += 3.2) for(let z = z0 + 0.6; z <= z1 - 0.5; z += 3.2) cylY(p, 0.22, 0.25, ph, PILE, x, floorY + ph / 2 - 0.3, z, 7);
+  for(let x = x0 + 0.6; x <= x1 - 0.5; x += 3.2){ const b1 = box(p, 0.15, 0.2, Math.min(d, 4.6), BRACE, x, y - 1.6, z0 + 2); b1.rotation.x = 0.6; }
+  box(p, w, 0.5, 0.3, BRACE, (x0 + x1) / 2, y - 0.6, z0 + 0.15); box(p, w, 0.5, 0.3, BRACE, (x0 + x1) / 2, y - 0.6, z1 - 0.15);
+  return deck;
+}
+function helicopter(){
+  const g = new THREE.Group(), W = mat(0xf2f0ea, 0.45), R = mat(0xc8201e, 0.5), DK = mat(0x2a2c30, 0.5), GL = glassMat();
+  const body = add(g, new THREE.SphereGeometry(1.5, 16, 12), W, 0, 1.9, 0.6); body.scale.set(1, 1, 1.7);
+  add(g, new THREE.SphereGeometry(1.2, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2.2), GL, 0, 2.2, 2.0).rotation.x = 1.1;
+  cylZ(g, 0.55, 0.22, 6.5, W, 0, 2.3, -3.9, 12);
+  box(g, 0.12, 1.6, 1.0, W, 0, 3.0, -7.0); box(g, 1.8, 0.1, 0.6, W, 0, 2.4, -6.6);
+  box(g, 0.06, 0.32, 3.4, R, 1.52, 1.7, 0.2); box(g, 0.06, 0.32, 3.4, R, -1.52, 1.7, 0.2);
+  for(const s of [-1, 1]){ const fl = cylZ(g, 0.38, 0.38, 4.2, W, s * 1.4, 0.45, 0.5, 12); add(g, new THREE.SphereGeometry(0.38, 10, 8), W, s * 1.4, 0.45, 2.6); box(g, 0.1, 1.0, 0.1, DK, s * 1.2, 0.95, 1.6).rotation.z = s * 0.3; box(g, 0.1, 1.0, 0.1, DK, s * 1.2, 0.95, -0.6).rotation.z = s * 0.3; }
+  cylY(g, 0.35, 0.45, 0.5, DK, 0, 3.4, 0.3, 10);
+  const rotor = new THREE.Group(); rotor.position.set(0, 3.75, 0.3); g.add(rotor);
+  for(let k = 0; k < 4; k++){ const b = box(rotor, 0.4, 0.06, 5.2, DK, 0, 0, 2.6); const piv = new THREE.Group(); piv.rotation.y = k * Math.PI / 2; piv.add(b); rotor.add(piv); }
+  const tail = new THREE.Group(); tail.position.set(0.2, 3.0, -7.2); g.add(tail);
+  for(let k = 0; k < 2; k++){ const b = box(tail, 0.05, 1.5, 0.18, DK, 0, 0, 0); b.rotation.x = k * Math.PI / 2; }
+  g.userData.rotor = rotor; g.userData.tail = tail;
+  return g;
+}
+function lifeboat(){
+  const g = new THREE.Group();
+  const hull = add(g, new THREE.CylinderGeometry(1.6, 1.0, 9, 14, 1, false, 0, Math.PI), mat(0x1f3f8a, 0.5, 0, 'double'), 0, 0.9, 0); hull.rotation.set(Math.PI / 2, 0, Math.PI);
+  box(g, 3.1, 0.25, 8.6, mat(0xe8e4d8, 0.7), 0, 0.9, 0);
+  box(g, 2.3, 1.8, 3.4, mat(0xe8a020, 0.5), 0, 1.95, -0.6);
+  box(g, 2.4, 0.2, 3.6, mat(0xe8e4d8, 0.6), 0, 2.95, -0.6);
+  box(g, 2.0, 0.6, 0.05, glassMat(), 0, 2.3, 1.13);
+  box(g, 0.08, 1.8, 0.08, mat(0xe8e4d8, 0.6), 0, 3.9, -1.2);
+  box(g, 3.3, 0.35, 8.8, mat(0xc8201e, 0.6), 0, 1.15, 0).scale.y = 0.6;
+  return g;
+}
+function rockWall(G, pts, h0, rnd){
+  // a rough cliff face: columns of vertices along the line, pushed in and out, tufts of green on the ledges
+  const P = [], C = [], I = [], rows = 7, col = new THREE.Color();
+  pts.forEach((pt, i) => {
+    for(let r = 0; r < rows; r++){
+      const f = r / (rows - 1), y = -1 + f * (pt.top + 1), j = (rnd() - 0.5) * 2.4 + Math.sin(i * 0.7 + r) * 0.8;
+      P.push(pt.x + pt.nx * (j - f * 2.5), y, pt.z + pt.nz * (j - f * 2.5));
+      const v = 0.42 + rnd() * 0.16, green = rnd() < 0.28 + f * 0.25;
+      if(green) col.setRGB(0.22 + rnd() * 0.08, 0.36 + rnd() * 0.1, 0.16); else col.setRGB(v, v * 0.98, v * 0.93);
+      C.push(col.r, col.g, col.b);
+    }
+    if(i) for(let r = 0; r < rows - 1; r++){ const a = (i - 1) * rows + r, b = i * rows + r; I.push(a, b, a + 1, a + 1, b, b + 1); }
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setIndex(I); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.95, flatShading: true, side: THREE.DoubleSide}));
+  m.userData.keep = true; m.castShadow = m.receiveShadow = true; G.add(m);
+  // shrubs along the top and on ledges
+  const BUSH = [mat(0x2e5a24, 0.9), mat(0x3e6a2c, 0.9), mat(0x4a7a30, 0.9)];
+  pts.forEach((pt, i) => { if(i % 2) return; for(let k = 0; k < 2; k++){ const s = 1.2 + rnd() * 2.2, y = k ? pt.top - 0.5 : pt.top * (0.3 + rnd() * 0.4); const b = add(G, new THREE.IcosahedronGeometry(s, 0), BUSH[(i + k) % 3], pt.x - pt.nx * (k ? 1.2 : 2.5), y, pt.z - pt.nz * (k ? 1.2 : 2.5)); b.scale.y = 0.75; } });
+}
+function buildRescue(D){
+  const roads = D.roads.map(ids => vehiclesFor(ids, D));
+  const LEN = 150, WID = 50;
+  const site = rescueSite(D, LEN, WID) || findSite(D.station, D.line, LEN, WID);
+  const kit = siteKit(site), G = kit.G, lx = kit.lx;
+  let s = 31; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const seaY = (0 - kit.base) / M, pierY = Math.min(0, seaY + 2.4);
+  // the quay: the levelled yard faced in white concrete down into the sea
+  const pad = G.children[0]; if(pad) pad.material = mat(0xd9d6cc, 0.9);
+  const GRAV = mat(0xa8a49a, 0.95), GRASS = mat(0x6a9a46, 0.95), DIRT = mat(0x7a5236, 0.95), CONC = mat(0xe4e2da, 0.85), WHITE = mat(0xf0eee6, 0.7);
+  box(G, lx(1) * 0 + 1.4, 0.5, LEN + 4, CONC, lx(0.2), 0.25, LEN / 2);                       // coping along the quay edge
+  box(G, 21, 0.03, LEN, GRAV, lx(12.5), 0.02, LEN / 2);                                        // ballast round the tracks
+  box(G, 26, 0.03, LEN, GRASS, lx(36), 0.015, LEN / 2);                                        // grass behind
+  box(G, 4.5, 0.03, LEN, DIRT, lx(24.5), 0.022, LEN / 2);                                      // the earth roadway along the yard
+  box(G, 4, 0.03, 60, DIRT, lx(47), 0.022, 30);
+  for(let a = 4; a < LEN; a += 9) cylY(G, 0.22, 0.26, 0.7, mat(0x1a1a1a, 0.6), lx(0.8), 0.35, a, 8);   // bollards
+  // the tracks: two through roads along the quay, the yard roads where Flynn and Rocky stand
+  [5, 9.5].forEach(b => kit.road(0, b, LEN, b));
+  kit.road(20, 5, 34, 9.5); kit.road(118, 9.5, 132, 14);
+  roads.forEach((units, i) => {
+    const b = 14 + i * 4.5;
+    kit.road(i ? 30 : 0, b, LEN, b);
+    kit.row(units.flat(), 60, b, 1, 0);
+    K.yards.push({D, label: D.label, rail: 'nwr', units, ids: D.roads[i], at: (s2, out) => out.copy(kit.pt(s2, b)), yaw: kit.yaw + Math.PI, face: -1, sMin: 32, sMax: LEN - 1, shed: 0});
+  });
+  parkAll(roads);
+  // the turntable: a pit with a concrete rim and a green girder deck, roads off it to the yard
+  { const ta = 22, tb = 36, R = 10.5, T = new THREE.Group(); T.position.set(lx(tb), 0, ta); G.add(T);
+    add(T, new THREE.RingGeometry(R, R + 0.9, 40).rotateX(-Math.PI / 2), CONC, 0, 0.32, 0);
+    const wall = add(T, new THREE.CylinderGeometry(R, R, 1.1, 40, 1, true), mat(0x9a968c, 0.9, 0, 'double'), 0, -0.25, 0);
+    add(T, new THREE.CircleGeometry(R, 40).rotateX(-Math.PI / 2), mat(0x7e7a72, 0.95), 0, -0.75, 0);
+    add(T, new THREE.RingGeometry(R - 0.6, R - 0.3, 40).rotateX(-Math.PI / 2), mat(0x5a5650, 0.6, 0.5), 0, -0.72, 0);
+    const deck = new THREE.Group(); deck.rotation.y = 0.35; T.add(deck);
+    const GR = mat(0x3a6a3a, 0.65, 0.2);
+    box(deck, 3.4, 0.25, 2 * R - 0.3, mat(0x6a6a66, 0.8), 0, -0.05, 0);
+    for(const sd of [-1, 1]){ box(deck, 0.35, 1.0, 2 * R - 0.3, GR, sd * 1.8, 0.2, 0); for(let z = -R + 1; z < R - 0.5; z += 1.6){ const d2 = box(deck, 0.12, 1.0, 1.1, GR, sd * 1.8, 0.2, z); d2.rotation.x = 0.7; } }
+    for(const sd of [-0.72, 0.72]) box(deck, 0.08, 0.12, 2 * R - 0.3, mat(0xb8bcc2, 0.3, 0.7), sd, 0.17, 0);
+    for(let z = -R + 0.8; z < R; z += 0.75) box(deck, 2.4, 0.08, 0.22, mat(0x4a3a2a, 0.9), 0, 0.09, z);
+    box(deck, 1.6, 2.0, 1.6, mat(0xe8e2d0, 0.8), 2.6, 0.9, R - 1.4); box(deck, 1.9, 0.15, 1.9, mat(0x3a4a5a, 0.7), 2.6, 1.95, R - 1.4);
+    for(const ang of [0.35, 1.1, -0.45, Math.PI + 0.35]){ const ca = Math.cos(ang), sa = Math.sin(ang); kit.road(ta + ca * (R + 0.6), tb + sa * (R + 0.6), ta + ca * (R + 9), tb + sa * (R + 9)); }
+    kit.road(ta + Math.cos(0.35 + Math.PI) * -(R + 0.6), tb - Math.sin(0.35) * (R + 0.6), 52, 18.5);
+  }
+  // the goods shed at the far end: brown timber, two doors on to the quay
+  { const g = new THREE.Group(); g.position.set(lx(36), 0, 4 + 6); g.rotation.y = -Math.PI / 2; G.add(g);
+    box(g, 12, 5.5, 14, clapMat('#7a4a30', [3, 1.5]), 0, 2.75, 0); gable(g, 12.6, 14.6, 5.5, mat(0x4a3a30, 0.8), 0, 0, Math.PI / 2);
+    for(const x of [-3, 3]){ box(g, 3.4, 4.2, 0.1, mat(0x4a2a1a, 0.8), x, 2.1, 7.05); box(g, 0.12, 4.2, 0.12, mat(0x2a1a10), x, 2.1, 7.1); }
+    box(g, 14, 1.0, 3, mat(0x7a5a3a, 0.9), 0, 0.5, 8.6);
+    for(let k = 0; k < 4; k++) box(g, 1.1, 1.0, 1.1, mat(0xa07a4a, 0.9), -5 + k * 1.4, 1.5, 8.8 - (k % 2) * 0.6); }
+  // the headquarters: front to the sea, local x along the quay, z towards the water
+  const hq = new THREE.Group(); hq.position.set(lx(34), 0, 78); hq.rotation.y = -Math.PI / 2; G.add(hq);
+  { const GREY = clapMat('#c8c6c0', [8, 2]), GREY2 = clapMat('#bcbab4', [5, 1.5]), RED = mat(0x9a3426, 0.6), REDDOOR = mat(0xc22a1e, 0.55), SLATE = mat(0x4a586c, 0.7), BASE = mat(0xb4b0a6, 0.9), GL = glassMat();
+    const win = (p, x, y, z, w, h, arch) => { box(p, w + 0.3, h + 0.3, 0.12, RED, x, y, z); box(p, w, h, 0.14, GL, x, y, z + 0.01); box(p, 0.08, h, 0.16, RED, x, y, z + 0.02); box(p, w + 0.5, 0.15, 0.3, RED, x, y - h / 2 - 0.2, z + 0.08);
+      if(arch){ const a2 = add(p, new THREE.CircleGeometry(w / 2 + 0.15, 16, 0, Math.PI), RED, x, y + h / 2, z + 0.07); a2.scale.y = 0.5; } };
+    // ground floor: 34 x 6 x 16
+    box(hq, 34.6, 0.6, 16.6, BASE, 0, 0.3, 0);
+    box(hq, 34, 6, 16, GREY, 0, 3.3, 0);
+    for(const x of [-17, -6, 6, 17]) box(hq, 0.5, 6.2, 0.5, RED, x, 3.3, 8.05);
+    box(hq, 34.4, 0.35, 0.4, RED, 0, 6.15, 8.1);
+    for(const x of [-13.2, -8.8]){ box(hq, 4.0, 4.6, 0.12, REDDOOR, x, 2.9, 8.05); box(hq, 0.1, 4.6, 0.16, mat(0x6a1a12), x, 2.9, 8.1); for(const y of [1.6, 3.6]) box(hq, 3.8, 0.08, 0.15, mat(0x8a2218), x, y, 8.1); box(hq, 4.6, 0.3, 0.3, RED, x, 5.35, 8.1); }
+    box(hq, 4.2, 4.6, 0.12, REDDOOR, 11, 2.9, 8.05); box(hq, 0.1, 4.6, 0.16, mat(0x6a1a12), 11, 2.9, 8.1);
+    box(hq, 1.2, 2.3, 0.12, REDDOOR, -3.5, 1.75, 8.05); box(hq, 1.2, 2.3, 0.12, REDDOOR, 15.4, 1.75, 8.05);
+    for(const x of [-1.5, 1.5, 4.0]) win(hq, x, 3.2, 8.02, 1.4, 1.8);
+    for(let z = -6; z <= 6; z += 3) { win(hq, 0, 3.2, 0, 1.3, 1.6); }
+    // canopy over the yard side, on brackets
+    const can = box(hq, 34.8, 0.18, 2.4, SLATE, 0, 6.1, 9.2); can.rotation.x = 0.18;
+    for(let x = -16; x <= 16; x += 4){ const br = box(hq, 0.15, 0.15, 1.9, RED, x, 5.5, 8.9); br.rotation.x = -0.55; }
+    // the upper floor, set back so a balcony runs round the front and the sea end
+    const UX = -4, UW = 26, UD = 11, UZ = -2.2;
+    box(hq, UW, 4.6, UD, GREY2, UX, 8.6, UZ);
+    box(hq, 34.4, 0.25, 16.4, mat(0x6e6e6a, 0.85), 0, 6.42, 0);                              // the flat roof / balcony floor
+    railing(hq, -17, 8.1, 17, 8.1, 6.55); railing(hq, 17, 8.1, 17, -8, 6.55); railing(hq, -17, 8.1, -17, -8, 6.55);
+    for(const x of [-14, -10, -6, -2, 2, 6]) win(hq, x, 8.7, UZ + UD / 2 + 0.02, 1.4, 2.0, true);
+    for(const x of [-8, 0]) box(hq, 1.2, 2.4, 0.12, REDDOOR, x - 2, 7.8, UZ + UD / 2 + 0.03);
+    box(hq, UW + 0.4, 0.4, 0.4, RED, UX, 10.85, UZ + UD / 2 + 0.05);
+    gable(hq, UD + 1.2, UW + 1.2, 10.9, SLATE, UX, UZ, Math.PI / 2, 0.55);
+    // a three-storey block at the land end with the emblem
+    box(hq, 7, 4.2, 9, GREY2, -13.5, 12.6, -3.2); gable(hq, 9.6, 7.6, 14.7, SLATE, -13.5, -3.2, 0, 0.6);
+    for(const x of [-15, -12]) win(hq, x, 12.6, 1.32, 1.1, 1.6);
+    box(hq, 7.4, 0.35, 0.35, RED, -13.5, 14.7, 1.4);
+    // dormers and chimneys
+    for(const x of [-6, 4]){ box(hq, 2.4, 1.6, 2.0, GREY2, x, 12.2, 1.6); gable(hq, 2.8, 2.4, 12.95, SLATE, x, 1.6, 0, 0.7); win(hq, x, 12.1, 2.62, 1.1, 1.0); }
+    for(const x of [-9, 7]){ box(hq, 1.1, 2.6, 1.1, mat(0x8a3a2a, 0.9), x, 13.4, -4); box(hq, 1.3, 0.25, 1.3, mat(0x5a4a40, 0.8), x, 14.8, -4); }
+    // the name board on the roof and the emblems
+    const sb = new THREE.Mesh(new THREE.PlaneGeometry(13, 1.6), new THREE.MeshStandardMaterial({map: signTex('SODOR SEARCH AND RESCUE', '#f4f0e6', '#b81e1a'), roughness: 0.6}));
+    sb.position.set(-1, 12.9, 2.6); sb.rotation.x = -0.15; hq.add(sb); sb.userData.keep = true;
+    box(hq, 0.2, 1.6, 0.2, RED, -7.3, 12.0, 2.3); box(hq, 0.2, 1.6, 0.2, RED, 5.3, 12.0, 2.3);
+    const emM = new THREE.MeshStandardMaterial({map: emblemTex(), roughness: 0.6});
+    for(const [x, y, z] of [[-13.5, 15.6, 1.42], [-1, 5.0, 8.1], [9, 9.2, UZ + UD / 2 + 0.05]]){ const e = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), emM); e.position.set(x, y, z); hq.add(e); e.userData.keep = true; }
+    // the outside stair up to the balcony at the quay end
+    for(let k = 0; k < 14; k++) box(hq, 1.3, 0.18, 0.4, mat(0x6a3a2a, 0.8), 18.0, 0.45 * k + 0.3, 6.6 - k * 0.42);
+    const str = box(hq, 0.15, 0.3, 6.6, RED, 18.7, 3.6, 3.7); str.rotation.x = 0.82; const str2 = box(hq, 0.15, 0.3, 6.6, RED, 17.3, 3.6, 3.7); str2.rotation.x = 0.82;
+    for(let k = 0; k < 4; k++) box(hq, 0.12, 1.1 + 1.6 * k, 0.12, RED, 18.75, (1.1 + 1.6 * k) / 2, 6.6 - k * 1.6);
+    // the raised deck beyond, and the green girder ramp down to the yard
+    box(hq, 12, 6.2, 12, GREY, 23.5, 3.1, -1); box(hq, 12.4, 0.3, 12.4, mat(0x7a7a76, 0.85), 23.5, 6.3, -1);
+    box(hq, 4, 3.6, 0.12, REDDOOR, 23.5, 1.8, 5.06);
+    railing(hq, 17.6, 5.2, 29.6, 5.2, 6.45); railing(hq, 17.6, -7.2, 29.6, -7.2, 6.45);
+    const ramp = new THREE.Group(); ramp.position.set(29.5, 6.3, -1); hq.add(ramp);
+    const RL = 32, ang = Math.atan2(6.2, RL), GRN = mat(0x3a6e46, 0.6, 0.2);
+    const rp = box(ramp, RL / Math.cos(ang), 0.3, 6, mat(0x8a8a84, 0.85), RL / 2, -3.1, 0); rp.rotation.z = -ang;
+    for(const z of [-3.1, 3.1]){
+      const gird = box(ramp, RL / Math.cos(ang), 1.2, 0.3, GRN, RL / 2, -3.7, z); gird.rotation.z = -ang;
+      for(let k = 1; k < 8; k++){ const xx = k * RL / 8, yy = -6.2 * (xx / RL); box(ramp, 0.3, 6.2 + yy - 0.3, 0.3, GRN, xx, (-0.3 + yy - 6.2) / 2 + 0.0 - 0.0, z).position.y = (yy - 6.6) / 2; const dg = box(ramp, 0.2, 0.2, 0.2, GRN, xx, yy - 1, z); dg.scale.x = 1; }
+    }
+    for(let k = 1; k < 8; k++){ const xx = k * RL / 8, yy = -6.2 * (xx / RL); const xb = box(ramp, 0.2, (6.2 + yy) * 1.2, 0.2, GRN, xx - RL / 16, (yy - 6.4) / 2, 0); xb.rotation.z = 0.6; }
+    // the yellow gantry and the red and white barrier at the top of the ramp
+    const Y = mat(0xe8c030, 0.5);
+    box(ramp, 0.3, 4.6, 0.3, Y, 0.6, 2.3, -3.3); box(ramp, 0.3, 4.6, 0.3, Y, 0.6, 2.3, 3.3); box(ramp, 0.3, 0.3, 7, Y, 0.6, 4.6, 0);
+    const sg = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.8), emM); sg.position.set(0.8, 5.2, 0); sg.rotation.y = Math.PI / 2; ramp.add(sg); sg.userData.keep = true;
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 6.2), new THREE.MeshStandardMaterial({map: canvasTex(128, 8, (g, w, h) => { for(let k = 0; k < 8; k++){ g.fillStyle = k % 2 ? '#f2f0ea' : '#c8201e'; g.fillRect(k * w / 8, 0, w / 8, h); } }), roughness: 0.6}));
+    bar.position.set(-0.6, 1.0, 0); bar.rotation.x = 0; ramp.add(bar); bar.userData.keep = true; box(ramp, 0.4, 1.0, 0.4, mat(0xc8201e, 0.5), -0.6, 0.5, -3.3);
+    // the water tower: a grey tank on a green steel trestle
+    const wt = new THREE.Group(); wt.position.set(21, 0, 8.4); hq.add(wt);
+    for(const [x, z] of [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]]) box(wt, 0.3, 7, 0.3, GRN, x, 3.5, z);
+    for(const y of [2.4, 4.8]) for(const r of [0, Math.PI / 2]){ const br = box(wt, 3.2, 0.15, 0.15, GRN, 0, y, 0); br.rotation.y = r; }
+    cylY(wt, 1.9, 1.9, 3.6, mat(0x9aa0a6, 0.5, 0.4), 0, 8.8, 0, 18); domeCap(wt, 1.9, mat(0x8a9096, 0.5, 0.4), 0, 10.6, 0).scale.y = 0.3;
+    for(let k = 0; k < 12; k++) box(wt, 0.06, 0.06, 0.06, GRN, 0, 0, 0);
+    box(wt, 0.5, 0.15, 3, GRN, 2.0, 7.2, 0); box(wt, 0.12, 7.2, 0.12, GRN, 2.2, 3.6, 1.6);
+  }
+  // the wooden platform by the yard roads, a red water crane, crates and lamps
+  box(G, 3, 0.9, 26, plankMat([1, 7]), lx(21.6), 0.45, 64);
+  { const wc = new THREE.Group(); wc.position.set(lx(21.8), 0, 112); G.add(wc); const RD = mat(0xb8261e, 0.5);
+    cylY(wc, 0.3, 0.38, 3.6, RD, 0, 1.8, 0, 10); cylY(wc, 0.55, 0.55, 0.4, RD, 0, 0.2, 0, 10); const arm = cylX(wc, 0.18, 0.18, 3.4, RD, -1.5, 3.5, 0, 8); add(wc, new THREE.TorusGeometry(0.4, 0.17, 6, 10, Math.PI / 2), RD, 0, 3.1, 0);
+    cylY(wc, 0.14, 0.18, 1.0, mat(0x2a2a2a, 0.6), -3.2, 2.9, 0, 8); }
+  for(let k = 0; k < 7; k++) box(G, 1.2, 1.0, 1.2, mat([0xa07a4a, 0x8a6a40, 0x6a7a4a][k % 3], 0.9), lx(26 + (k % 3) * 1.3), 0.5 + (k > 4 ? 1 : 0), 92 + Math.floor(k / 3) * 1.4);
+  for(let k = 0; k < 4; k++) cylY(G, 0.45, 0.45, 1.1, mat(k % 2 ? 0x2a4a8a : 0xc8201e, 0.6, 0.3), lx(27.5), 0.55, 100 + k * 1.0, 10);
+  for(let a = 8; a < LEN; a += 24){ cylY(G, 0.09, 0.12, 6, mat(0x2a2a2a, 0.5, 0.5), lx(1.8), 3, a, 6); box(G, 0.12, 0.12, 1.2, mat(0x2a2a2a), lx(1.8), 6, a + 0.5); box(G, 0.4, 0.3, 0.6, mat(0xf2f0e0, 0.4), lx(1.8), 5.8, a + 1.0); }
+  // the boathouse on its pier, with the slipway down into the sea
+  { const bh = new THREE.Group(); bh.position.set(lx(-1), 0, 46); bh.rotation.y = -Math.PI / 2; G.add(bh);
+    pier(bh, -8, 8, 0, 16, pierY, seaY - 4);
+    const CR = clapMat('#e8dcb0', [3, 1.2]), RD = mat(0xc22a1e, 0.55), TR = mat(0x8a2a20, 0.6);
+    box(bh, 9, 5, 9, CR, 0, pierY + 2.5, 6.5); gable(bh, 9.8, 9.8, pierY + 5, mat(0x3a4a6a, 0.7), 0, 6.5, 0, 0.6);
+    box(bh, 4.4, 4.0, 0.12, RD, 0, pierY + 2.0, 11.05); box(bh, 0.1, 4.0, 0.16, mat(0x6a1a12), 0, pierY + 2.0, 11.1);
+    for(const x of [-4.5, 4.5]) box(bh, 0.35, 5.2, 0.35, TR, x, pierY + 2.6, 11.0);
+    box(bh, 3.2, 0.7, 0.1, new THREE.MeshStandardMaterial({map: signTex('BOATHOUSE', '#e8c030', '#8a2a20', 512, 96)}), 0, pierY + 6.2, 11.0).userData.keep = true;
+    for(const x of [-3.5, 3.5]){ box(bh, 1.2, 1.4, 0.12, glassMat(), x * 0.95, pierY + 3.0, 2.0 - 0.06); }
+    cylY(bh, 0.3, 0.3, 1.6, mat(0x8a3a2a, 0.9), 2.5, pierY + 6.8, 5, 8);
+    // slipway: planks striped yellow and orange down into the water
+    const sl = new THREE.Group(); sl.position.set(0, pierY, 11.2); bh.add(sl);
+    const slLen = Math.max(8, (pierY - seaY + 1.2) / Math.tan(0.28)), stripe = [mat(0xe8b020, 0.6), mat(0xd86a1a, 0.6)];
+    for(let k = 0; k < 6; k++){ const p2 = box(sl, 0.7, 0.2, slLen, stripe[k % 2], -2.1 + k * 0.84, 0, slLen / 2); p2.position.y = -Math.sin(0.28) * slLen / 2; p2.rotation.x = 0.28; p2.position.z = Math.cos(0.28) * slLen / 2; }
+    railing(bh, -8, 0, -8, 16, pierY); railing(bh, 8, 0, 8, 16, pierY);
+    // davit cranes and lifebuoys
+    for(const x of [-6.5, 6.5]){ const d = new THREE.Group(); d.position.set(x, pierY, 14); bh.add(d); cylY(d, 0.12, 0.15, 3.2, mat(0xf2f0ea, 0.5), 0, 1.6, 0, 8); const arm2 = add(d, new THREE.TorusGeometry(0.9, 0.1, 6, 12, Math.PI / 2), mat(0xf2f0ea, 0.5), 0, 3.2, 0.9); arm2.rotation.y = Math.PI / 2; box(d, 0.05, 1.2, 0.05, mat(0x222222), 0, 2.9, 1.8); add(d, new THREE.TorusGeometry(0.15, 0.04, 4, 8), mat(0xe8c030, 0.5), 0, 2.2, 1.8); }
+    for(const x of [-2.8, 2.8]){ const lb = add(bh, new THREE.TorusGeometry(0.4, 0.12, 8, 14), mat(0xd8401a, 0.6), x, pierY + 2.2, 11.1); }
+    const flag = new THREE.Group(); flag.position.set(-7.4, pierY, 15); bh.add(flag); cylY(flag, 0.06, 0.08, 7, mat(0xf2f0ea, 0.5), 0, 3.5, 0, 6); box(flag, 0.04, 0.8, 1.2, mat(0xc8201e, 0.6, 0, 'double'), 0, 6.5, 0.6);
+    const boat = lifeboat(); boat.position.set(3, seaY + 0.1, 24); boat.rotation.y = 0.3; bh.add(boat); boat.userData.keep = true; RESCUE_ANIM.push({boat, y0: boat.position.y, ph: 0});
+  }
+  // the helipad pier: the pad, the hangar with its great red door, the control tower and a hut
+  { const hp = new THREE.Group(); hp.position.set(lx(-1), 0, 118); hp.rotation.y = -Math.PI / 2; G.add(hp);
+    pier(hp, -22, 22, 0, 30, pierY, seaY - 5);
+    const pad2 = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), new THREE.MeshStandardMaterial({map: helipadTex(), roughness: 0.8}));
+    pad2.rotation.x = -Math.PI / 2; pad2.position.set(-6, pierY + 0.02, 15); hp.add(pad2); pad2.userData.keep = true;
+    railing(hp, -22, 30, 22, 30, pierY, 0xd8d6ce); railing(hp, -22, 0.5, -22, 30, pierY, 0xd8d6ce);
+    // the hangar: walls in cream boards, a barrel roof, the big red door facing the pad
+    const hg = new THREE.Group(); hg.position.set(14, pierY, 14); hp.add(hg);
+    const CRM = clapMat('#ddd6c4', [4, 1.5]);
+    box(hg, 14, 7, 16, CRM, 0, 3.5, 0);
+    const vault = add(hg, new THREE.CylinderGeometry(7.3, 7.3, 16.6, 24, 1, false, -Math.PI / 2, Math.PI), mat(0x3a4a62, 0.6, 0, 'double'), 0, 7, 0); vault.rotation.x = Math.PI / 2; vault.scale.x = 1; vault.scale.z = 0.38;
+    const RDR = mat(0xb8261e, 0.55);
+    box(hg, 0.15, 6.2, 11.5, RDR, -7.05, 3.2, 0); for(let z = -5; z <= 5; z += 2.5) box(hg, 0.18, 6.2, 0.08, mat(0x7a1a12), -7.1, 3.2, z);
+    box(hg, 0.4, 0.4, 14, mat(0x2a3a52, 0.6), -7.1, 6.5, 0);
+    const hs = new THREE.Mesh(new THREE.PlaneGeometry(3, 1), emM2()); hs.position.set(-7.2, 9.0, 0); hs.rotation.y = -Math.PI / 2; hg.add(hs); hs.userData.keep = true;
+    add(hg, new THREE.SphereGeometry(0.35, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xc8201e, 0.4), -7.3, 7.6, 0);
+    // the control tower: three storeys, white with red trim, a glazed cab and a gallery
+    const tw = new THREE.Group(); tw.position.set(4, pierY, 26); hp.add(tw);
+    const TW = clapMat('#f0ece2', [2, 3]), TR = mat(0x9a3426, 0.6);
+    box(tw, 4.4, 10, 4.4, TW, 0, 5, 0); for(const [x, z] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]]) box(tw, 0.3, 10.2, 0.3, TR, x, 5.1, z);
+    for(const y of [3.3, 6.6]) box(tw, 4.7, 0.25, 4.7, TR, 0, y, 0);
+    box(tw, 5.6, 0.3, 5.6, TR, 0, 10.1, 0); railing(tw, -2.8, -2.8, 2.8, -2.8, 10.2, 0xe8e4d8); railing(tw, -2.8, 2.8, 2.8, 2.8, 10.2, 0xe8e4d8); railing(tw, -2.8, -2.8, -2.8, 2.8, 10.2, 0xe8e4d8); railing(tw, 2.8, -2.8, 2.8, 2.8, 10.2, 0xe8e4d8);
+    box(tw, 3.8, 2.4, 3.8, glassMat(), 0, 11.5, 0); for(const [x, z] of [[-1.9, -1.9], [1.9, -1.9], [-1.9, 1.9], [1.9, 1.9]]) box(tw, 0.18, 2.4, 0.18, TR, x, 11.5, z);
+    box(tw, 4.6, 0.4, 4.6, mat(0x3a4a62, 0.6), 0, 12.9, 0); cylY(tw, 0.04, 0.04, 2.4, mat(0x2a2a2a), 1.4, 14.3, 1.4, 6); add(tw, new THREE.SphereGeometry(0.2, 8, 6), mat(0xff3020, 0.3), 0, 13.25, 0);
+    const em3 = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), emM2()); em3.position.set(0, 8.4, -2.23); em3.rotation.y = Math.PI; tw.add(em3); em3.userData.keep = true;
+    box(tw, 1.1, 2.2, 0.12, mat(0xc22a1e, 0.55), 0, 1.1, -2.23);
+    for(const y of [4.9]) box(tw, 1.4, 1.2, 0.12, glassMat(), 0, y, -2.24);
+    for(let k = 0; k < 10; k++) box(tw, 1.0, 0.15, 0.35, mat(0x6a3a2a, 0.8), 2.9, 0.5 * k + 0.2, -1.6 + k * 0.34);
+    // the hut
+    const ht = new THREE.Group(); ht.position.set(-18, pierY, 4); hp.add(ht);
+    box(ht, 5, 3, 4, clapMat('#e8dcc0', [2, 1]), 0, 1.5, 0); box(ht, 5.4, 0.3, 4.4, mat(0x3a4a62, 0.7), 0, 3.15, 0); box(ht, 1, 2, 0.1, mat(0xc22a1e, 0.55), 1, 1, 2.05); box(ht, 1.3, 1, 0.1, glassMat(), -1.2, 1.8, 2.05);
+    // the helicopter on the pad, rotor turning slowly
+    const heli = helicopter(); heli.position.set(-6, pierY, 15); heli.rotation.y = 0.6; hp.add(heli); heli.userData.keep = true; RESCUE_ANIM.push({heli});
+    // the red davit crane at the corner of the pier
+    const dv = new THREE.Group(); dv.position.set(-20.5, pierY, 28.5); hp.add(dv); cylY(dv, 0.2, 0.25, 5, mat(0xb8261e, 0.5), 0, 2.5, 0, 8); const da = add(dv, new THREE.TorusGeometry(1.6, 0.16, 6, 12, Math.PI / 2), mat(0xb8261e, 0.5), 0, 5, 1.6); da.rotation.y = Math.PI / 2;
+  }
+  // the cliffs behind
+  { const pts = [];
+    for(let a = -14; a <= LEN + 14; a += 4){
+      const w = kit.pt(a, WID + 2), gh = Math.max(0, (heightAt(w.x, w.z) - kit.base) / M);
+      pts.push({x: lx(WID + 2 + Math.sin(a * 0.11) * 1.5), z: a, nx: 1, nz: 0, top: Math.max(16, gh + 7) + rnd() * 7 + Math.max(0, 14 - Math.abs(a - 75) * 0.18)});
+    }
+    rockWall(G, pts, 0, rnd);
+    for(const [a0, a1] of [[-14, -14], [LEN + 14, LEN + 14]]){ const side = []; for(let b = WID + 2; b >= 26; b -= 4){ const w = kit.pt(a0, b), gh = Math.max(0, (heightAt(w.x, w.z) - kit.base) / M); side.push({x: lx(b), z: a0, nx: 0, nz: a0 < 0 ? 1 : -1, top: Math.max(3, gh + 2) * ((b - 24) / (WID - 22)) + 1}); } rockWall(G, side, 0, rnd); }
+  }
+  // the helicopter and the lifeboat move, so they stand apart from the baked site
+  G.updateMatrixWorld(true);
+  RESCUE_ANIM.forEach(o => { const ob = o.heli || o.boat; G.attach(ob); ob.userData.keep = true; if(o.boat) o.y0 = ob.position.y; });
+  finishSite(D, kit);
+}
+function emM2(){ return rmat('emblem', () => new THREE.MeshStandardMaterial({map: emblemTex(), roughness: 0.6})); }
+frameHooks.push(dt => {
+  if(!RESCUE_ANIM.length) return;
+  const t = performance.now() / 1000;
+  RESCUE_ANIM.forEach(r => {
+    if(r.heli){ r.heli.userData.rotor.rotation.y += dt * 1.2; r.heli.userData.tail.rotation.x += dt * 4; }
+    if(r.boat){ r.boat.position.y = r.y0 + Math.sin(t * 0.9) * 0.18; r.boat.rotation.z = Math.sin(t * 0.7) * 0.04; r.boat.rotation.x = Math.sin(t * 0.55) * 0.03; }
+  });
+});
 function finishSite(D, kit){
   bakeSite(kit.G);
   depotGroup.add(kit.G);
