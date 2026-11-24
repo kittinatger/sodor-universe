@@ -153,14 +153,24 @@ function coachSideMat(color, upper, win, n){
 }
 
 // ------------------------------------------------------------------ running gear
+// A wheelset: spoked wheels with a crank boss and a balance weight, flanged tyres, on a plain axle.
 function wheelset(r, z, color = BLACK, spokes = true){
   const g = new THREE.Group(); g.position.set(0, r, z);
-  const tyre = mat(color, 0.6, 0.2), hub = mat(0x6a6a6a, 0.35, 0.6);
+  const tyre = mat(color, 0.6, 0.2), hub = mat(0x3a3b3e, 0.45, 0.4), rim = mat(0x8a8d91, 0.3, 0.7);
   for(const s of [-1, 1]){
-    cylX(g, r, r, 0.08, tyre, s * GAUGE / 2, 0, 0, 20);
-    cylX(g, r * 1.07, r * 1.07, 0.025, mat(IRON, 0.5, 0.4), s * (GAUGE / 2 - 0.045), 0, 0, 20);   // flange
-    if(spokes) for(let k = 0; k < 3; k++){ const b = box(g, 0.012, r * 1.72, r * 0.15, hub, s * (GAUGE / 2 + 0.042), 0, 0); b.rotation.x = k * Math.PI / 3; }
-    cylX(g, r * 0.24, r * 0.24, 0.03, hub, s * (GAUGE / 2 + 0.05), 0, 0, 10);
+    const x = s * GAUGE / 2;
+    cylX(g, r, r, 0.08, tyre, x, 0, 0, 24);
+    cylX(g, r * 1.07, r * 1.07, 0.025, mat(IRON, 0.5, 0.4), s * (GAUGE / 2 - 0.045), 0, 0, 24);   // flange
+    cylX(g, r * 0.96, r * 0.96, 0.012, rim, x + s * 0.041, 0, 0, 24);                              // the bright tyre face
+    if(spokes){
+      cylX(g, r * 0.84, r * 0.84, 0.014, mat(0x0c0c0c, 0.9), x + s * 0.043, 0, 0, 24);             // the dark between the spokes
+      const n = r > 0.2 ? 10 : 8;
+      for(let k = 0; k < n; k++){ const b = box(g, 0.02, r * 1.66, r * 0.075, tyre, x + s * 0.046, 0, 0); b.rotation.x = k * Math.PI / n; }
+      const cw = add(g, new THREE.CircleGeometry(r * 0.78, 18, -0.9, 1.8), tyre, x + s * 0.054, 0, 0);   // balance weight
+      cw.rotation.y = s * Math.PI / 2;
+    }
+    cylX(g, r * 0.26, r * 0.26, 0.04, hub, x + s * 0.05, 0, 0, 12);
+    cylX(g, r * 0.1, r * 0.1, 0.06, rim, x + s * 0.06, r * 0.48, 0, 8);                           // crank pin
   }
   cylX(g, 0.03, 0.03, GAUGE, mat(IRON), 0, 0, 0, 8);
   bake(g, false);
@@ -170,7 +180,7 @@ function addRods(root, axles, r, color){
   const zs = axles.map(a => a.z), span = Math.max(...zs) - Math.min(...zs), mid = (Math.max(...zs) + Math.min(...zs)) / 2;
   const rods = [];
   for(const s of [-1, 1]){
-    const rod = box(root, 0.028, 0.05, span + 0.1, mat(color || 0x8c8f93, 0.3, 0.7), s * (GAUGE / 2 + 0.075), r, mid);
+    const rod = box(root, 0.026, 0.05, span + 0.12, mat(color || 0x8c8f93, 0.28, 0.75), s * (GAUGE / 2 + 0.085), r, mid);
     rods.push({mesh: rod, mid, r, rc: r * 0.48, phase: s > 0 ? Math.PI / 2 : 0});
   }
   return rods;
@@ -181,122 +191,199 @@ function chimney(p, S, x, y, z){
   const g = new THREE.Group(); g.position.set(x, y, z); p.add(g);
   const blk = mat(BLACK, 0.55, 0.1, 'double');
   if(S.chimney === 'giesl'){                       // Peter Sam's flat, oblong Giesl ejector
-    const s = new THREE.Shape(); s.moveTo(-0.08, -0.17); s.lineTo(0.08, -0.17); s.lineTo(0.06, 0.17); s.lineTo(-0.06, 0.17); s.closePath();
     box(g, 0.13, 0.3, 0.34, blk, 0, 0.15, 0);
+    box(g, 0.2, 0.06, 0.42, blk, 0, 0.03, 0);
     box(g, 0.15, 0.035, 0.37, mat(0x333333, 0.4, 0.3), 0, 0.31, 0);
     box(g, 0.06, 0.02, 0.28, mat(0x0a0a0a), 0, 0.33, 0);
     return;
   }
   const h = S.chimneyH || 0.5;
-  const prof = [[0.15, 0], [0.095, 0.06], [0.085, h - 0.1], [0.105, h - 0.05], [0.115, h], [0.07, h], [0.068, h - 0.06]]
+  // a flared foot sitting on the smokebox, a slim barrel, then the capuchon or a flared top
+  const prof = [[0.17, 0], [0.12, 0.03], [0.09, 0.08], [0.083, h * 0.5], [0.087, h - 0.11], [0.11, h - 0.05], [0.118, h - 0.02], [0.118, h], [0.072, h], [0.07, h - 0.08]]
     .map(([a, b]) => new THREE.Vector2(a, b));
-  add(g, new THREE.LatheGeometry(prof, 18), blk);
-  if(S.capColor) cylY(g, 0.117, 0.117, 0.05, mat(S.capColor, 0.3, 0.65), 0, h - 0.025, 0, 18);
-  if(S.chimneyStripe) cylY(g, 0.09, 0.09, 0.05, mat(S.chimneyStripe, 0.3, 0.65), 0, h * 0.5, 0, 18);
+  add(g, new THREE.LatheGeometry(prof, 20), blk);
+  if(S.capColor) cylY(g, 0.121, 0.121, 0.055, mat(S.capColor, 0.3, 0.65), 0, h - 0.028, 0, 20);
+  if(S.chimneyStripe) cylY(g, 0.088, 0.088, 0.045, mat(S.chimneyStripe, 0.3, 0.65), 0, h * 0.52, 0, 18);
+}
+// a brass bell-shaped safety valve bonnet, or a dome with a flared foot
+function bell(p, m, x, y, z, k = 1){
+  const prof = [[0.1, 0], [0.075, 0.03], [0.05, 0.08], [0.045, 0.14], [0.06, 0.17], [0.035, 0.2], [0.012, 0.23], [0, 0.235]].map(([a, b]) => new THREE.Vector2(a * k, b * k));
+  return add(p, new THREE.LatheGeometry(prof, 16), m, x, y, z);
+}
+function domeShape(p, m, x, y, z, r = 0.13){
+  const prof = [[r * 1.45, 0], [r * 1.15, 0.03], [r, 0.07], [r, 0.12]];
+  for(let k = 1; k <= 8; k++){ const a = k / 8 * Math.PI / 2; prof.push([r * Math.cos(a), 0.12 + r * 0.95 * Math.sin(a)]); }
+  return add(p, new THREE.LatheGeometry(prof.map(([a, b]) => new THREE.Vector2(a, b)), 20), m, x, y, z);
+}
+// a handrail on stanchions between two points along z, at |x| = sx
+function handrail(p, sx, y, z0, z1, m){
+  const len = Math.abs(z1 - z0);
+  for(const s of [-1, 1]){
+    cylZ(p, 0.011, 0.011, len, m, s * sx, y, (z0 + z1) / 2, 6);
+    for(let k = 0; k <= Math.max(1, Math.round(len / 0.35)); k++){ const z = z0 + (z1 - z0) * k / Math.max(1, Math.round(len / 0.35)); cylX(p, 0.007, 0.007, 0.05, m, s * (sx - 0.025), y, z, 5); cylY(p, 0.017, 0.017, 0.02, m, s * sx, y, z, 6); }
+  }
 }
 
 function buildSteam(S){
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
   const L = S.len, F = L / 2, R = -L / 2;
-  const C = mat(S.color, 0.42), LIN = mat(S.lining, 0.35, 0.3), BEAM = mat(S.beam || BEAM_RED, 0.5), BLK = mat(BLACK, 0.7);
+  const C = mat(S.color, 0.4), LIN = mat(S.lining, 0.35, 0.3), BEAM = mat(S.beam || BEAM_RED, 0.5), BLK = mat(BLACK, 0.7), STEEL = mat(0x9a9da2, 0.3, 0.7);
   const FIT = S.fittings === 'bronze' ? bronzeMat() : brassMat();
   const br = S.boilerR || 0.3, by = S.boilerY || 0.98;
   const bunkLen = S.bunkerLen === undefined ? 0.3 : S.bunkerLen, cabLen = S.cabLen || 0.6;
   const cabRear = R + 0.07 + bunkLen, cabFront = cabRear + cabLen;
   const deck = 0.62;
 
-  box(body, 0.44, 0.32, L - 0.12, BLK, 0, 0.43, 0);                                     // frames
-  box(body, 0.84, 0.045, L - 0.04, mat(S.foot || BLACK, 0.6), 0, deck, 0);              // running plate
-  for(const s of [-1, 1]) box(body, 0.012, 0.045, L - 0.08, LIN, s * 0.423, deck, 0);  // valance lining
+  // ---- frames, axleboxes and springs, the running plate with its valance
+  box(body, 0.44, 0.32, L - 0.12, BLK, 0, 0.43, 0);
+  for(const a of S.axles){
+    for(const s of [-1, 1]){
+      box(body, 0.05, 0.13, 0.13, mat(0x2a2b2d, 0.6), s * 0.235, a.r + 0.0, a.z);                     // axlebox
+      box(body, 0.045, 0.035, Math.min(0.34, a.r * 1.4), mat(0x3a3b3e, 0.5, 0.3), s * 0.235, a.r + 0.12, a.z);   // leaf spring
+      box(body, 0.045, 0.02, Math.min(0.3, a.r * 1.2), mat(0x3a3b3e, 0.5, 0.3), s * 0.235, a.r + 0.15, a.z);
+    }
+  }
+  box(body, 0.84, 0.045, L - 0.04, mat(S.foot || BLACK, 0.6), 0, deck, 0);
+  for(const s of [-1, 1]){
+    box(body, 0.02, 0.07, L - 0.08, C, s * 0.42, deck - 0.045, 0);                                    // valance
+    box(body, 0.022, 0.016, L - 0.12, LIN, s * 0.421, deck - 0.045, 0);
+  }
+  // ---- bufferbeams: central buffer, coupling hook and chain, lamp irons, a lamp on the front
   for(const e of [1, -1]){
     const z = e * (L / 2 - 0.035);
     box(body, 0.86, 0.2, 0.07, BEAM, 0, 0.53, z);
-    cylZ(body, 0.065, 0.065, 0.13, BLK, 0, 0.5, z + e * 0.09, 10);                       // central buffer-coupler
-    cylZ(body, 0.1, 0.1, 0.03, mat(0x7a7a7a, 0.3, 0.6), 0, 0.5, z + e * 0.165, 14);
-    box(body, 0.1, 0.03, 0.03, mat(0x555555, 0.4, 0.5), e * 0.28, 0.66, z);            // lamp iron
+    box(body, 0.84, 0.018, 0.075, LIN, 0, 0.62, z);
+    cylZ(body, 0.065, 0.065, 0.13, BLK, 0, 0.5, z + e * 0.09, 12);
+    cylZ(body, 0.1, 0.1, 0.03, mat(0x7a7a7a, 0.3, 0.6), 0, 0.5, z + e * 0.165, 16);
+    box(body, 0.03, 0.06, 0.06, BLK, 0, 0.42, z + e * 0.06);
+    for(let k = 0; k < 2; k++) add(body, new THREE.TorusGeometry(0.025, 0.008, 5, 10), STEEL, 0, 0.38 - k * 0.04, z + e * 0.08).rotation.y = k * Math.PI / 2;
+    for(const sx of [-0.28, 0, 0.28]) box(body, 0.03, 0.06, 0.02, mat(0x555555, 0.4, 0.5), sx, 0.66, z + e * 0.02);   // lamp irons
+    for(const s of [-1, 1]){ box(body, 0.02, 0.2, 0.07, BLK, s * 0.31, 0.32, z - e * 0.03); box(body, 0.1, 0.02, 0.08, mat(0x555555, 0.5, 0.4), s * 0.31, 0.24, z - e * 0.03); }  // guard irons
   }
-  if(S.cylinders !== false) for(const s of [-1, 1]){                                     // outside cylinders
-    cylZ(body, 0.1, 0.1, 0.34, C, s * 0.41, 0.46, F - 0.36, 14);
-    cylZ(body, 0.104, 0.104, 0.03, LIN, s * 0.41, 0.46, F - 0.2, 14);
+  { const lamp = new THREE.Group(); lamp.position.set(-0.28, 0.69, F - 0.04); body.add(lamp);         // the white lamp on the front
+    box(lamp, 0.12, 0.13, 0.1, mat(0xeeeeea, 0.45), 0, 0.065, 0); cylZ(lamp, 0.04, 0.04, 0.02, mat(0xfff4d0, 0.2), 0, 0.065, 0.055, 12);
+    box(lamp, 0.13, 0.02, 0.11, mat(0xdedede, 0.4), 0, 0.14, 0); add(lamp, new THREE.TorusGeometry(0.03, 0.007, 4, 10, Math.PI), mat(0xcfcfcf, 0.4), 0, 0.15, 0); }
+  // ---- outside cylinders with covers and a valve chest; slide bars and crosshead
+  if(S.cylinders !== false) for(const s of [-1, 1]){
+    const cz = F - 0.36;
+    cylZ(body, 0.1, 0.1, 0.34, C, s * 0.41, 0.46, cz, 16);
+    for(const e of [1, -1]) cylZ(body, 0.106, 0.106, 0.03, S.cylCovers ? mat(S.cylCovers, 0.3, 0.6) : LIN, s * 0.41, 0.46, cz + e * 0.16, 16);
+    cylZ(body, 0.04, 0.04, 0.03, STEEL, s * 0.41, 0.46, cz + 0.19, 8);
+    box(body, 0.1, 0.1, 0.28, C, s * 0.39, 0.58, cz);
+    for(const y of [0.5, 0.42]) box(body, 0.02, 0.018, 0.22, STEEL, s * 0.41, y, cz - 0.28);
+    box(body, 0.05, 0.07, 0.06, STEEL, s * 0.41, 0.46, cz - 0.3);
   }
-
+  // ---- boiler with bands, smokebox and its door ring, saddle, chimney
   const boilerFront = F - 0.1, smokeLen = 0.34;
   const boilerLen = boilerFront - smokeLen - cabFront;
-  const boilerMat = S.boilerColor ? mat(S.boilerColor, 0.42) : C;
-  cylZ(body, br, br, boilerLen, boilerMat, 0, by, cabFront + boilerLen / 2, 24);
+  const boilerMat = S.boilerColor ? mat(S.boilerColor, 0.4) : C;
+  cylZ(body, br, br, boilerLen, boilerMat, 0, by, cabFront + boilerLen / 2, 26);
   const bandMat = S.bands ? mat(S.bands, 0.3, 0.6) : LIN;
-  for(let k = 0; k <= 3; k++) cylZ(body, br + 0.008, br + 0.008, 0.022, bandMat, 0, by, cabFront + 0.03 + k * (boilerLen - 0.06) / 3, 24);
-  const sbz = boilerFront - smokeLen / 2;
-  cylZ(body, br + 0.025, br + 0.025, smokeLen, mat(0x232427, 0.6), 0, by, sbz, 24);
-  cylZ(body, br + 0.035, br + 0.035, 0.03, mat(0x2d2e31, 0.45, 0.3), 0, by, boilerFront, 24);
+  for(let k = 0; k <= 3; k++) cylZ(body, br + 0.008, br + 0.008, 0.022, bandMat, 0, by, cabFront + 0.03 + k * (boilerLen - 0.06) / 3, 26);
+  const sbz = boilerFront - smokeLen / 2, SMK = mat(0x202124, 0.62);
+  cylZ(body, br + 0.025, br + 0.025, smokeLen, SMK, 0, by, sbz, 26);
+  cylZ(body, br + 0.04, br + 0.04, 0.035, mat(0x2d2e31, 0.4, 0.35), 0, by, boilerFront, 26);
+  cylZ(body, br + 0.03, br + 0.03, 0.02, mat(0x2d2e31, 0.4, 0.35), 0, by, boilerFront - smokeLen + 0.01, 26);
   box(body, 0.46, by - deck - 0.1, smokeLen * 0.7, BLK, 0, (by + deck) / 2 - 0.05, sbz);
-  faceDisc(body, br + 0.005, S.face, 0, by, boilerFront + 0.018);
+  faceDisc(body, br + 0.005, S.face, 0, by, boilerFront + 0.02);
+  // the curved handrail over the face and the top lamp iron
+  { const hr = add(body, new THREE.TorusGeometry(br + 0.05, 0.011, 5, 24, Math.PI), FIT, 0, by, boilerFront - 0.04); hr.rotation.z = 0; }
+  box(body, 0.03, 0.07, 0.02, mat(0x555555, 0.4, 0.5), 0, by + br + 0.03, boilerFront + 0.02);
   chimney(body, S, 0, by + br - 0.03, sbz);
-  box(body, 0.14, 0.12, 0.08, BLK, 0, 0.72, boilerFront - 0.02);                          // smokebox step
-
-  let plateX = br + 0.012, plateY = by;
+  box(body, 0.14, 0.12, 0.08, BLK, 0, 0.72, boilerFront - 0.02);
+  // ---- tanks
+  let plateX = br + 0.012, plateY = by, topY = by + br;
   if(S.tank === 'saddle'){
-    const tR = br + 0.13, t0 = boilerFront - smokeLen - 0.03, tl = t0 - cabFront + 0.02;
+    const tR = br + 0.13, t0 = S.tankOverSmoke ? boilerFront - 0.1 : boilerFront - smokeLen - 0.03, tl = t0 - cabFront + 0.02;
     arcZ(body, tR, tl, 2.05, C, 0, by, cabFront + tl / 2 - 0.01);
+    for(const e of [1, -1]){ const cap = add(body, new THREE.CircleGeometry(tR, 26, Math.PI / 2 - 2.05, 4.1), C, 0, by, cabFront - 0.01 + (e > 0 ? tl : 0)); if(e < 0) cap.rotation.y = Math.PI; }
+    add(body, new THREE.TorusGeometry(tR + 0.005, 0.012, 5, 26, 4.1), LIN, 0, by, cabFront - 0.01 + tl - 0.02).rotation.z = Math.PI / 2 - 2.05;
     for(const s of [-1, 1]){
       const ang = 2.05 - 0.04, lx = Math.sin(ang) * (tR + 0.006), ly = -Math.cos(ang) * (tR + 0.006);
       box(body, 0.012, 0.02, tl - 0.06, LIN, s * lx, by + ly, cabFront + tl / 2);
       box(body, 0.012, 0.02, tl - 0.06, LIN, s * (tR + 0.004), by + 0.16, cabFront + tl / 2);
     }
-    cylY(body, 0.07, 0.07, 0.06, FIT, 0, by + tR + 0.01, t0 - 0.12, 12);                   // filler cap
-    plateX = tR + 0.006;
+    // filler hatch with its hinge, handrails along the tank
+    cylY(body, 0.075, 0.075, 0.05, FIT, 0, by + tR + 0.01, t0 - 0.14, 14); box(body, 0.03, 0.02, 0.09, FIT, 0, by + tR + 0.04, t0 - 0.21);
+    handrail(body, tR * 0.86, by + tR * 0.55, cabFront + 0.06, t0 - 0.06, FIT);
+    plateX = tR + 0.006; topY = by + tR;
   } else if(S.tank === 'side'){
     const tl = S.tankLen || boilerLen + 0.1;
     for(const s of [-1, 1]){
       box(body, 0.17, 0.46, tl, C, s * 0.33, deck + 0.25, cabFront + tl / 2);
       box(body, 0.176, 0.02, tl - 0.05, LIN, s * 0.33, deck + 0.46, cabFront + tl / 2);
       box(body, 0.176, 0.02, tl - 0.05, LIN, s * 0.33, deck + 0.05, cabFront + tl / 2);
-      cylY(body, 0.045, 0.045, 0.05, FIT, s * 0.33, deck + 0.5, cabFront + tl - 0.12, 10);
+      box(body, 0.176, 0.42, 0.02, LIN, s * 0.33, deck + 0.25, cabFront + tl - 0.03);
+      cylY(body, 0.045, 0.045, 0.05, FIT, s * 0.33, deck + 0.5, cabFront + tl - 0.12, 12);
     }
+    handrail(body, br + 0.05, by + 0.14, cabFront + 0.05, boilerFront - smokeLen, FIT);
     plateX = 0.33 + 0.088; plateY = deck + 0.26;
-  } else if(S.tank === 'well'){
-    box(body, 0.48, 0.2, boilerLen * 0.85, C, 0, 0.47, cabFront + boilerLen * 0.48);
-    box(body, 0.484, 0.018, boilerLen * 0.8, LIN, 0, 0.56, cabFront + boilerLen * 0.48);
+  } else {
+    if(S.tank === 'well'){
+      box(body, 0.48, 0.2, boilerLen * 0.85, C, 0, 0.47, cabFront + boilerLen * 0.48);
+      box(body, 0.484, 0.018, boilerLen * 0.8, LIN, 0, 0.56, cabFront + boilerLen * 0.48);
+    }
+    handrail(body, br + 0.05, by + 0.12, cabFront + 0.05, boilerFront - 0.04, FIT);
   }
-  const top = S.tank === 'saddle' ? by + br + 0.12 : by + br;
-  if(S.dome) domeCap(body, 0.13, S.domeColor ? mat(S.domeColor, 0.32, 0.6) : FIT, 0, top - 0.035, cabFront + boilerLen * (S.domeAt || 0.55));
-  cylY(body, 0.045, 0.06, 0.18, FIT, 0, top + 0.06, cabFront + 0.12, 12);                 // safety valves
-  cylY(body, 0.018, 0.018, 0.16, FIT, 0.1, top + 0.04, cabFront + 0.24, 8);                 // whistle
-
-  for(const s of [-1, 1]) box(body, 0.1, 0.1, 0.22, C, s * 0.36, deck + 0.07, F - 0.22);     // sandboxes
-
-  const cabH = S.cabH || 0.74, cabTop = deck + cabH;
-  box(body, 0.8, cabH, 0.04, C, 0, deck + cabH / 2, cabFront);                                // spectacle plate
+  // ---- boiler mountings: dome, safety valves, whistle, sandboxes and pipes
+  const top = S.tank === 'saddle' ? topY : by + br;
+  if(S.dome) domeShape(body, S.domeColor ? mat(S.domeColor, 0.3, 0.6) : FIT, 0, top - 0.035, cabFront + boilerLen * (S.domeAt || 0.55));
+  if(S.safety === 'bell') bell(body, FIT, 0, top - 0.02, cabFront + 0.14, 1.1);
+  else { cylY(body, 0.045, 0.06, 0.12, FIT, 0, top + 0.04, cabFront + 0.12, 12); for(const s of [-1, 1]) cylY(body, 0.022, 0.022, 0.12, FIT, s * 0.04, top + 0.15, cabFront + 0.12, 8); }
+  cylY(body, 0.012, 0.012, 0.12, FIT, 0.11, top + 0.04, cabFront + 0.04, 6); bell(body, FIT, 0.11, top + 0.09, cabFront + 0.04, 0.45);   // whistle
+  for(const s of [-1, 1]){
+    box(body, 0.1, 0.1, 0.22, C, s * 0.36, deck + 0.07, F - 0.22);
+    cylY(body, 0.035, 0.035, 0.03, FIT, s * 0.36, deck + 0.13, F - 0.22, 8);
+    cylY(body, 0.01, 0.01, 0.3, mat(0x2a2a2a, 0.5), s * 0.33, deck - 0.15, S.axles[0].z + 0.2, 5);
+  }
+  // ---- the cab: spectacle plate with round windows, side sheets, a roof with an overhang and rain strip
+  const cabH = S.cabH || 0.74, cabTop = deck + cabH, weather = S.cab === 'weatherboard';
+  box(body, 0.8, weather ? cabH - 0.1 : cabH, 0.04, C, 0, deck + (weather ? cabH - 0.1 : cabH) / 2, cabFront);
   for(const s of [-1, 1]) for(const f of [1, -1]){
-    const w = add(body, new THREE.CircleGeometry(0.08, 16), glassMat(), s * 0.22, cabTop - 0.2, cabFront + f * 0.022);
+    const wy = cabTop - (weather ? 0.3 : 0.2);
+    const w = add(body, new THREE.CircleGeometry(0.08, 18), glassMat(), s * 0.22, wy, cabFront + f * 0.022);
     if(f < 0) w.rotation.y = Math.PI;
-    const ring = add(body, new THREE.RingGeometry(0.08, 0.1, 18), S.portholes ? mat(S.portholes, 0.4) : FIT, s * 0.22, cabTop - 0.2, cabFront + f * 0.023);
+    const ring = add(body, new THREE.RingGeometry(0.08, 0.102, 20), S.portholes ? mat(S.portholes, 0.4) : FIT, s * 0.22, wy, cabFront + f * 0.023);
     if(f < 0) ring.rotation.y = Math.PI;
   }
-  const sideH = S.cab === 'open' ? 0.36 : 0.44;
+  if(weather){ box(body, 0.82, 0.02, 0.05, LIN, 0, deck + cabH - 0.1, cabFront); }
+  const sideH = S.cab === 'open' ? 0.36 : weather ? 0.3 : 0.44;
   for(const s of [-1, 1]){
-    box(body, 0.04, sideH, cabLen, C, s * 0.4, deck + sideH / 2, cabFront - cabLen / 2);
-    box(body, 0.042, cabH, 0.06, C, s * 0.4, deck + cabH / 2, cabFront - 0.03);
-    box(body, 0.042, cabH, 0.06, C, s * 0.4, deck + cabH / 2, cabRear + 0.03);
-    box(body, 0.044, 0.018, cabLen - 0.12, LIN, s * 0.4, deck + sideH - 0.05, cabFront - cabLen / 2);
-    box(body, 0.044, sideH - 0.12, 0.018, LIN, s * 0.4, deck + sideH / 2, cabFront - 0.08);
-    box(body, 0.044, sideH - 0.12, 0.018, LIN, s * 0.4, deck + sideH / 2, cabRear + 0.08);
-    box(body, 0.04, 0.05, 0.16, BLK, s * 0.38, 0.4, cabRear + cabLen / 2);                    // cab step
+    if(!weather){
+      box(body, 0.04, sideH, cabLen, C, s * 0.4, deck + sideH / 2, cabFront - cabLen / 2);
+      box(body, 0.042, cabH, 0.06, C, s * 0.4, deck + cabH / 2, cabFront - 0.03);
+      box(body, 0.042, cabH, 0.06, C, s * 0.4, deck + cabH / 2, cabRear + 0.03);
+      box(body, 0.044, 0.018, cabLen - 0.12, LIN, s * 0.4, deck + sideH - 0.05, cabFront - cabLen / 2);
+      box(body, 0.044, sideH - 0.12, 0.018, LIN, s * 0.4, deck + sideH / 2, cabFront - 0.08);
+      box(body, 0.044, sideH - 0.12, 0.018, LIN, s * 0.4, deck + sideH / 2, cabRear + 0.08);
+      cylY(body, 0.01, 0.01, cabH - 0.1, FIT, s * 0.425, deck + cabH / 2, cabRear + 0.07, 6);   // grab handle
+    } else box(body, 0.04, sideH, 0.24, C, s * 0.4, deck + sideH / 2, cabFront - 0.12);
+    for(let k = 0; k < 2; k++) box(body, 0.06, 0.016, 0.14, BLK, s * 0.39, 0.42 - k * 0.12, cabFront - cabLen / 2);   // steps
+    box(body, 0.02, 0.26, 0.016, BLK, s * 0.42, 0.37, cabFront - cabLen / 2 - 0.07); box(body, 0.02, 0.26, 0.016, BLK, s * 0.42, 0.37, cabFront - cabLen / 2 + 0.07);
     if(S.cab === 'closed') box(body, 0.042, 0.06, cabLen, C, s * 0.4, cabTop - 0.04, cabFront - cabLen / 2);
   }
   if(S.cab === 'closed'){
     box(body, 0.8, cabH * 0.45, 0.04, C, 0, deck + cabH * 0.225, cabRear);
     for(const s of [-1, 1]) box(body, 0.16, cabH * 0.55, 0.04, C, s * 0.32, deck + cabH * 0.725, cabRear);
+    for(const s of [-1, 1]){ const w = add(body, new THREE.CircleGeometry(0.075, 16), glassMat(), s * 0.22, cabTop - 0.2, cabRear - 0.022); w.rotation.y = Math.PI; }
   }
-  roof(body, 0.92, cabLen + 0.14, cabTop + 0.07, S.roof ? mat(S.roof, 0.5) : C, cabFront - cabLen / 2);
-  box(body, 0.6, 0.38, 0.5, mat(0x2a2a2a, 0.8), 0, deck + 0.19, cabFront - cabLen / 2 - 0.02);  // backhead / firebox
-
+  if(!weather){
+    roof(body, 0.94, cabLen + 0.16, cabTop + 0.07, S.roof ? mat(S.roof, 0.5) : C, cabFront - cabLen / 2);
+    for(const s of [-1, 1]) box(body, 0.015, 0.015, cabLen + 0.12, mat(0x2a2a2a, 0.5), s * 0.3, cabTop + 0.085, cabFront - cabLen / 2);   // rain strips
+  }
+  // the backhead: firebox door, gauges and the regulator
+  box(body, 0.6, 0.42, 0.06, mat(0x2a2a2a, 0.8), 0, deck + 0.21, cabFront - 0.05);
+  box(body, 0.16, 0.12, 0.02, mat(0x1a1a1a, 0.6), 0, deck + 0.2, cabFront - 0.085);
+  for(const sx of [-0.12, 0.12]) cylZ(body, 0.035, 0.035, 0.015, FIT, sx, deck + 0.38, cabFront - 0.085, 12);
+  box(body, 0.03, 0.03, 0.18, FIT, 0.05, deck + 0.46, cabFront - 0.13);
+  // ---- bunker and coal
   if(bunkLen > 0){
     box(body, 0.8, 0.42, bunkLen, C, 0, deck + 0.21, cabRear - bunkLen / 2);
-    box(body, 0.7, 0.07, bunkLen - 0.06, mat(0x101010, 0.95), 0, deck + 0.44, cabRear - bunkLen / 2);
     for(const s of [-1, 1]) box(body, 0.012, 0.3, bunkLen - 0.06, LIN, s * 0.402, deck + 0.21, cabRear - bunkLen / 2);
+    const COAL = mat(0x121212, 0.95);
+    for(let k = 0; k < 6; k++){ const c = box(body, 0.2 + (k % 3) * 0.06, 0.06, bunkLen * 0.4, COAL, -0.22 + (k % 3) * 0.22, deck + 0.44 + (k % 2) * 0.03, cabRear - bunkLen * (0.28 + 0.4 * Math.floor(k / 3))); c.rotation.y = k * 0.4; }
+    handrail(body, 0.41, deck + 0.38, cabRear - bunkLen + 0.04, cabRear - 0.04, FIT);
   }
-
   const P = S.plates;
   if(P.name) sidePlates(body, plateMat(P.name, P.bg, P.fg, P.border), P.nameW || 0.62, 0.15, plateX, plateY, P.nameZ !== undefined ? P.nameZ : cabFront + boilerLen * 0.5);
   if(P.number){
@@ -717,7 +804,7 @@ const plate = (name, number, bg, fg, border = '#d4af37') => ({name: name.toUpper
 const ENGINES = [
   {id: 'skarloey', name: 'Skarloey', no: '1', wheels: '0-4-2ST', basis: 'Talyllyn Railway No. 1 Talyllyn (Fletcher Jennings, 1864)',
    livery: 'Crimson with white and gold lining, brass fittings', job: 'Passenger trains with the red coaches',
-   build: () => buildSteam({len: 2.15, color: 0x9b1730, lining: 0xf3f0e8, tank: 'saddle', cab: 'open', chimneyH: 0.55, capColor: BRASS,
+   build: () => buildSteam({len: 2.15, color: 0x9b1730, lining: 0xf3f0e8, tank: 'saddle', tankOverSmoke: true, safety: 'bell', cab: 'open', chimneyH: 0.55, capColor: null,
      dome: false, bunkerLen: 0.28, face: {smile: 0.7, brow: -0.3, mustache: false}, plates: plate('Skarloey', 1, '#9b1730', '#d4af37'),
      axles: [{z: 0.62, r: 0.25, coupled: true}, {z: 0.06, r: 0.25, coupled: true}, {z: -0.72, r: 0.15}]}),
    line: 'skarloey', from: "Crovan's Gate", to: 'Glennock', consist: ['redCoach', 'redCoach', 'redCoach'], cars: ['Agnes', 'Ruth', 'Jane'], speed: 1.0, passenger: true},
@@ -729,14 +816,14 @@ const ENGINES = [
    line: 'skarloeyloop', consist: ['redCoach', 'redCoach', 'skBrake'], cars: ['Lucy', 'Mabel', 'Beatrice'], speed: 0.9, passenger: true},
   {id: 'sirhandel', name: 'Sir Handel', no: '3', wheels: '0-4-2ST', basis: 'Talyllyn Railway No. 3 Sir Haydn (Hughes "Falcon", ex-Corris Railway)',
    livery: 'Royal blue with red lining and bufferbeams, brass fittings', job: 'Slate trains down from Blue Mountain Quarry',
-   build: () => buildSteam({len: 2.3, color: 0x1f4fbf, lining: 0xc8262b, tank: 'saddle', cab: 'closed', chimneyH: 0.46, capColor: null,
+   build: () => buildSteam({len: 2.3, color: 0x1f4fbf, lining: 0xc8262b, tank: 'saddle', safety: 'bell', cab: 'closed', chimneyH: 0.52, capColor: null,
      dome: false, bunkerLen: 0.3, face: {smile: 0.3, brow: 0.6}, plates: plate('Sir Handel', 3, '#c8262b', '#d4af37'),
      axles: [{z: 0.7, r: 0.25, coupled: true}, {z: 0.12, r: 0.25, coupled: true}, {z: -0.78, r: 0.15}]}),
    line: 'skarloey', from: 'Mountain Village', to: 'Blue Mountain Quarry', consist: ['skSlate', 'skSlate', 'skSlate', 'skSlate', 'skBrake'], speed: 0.8},
   {id: 'petersam', name: 'Peter Sam', no: '4', wheels: '0-4-2ST', basis: 'Talyllyn Railway No. 4 Edward Thomas (Kerr Stuart "Tattoo", ex-Corris Railway)',
    livery: 'Sea green with red lining and bufferbeams; Giesl ejector funnel', job: 'Passenger trains on the western line to Ulfstead',
-   build: () => buildSteam({len: 2.3, color: 0x2e8b6e, lining: 0xc8262b, tank: 'saddle', cab: 'closed', chimney: 'giesl',
-     dome: true, domeAt: 0.4, bunkerLen: 0.3, face: {smile: 0.9, brow: -0.1}, plates: plate('Peter Sam', 4, '#c8262b', '#d4af37'),
+   build: () => buildSteam({len: 2.3, color: 0x2e8b6e, lining: 0xc8262b, tank: 'saddle', safety: 'bell', cab: 'closed', chimney: 'giesl',
+     dome: false, domeAt: 0.4, bunkerLen: 0.3, face: {smile: 0.9, brow: -0.1}, plates: plate('Peter Sam', 4, '#c8262b', '#d4af37'),
      axles: [{z: 0.68, r: 0.25, coupled: true}, {z: 0.1, r: 0.25, coupled: true}, {z: -0.78, r: 0.15}]}),
    line: 'skarloey', from: 'Cronk Abbey', to: 'Rumblin Bridge', consist: ['blueCoach', 'blueCoach', 'blueCoach'], speed: 1.0, passenger: true},
   {id: 'rusty', name: 'Rusty', no: '5', wheels: '4wDM', basis: 'Talyllyn Railway No. 5 Midlander (Ruston & Hornsby 48DL diesel)',
@@ -758,14 +845,14 @@ const ENGINES = [
    line: 'rockyway', fromU: 0.0, toU: 0.5, consist: ['van', 'van', 'plank3', 'plank4', 'plank5'], speed: 1.2},
   {id: 'duke', name: 'Duke', no: 'MSR 1', wheels: '0-4-0ST+T', basis: 'Ffestiniog Railway No. 2 Prince ("Small England" class)',
    livery: 'Orange-brown with yellow lining and red bufferbeams; red name plaques', job: 'Heritage trains of semi-open coaches',
-   build: () => buildSteam({len: 1.75, color: 0x9a5426, lining: 0xf2c419, tank: 'saddle', cab: 'open', chimneyH: 0.5, capColor: BRASS,
+   build: () => buildSteam({len: 1.75, color: 0x9a5426, lining: 0xf2c419, tank: 'saddle', cab: 'weatherboard', chimneyH: 0.62, capColor: BRASS,
      dome: true, domeAt: 0.4, bunkerLen: 0, cabLen: 0.5, face: {smile: 0.3, brow: 0.3, mustache: true}, plates: Object.assign(plate('Duke', '', '#b3201c', '#d4af37'), {number: null, nameW: 0.4}),
      axles: [{z: 0.42, r: 0.23, coupled: true}, {z: -0.32, r: 0.23, coupled: true}]}),
    tender: {color: 0x9a5426, lining: 0xf2c419},
    line: 'skarloey', from: 'Rheneas', to: 'Mountain Village', consist: ['trSemiOpen', 'trSemiOpen'], speed: 0.7, passenger: true},
   {id: 'bertram', name: 'Bertram', no: '', wheels: '0-4-0ST+T', basis: 'Ffestiniog Railway "Small England" class',
    livery: 'Dark brown with red lining and bufferbeams', job: 'Mine trains at the old workings near Ulfstead',
-   build: () => buildSteam({len: 1.75, color: 0x4f2f1c, lining: 0xc8262b, tank: 'saddle', cab: 'open', chimneyH: 0.5, capColor: BRASS,
+   build: () => buildSteam({len: 1.75, color: 0x4f2f1c, lining: 0xc8262b, tank: 'saddle', cab: 'weatherboard', chimneyH: 0.62, capColor: BRASS,
      dome: true, domeAt: 0.4, bunkerLen: 0, cabLen: 0.5, face: {smile: 0.9, brow: -0.4, wide: true}, plates: Object.assign(plate('Bertram', '', '#b3201c', '#d4af37'), {number: null, nameW: 0.44}),
      axles: [{z: 0.42, r: 0.23, coupled: true}, {z: -0.32, r: 0.23, coupled: true}]}),
    tender: {color: 0x4f2f1c, lining: 0xc8262b},
