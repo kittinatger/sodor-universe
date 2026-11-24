@@ -184,6 +184,9 @@ function turnAt(v, j, atEnd){
   v.v = Math.min(v.v, 4 * M);
   return true;
 }
+// the bus stops each town laid out along its through roads (world.js)
+const STOPS = new Map();
+(W.towns || []).forEach(t => (t.busStops || []).forEach(b => { if(!STOPS.has(b.rd)) STOPS.set(b.rd, []); STOPS.get(b.rd).push(b); }));
 function stepVehicle(v, dt){
   let rd = v.rd, span = rd.s[rd.s.length - 1];
   if(v.pause > 0){ v.pause -= dt; v.v = Math.max(0, v.v - 3 * M * dt); }
@@ -194,6 +197,12 @@ function stepVehicle(v, dt){
     const distToEnd = v.dir > 0 ? span - v.s : v.s;
     const way = rd.jn.some(j => Math.abs(j.s - (v.dir > 0 ? span : 0)) < 30 * M);
     if(distToEnd < 18 * M) target = Math.min(target, Math.max(way ? 3 * M : 0.3 * M, distToEnd / 18 * v.vmax));
+    // buses call at the stops on their side of the road: draw up by the shelter, wait, pull away
+    if(v.kind === 'bus'){ const st = STOPS.get(rd); if(st) for(const b of st){
+      if(b === v.lastStop || b.side !== (v.dir > 0 ? 1 : -1)) continue;
+      const d = (b.s - v.s) * v.dir;
+      if(d > -1 * M && d < 45 * M){ target = Math.min(target, Math.sqrt(Math.max(0, 2 * 1.4 * M * Math.max(0, d - 0.5 * M)))); if(d < 1.5 * M && v.v < 1 * M){ v.pause = 10 + rnd() * 18; v.lastStop = b; } }
+    } }
     v.v += Math.sign(target - v.v) * Math.min(Math.abs(target - v.v), 2.5 * M * dt);
   }
   const s0 = v.s, step = v.dir * v.v * dt;
@@ -248,14 +257,14 @@ function relocate(v, cx, cz, R){
 let relocT = 0;
 // A light scatter of traffic on the arterial roads — enough to feel alive without crowding the
 // island (over a thousand road segments exist; only a couple of hundred ever carry a vehicle).
-const CAP = 360;
+const CAP = 420;
 const arterial = (W.roads || []).filter(rd => rd.s[rd.s.length - 1] > 90 * M && (rd.cls === 'A' || rd.cls === 'B' || (rd.cls === 'street' && rd.town && rd.town.cls === 3)));
 arterial.forEach(rd => {
   if(VEHICLES.length >= CAP) return;
-  const chance = rd.cls === 'A' ? 0.85 : rd.cls === 'B' ? 0.45 : 0.1;
+  const chance = rd.cls === 'A' ? 0.9 : rd.cls === 'B' ? 0.5 : 0.22;
   if(rnd() > chance) return;                                        // most side streets stay quiet
   const roll = rnd(), busRoute = rd.cls === 'A' && rd.town;
-  const kind = busRoute && roll < 0.12 ? 'bus' : roll < 0.18 ? 'van' : roll < 0.24 ? 'lorry' : roll < 0.27 && rd.cls !== 'street' ? 'tractor' : 'car';
+  const kind = (busRoute || STOPS.has(rd)) && roll < 0.14 ? 'bus' : roll < 0.18 ? 'van' : roll < 0.24 ? 'lorry' : roll < 0.27 && rd.cls !== 'street' ? 'tractor' : 'car';
   makeVehicle(rd, kind);
 });
 // motorway traffic: a vehicle every few hundred metres each way, lorries keeping to the inside lane

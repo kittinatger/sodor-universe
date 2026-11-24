@@ -296,12 +296,12 @@ function townStyle(t){
 // a taller (or shorter-roofed) version of a house type, built once and shared
 const BAND = {terrace: 0.5, house: 0.5, shop: 1 / 3, villa: 0.5};
 function styledType(type, st){
-  const floors = (st.floors && st.floors[type]) || 2, rh = st.rh || 1;
-  if(!BAND[type] || (floors === 2 && rh === 1)) return type;
+  const base = /^shop\d/.test(type) ? 'shop' : type, floors = (st.floors && st.floors[base]) || 2, rh = st.rh || 1;
+  if(!BAND[base] || (floors === 2 && rh === 1)) return type;
   const key = `${type}_${floors}_${rh}`;
   if(!ARCH[key]){
-    const A0 = ARCH[type], extra = type === 'shop' ? floors - 3 : floors - 2;
-    const A = Object.assign({}, A0, {h2: A0.h, bandV: BAND[type], h: A0.h + Math.max(0, extra) * A0.h * BAND[type], rh: A0.rh * rh});
+    const A0 = ARCH[type], extra = base === 'shop' ? floors - 3 : floors - 2;
+    const A = Object.assign({}, A0, {h2: A0.h, bandV: BAND[base], h: A0.h + Math.max(0, extra) * A0.h * BAND[base], rh: A0.rh * rh});
     Object.assign(A, archGeo(A)); ARCH[key] = A;
   }
   return key;
@@ -439,23 +439,75 @@ lap('crossings');
 const roadGroup = new THREE.Group(); scene.add(roadGroup);
 const roadBridges = [];
 function roadTex(kind){
-  return canvasTex(64, 256, (g, w, h) => {
-    g.fillStyle = kind === 'lane' ? '#6b6a64' : '#4a4b4e'; g.fillRect(0, 0, w, h);
-    let s = 3; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    for(let k = 0; k < 900; k++){ const v = 60 + rnd() * 40 | 0; g.fillStyle = `rgba(${v},${v},${v + 4},0.5)`; g.fillRect(rnd() * w, rnd() * h, 1.5, 1.5); }
-    if(kind === 'A'){ g.fillStyle = '#e8e8e2'; g.fillRect(3, 0, 2, h); g.fillRect(w - 5, 0, 2, h); }
-    if(kind === 'A' || kind === 'B'){ g.fillStyle = '#e8e8e2'; g.fillRect(w / 2 - 1, 0, 2, h * 0.45); }
-    if(kind === 'lane'){ g.fillStyle = 'rgba(90,120,60,0.6)'; g.fillRect(0, 0, 4, h); g.fillRect(w - 4, 0, 4, h); }
-    if(kind === 'street'){ g.fillStyle = '#8a8a86'; g.fillRect(0, 0, 6, h); g.fillRect(w - 6, 0, 6, h); }
-    if(kind === 'M'){                               // two carriageways of two lanes, hard shoulders and a grass central reserve
-      g.fillStyle = '#3e3f42'; g.fillRect(0, 0, w, h);
-      for(let k = 0; k < 700; k++){ const v = 52 + rnd() * 30 | 0; g.fillStyle = `rgba(${v},${v},${v + 4},0.5)`; g.fillRect(rnd() * w, rnd() * h, 1.2, 1.2); }
+  // 128 across by 512 along (8 m): worn asphalt with aggregate, darker wheel tracks, tar-sealed cracks and
+  // patches, then the markings: edge lines, dashed centre lines, the gutters and drains of town streets
+  return canvasTex(128, 512, (g, w, h) => {
+    let s = kind.length * 7 + 3; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    const base = kind === 'lane' ? [104, 102, 94] : kind === 'M' ? [60, 61, 64] : [70, 71, 74];
+    g.fillStyle = `rgb(${base})`; g.fillRect(0, 0, w, h);
+    for(let k = 0; k < 9000; k++){ const v = rnd(), c = base.map(b => b - 18 + v * 40 | 0); g.fillStyle = `rgba(${c},0.55)`; g.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 1.5, 1 + rnd() * 1.5); }
+    // polished wheel tracks
+    if(kind !== 'lane') for(const x of kind === 'M' ? [0.16, 0.34, 0.66, 0.84] : [0.22, 0.38, 0.62, 0.78]){ const gr = g.createLinearGradient(w * x - 8, 0, w * x + 8, 0); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.5, 'rgba(0,0,0,0.12)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(w * x - 8, 0, 16, h); }
+    // patches and sealed cracks
+    for(let k = 0; k < (kind === 'lane' ? 2 : 4); k++){ const pw = 14 + rnd() * 30, ph = 30 + rnd() * 90; g.fillStyle = `rgba(${base.map(b => b - 14)},0.75)`; g.fillRect(10 + rnd() * (w - 20 - pw), rnd() * (h - ph), pw, ph); }
+    g.strokeStyle = 'rgba(20,20,22,0.55)'; g.lineWidth = 1.2;
+    for(let k = 0; k < 6; k++){ g.beginPath(); let x = rnd() * w, y = rnd() * h; g.moveTo(x, y); for(let q = 0; q < 6; q++){ x += (rnd() - 0.5) * 14; y += rnd() * 16; g.lineTo(x, y); } g.stroke(); }
+    const line = (x, y0, y1, lw, col) => { g.fillStyle = col; g.fillRect(x - lw / 2, y0, lw, y1 - y0); };
+    const W = '#ecebe4', Y = '#e0b83a';
+    if(kind === 'lane'){ g.fillStyle = 'rgba(80,110,50,0.75)'; g.fillRect(0, 0, 7, h); g.fillRect(w - 7, 0, 7, h); g.fillStyle = 'rgba(90,120,60,0.55)'; g.fillRect(w / 2 - 3, 0, 6, h); }
+    if(kind === 'street' || kind === 'A' || kind === 'B'){
+      // the gutter and kerb drainage: a darker strip, with a drain grating once along
+      for(const x of [0, w - 7]){ g.fillStyle = 'rgba(40,40,42,0.6)'; g.fillRect(x, 0, 7, h); }
+      g.fillStyle = '#2a2a2c'; g.fillRect(2, h * 0.3, 7, 18); g.fillStyle = '#5a5a5e'; for(let q = 0; q < 5; q++) g.fillRect(3, h * 0.3 + 2 + q * 3.2, 5, 1.2);
+    }
+    if(kind === 'A'){ line(10, 0, h, 2.4, W); line(w - 10, 0, h, 2.4, W); line(w / 2, 0, h * 0.55, 2.6, W); }
+    if(kind === 'B'){ line(w / 2, 0, h * 0.4, 2.4, W); }
+    if(kind === 'street'){ line(w / 2, 0, h * 0.3, 2.2, W); line(9, h * 0.62, h * 0.98, 1.6, Y); line(12, h * 0.62, h * 0.98, 1.6, Y); }   // double yellows by the kerb
+    if(kind === 'M'){
       g.fillStyle = '#4f7a3a'; g.fillRect(w * 0.46, 0, w * 0.08, h);
-      g.fillStyle = '#ececE6'; for(const x of [0.07, 0.43, 0.57, 0.93]) g.fillRect(w * x - 0.6, 0, 1.2, h);
-      g.fillStyle = '#ececE6'; for(const x of [0.25, 0.75]) g.fillRect(w * x - 0.6, 0, 1.2, h * 0.35);
-      g.fillStyle = '#e8c23a'; g.fillRect(w * 0.425, 0, 0.8, h); g.fillRect(w * 0.567, 0, 0.8, h);
+      for(let k = 0; k < 400; k++){ g.fillStyle = `rgba(${40 + rnd() * 40 | 0},${90 + rnd() * 40 | 0},${30 + rnd() * 30 | 0},0.6)`; g.fillRect(w * 0.46 + rnd() * w * 0.08, rnd() * h, 2, 2); }
+      g.fillStyle = '#9a9ea2'; g.fillRect(w * 0.457, 0, 1.6, h); g.fillRect(w * 0.539, 0, 1.6, h);                   // crash barriers
+      for(const x of [0.07, 0.43, 0.57, 0.93]) line(w * x, 0, h, 1.8, W);
+      for(const x of [0.25, 0.75]) line(w * x, 0, h * 0.3, 1.8, W);
+      g.fillStyle = Y; g.fillRect(w * 0.425, 0, 1.2, h); g.fillRect(w * 0.567, 0, 1.2, h);
+      for(let y = 0; y < h; y += 64){ g.fillStyle = '#f2f2ee'; g.fillRect(w * 0.07 - 1, y, 2, 3); g.fillRect(w * 0.93 - 1, y, 2, 3); }   // cat's eyes
     }
   });
+}
+// paving slabs for the town pavements, with the granite kerb along the road side (u = 0)
+function paveTex(){
+  return canvasTex(64, 256, (g, w, h) => {
+    let s = 77; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    g.fillStyle = '#a9a69e'; g.fillRect(0, 0, w, h);
+    for(let y = 0; y < h; y += 32) for(let x = 6; x < w; x += 29){ const v = 150 + rnd() * 30 | 0; g.fillStyle = `rgb(${v},${v - 3},${v - 9})`; g.fillRect(x + 1, y + 1, 27, 30); }
+    for(let k = 0; k < 1600; k++){ const v = 120 + rnd() * 70 | 0; g.fillStyle = `rgba(${v},${v},${v - 6},0.5)`; g.fillRect(rnd() * w, rnd() * h, 1, 1); }
+    for(let k = 0; k < 10; k++){ g.fillStyle = 'rgba(60,55,50,0.12)'; g.beginPath(); g.arc(rnd() * w, rnd() * h, 2 + rnd() * 5, 0, 7); g.fill(); }   // old chewing gum and stains
+    g.fillStyle = '#8e8b84'; g.fillRect(0, 0, 6, h); g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(0, 0, 2, h);
+    for(let y = 0; y < h; y += 24){ g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(0, y, 6, 1); }
+  });
+}
+// A raised pavement either side of a town street, 1.6 m of paving slabs behind a kerb, broken where another
+// road joins or crosses, at level crossings and on bridges.
+const PAVE = {p: [], u: [], i: []}, PAVE_W = 1.6 * M;
+function pavementsAlong(rd, gy){
+  const n = rd.pts.length, t = rd.town;
+  for(const sd of [-1, 1]){
+    let prev = -1;
+    for(let i = 0; i < n; i++){
+      const a = rd.pts[Math.max(0, i - 1)], b = rd.pts[Math.min(n - 1, i + 1)], tx = b.x - a.x, tz = b.z - a.z, tl = Math.hypot(tx, tz) || 1, nx = tz / tl * sd, nz = -tx / tl * sd;
+      const p = rd.pts[i], xi = p.x + nx * rd.hw, zi = p.z + nz * rd.hw, xo = p.x + nx * (rd.hw + PAVE_W), zo = p.z + nz * (rd.hw + PAVE_W);
+      const xm = (xi + xo) / 2, zm = (zi + zo) / 2;
+      const ok = Math.hypot(p.x - t.x, p.z - t.z) < t.R * 0.95 && rd.ys[i] < gy[i] + 0.2 * M && !rd.mods.some(c => Math.abs(rd.s[i] - c.s) < 28 * M)
+        && roadClear(xm, zm, 14 * M) > PAVE_W * 0.5 - 0.15 * M && roadClear(xo, zo, 14 * M) > -0.05 * M && !K.nearTrack(xm, zm, 3 * M) && !inZone(xm, zm) && H(xo, zo) > 0.5 * M;
+      if(!ok){ prev = -1; continue; }
+      const yr = Math.max(rd.ys[i], H(xi, zi)) + 0.16 * M, top = Math.max(yr, H(xo, zo)) + 0.14 * M, base = PAVE.p.length / 3, v = rd.s[i] / (8 * M);
+      PAVE.p.push(xi, yr - 0.02 * M, zi, xi, top, zi, xo, top, zo, xo, top - 0.5 * M, zo);          // kerb face, slabs, back edge
+      PAVE.u.push(0, v, 0.02, v, 1, v, 1, v);
+      if(prev >= 0){ const q = sd > 0 ? [0, 1, 2] : [2, 1, 0]; for(let k = 0; k < 3; k++){ const a0 = prev + q[k], a1 = prev + q[k] + 1, b0 = base + q[k], b1 = base + q[k] + 1;
+        if(sd > 0) PAVE.i.push(a0, b0, a1, a1, b0, b1); else PAVE.i.push(a0, a1, b0, a1, b1, b0); } }
+      prev = base;
+    }
+  }
 }
 (function(){
   const LAYER = {M: 0.2, A: 0.18, B: 0.17, street: 0.16, lane: 0.15};
@@ -485,6 +537,7 @@ function roadTex(kind){
       }
     });
     rd.ys = ys;
+    if(rd.town && rd.cls !== 'lane' && rd.cls !== 'M') pavementsAlong(rd, gy);
     // ribbon
     const B = buf[rd.cls] || (buf[rd.cls] = {p: [], u: [], i: []}), lift = LAYER[rd.cls] * M;
     let prev = -1;
@@ -502,6 +555,14 @@ function roadTex(kind){
       prev = base;
     }
   });
+  if(PAVE.p.length){
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(PAVE.p, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(PAVE.u, 2));
+    g.setIndex(PAVE.i); g.computeVertexNormals();
+    const tex = paveTex(); tex.wrapS = THREE.ClampToEdgeWrapping; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8;
+    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({map: tex, roughness: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2}));
+    m.receiveShadow = true; roadGroup.add(m);
+  }
   Object.keys(buf).forEach(cls => {
     const B = buf[cls], g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(B.p, 3));
@@ -677,25 +738,55 @@ roadBridges.forEach(b => {
 lap('crossingModels');
 // ------------------------------------------------------------------ buildings: facade atlas and archetypes
 // One painted atlas for every wall and roof; instance colours tint it (brick, render, stone, slate, tile).
-const ATLAS = 1024, CELL = 256;
+const ATLAS = 1024, AW = 2048, CELL = 256;          // 8 cells across, 4 down
+const SHOP_KINDS = [
+  {name: 'BAKERY', fascia: '#7a3a24', ink: '#f2e2b0', frame: '#5a2a18', awning: '#c8a040', goods: ['#d8a860', '#c88a40', '#f0d8a0'], glow: '#ffd890'},
+  {name: 'GROCER', fascia: '#2e5a32', ink: '#f2ecd0', frame: '#24482a', awning: '#3a7a3a', goods: ['#4a9a3a', '#d84a2a', '#e8b030', '#8ac040'], glow: '#ffe0a0'},
+  {name: 'POST OFFICE', fascia: '#b3201c', ink: '#f8e080', frame: '#8a1814', goods: ['#e8e4d8', '#c8b890'], glow: '#ffe8b0', sign: 'POST'},
+  {name: 'BANK', fascia: '#1f2f4a', ink: '#e8d080', frame: '#2a3a52', goods: ['#3a4a5a'], glow: '#fff0c8'},
+  {name: 'TEA ROOMS', fascia: '#e8dcc0', ink: '#5a3a2a', frame: '#6a8a9a', awning: '#5a8aaa', goods: ['#f0e8e0', '#c87060', '#e0c0a0'], glow: '#ffd8a0'},
+  {name: 'CHEMIST', fascia: '#2a6a6a', ink: '#f0f0e8', frame: '#1a4a4a', goods: ['#e04a4a', '#4a8ae0', '#f0f0f0', '#40b080'], glow: '#e8fff0', sign: '+'},
+  {name: 'THE RAILWAY ARMS', fascia: '#3a2a1a', ink: '#e8c060', frame: '#2a1a10', goods: ['#8a5a2a', '#c89040'], glow: '#ffb860', sign: 'INN'},
+  {name: 'BUTCHER', fascia: '#8a1c2a', ink: '#f2f0ea', frame: '#6a1420', awning: '#b02a3a', goods: ['#d86a6a', '#f0c0b0', '#c84a4a'], glow: '#fff0e0'},
+];
 // The same layout is painted twice: the facades by day, and a night map where only the window panes
 // glow (some rooms lit, some dark), used as the emissive map once the sun goes down.
 function paintAtlas(g, lit){
-  g.fillStyle = lit ? '#000000' : '#e6e3dc'; g.fillRect(0, 0, ATLAS, ATLAS);
+  g.fillStyle = lit ? '#000000' : '#e6e3dc'; g.fillRect(0, 0, AW, ATLAS);
   let s = 11; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   let ls = 5; const lrnd = () => (ls = (ls * 48271) % 2147483647) / 2147483647;
   if(!lit){
-    for(let k = 0; k < 26000; k++){ const v = 205 + rnd() * 40 | 0; g.fillStyle = `rgba(${v},${v - 3},${v - 8},0.55)`; g.fillRect(rnd() * ATLAS, rnd() * ATLAS, 2 + rnd() * 3, 1); }
-    for(let y = 0; y < ATLAS * 0.75; y += 5) { g.fillStyle = 'rgba(0,0,0,0.035)'; g.fillRect(0, y, ATLAS, 1); }
+    // brickwork under every wall: courses of bricks, each a shade of its own, with mortar joints and weathering
+    for(let y = 0; y < ATLAS * 0.75; y += 5){
+      const off = (y / 5) % 2 ? 6 : 0;
+      for(let x = -off; x < AW; x += 12){ const v = rnd(); g.fillStyle = v < 0.5 ? `rgba(0,0,0,${0.02 + v * 0.06})` : `rgba(255,255,255,${(v - 0.5) * 0.12})`; g.fillRect(x, y, 11, 4); }
+      g.fillStyle = 'rgba(0,0,0,0.07)'; g.fillRect(0, y + 4, AW, 1);
+      for(let x = 11 - off; x < AW; x += 12) g.fillRect(x, y, 1, 4);
+    }
+    for(let k = 0; k < 40000; k++){ const v = 205 + rnd() * 40 | 0; g.fillStyle = `rgba(${v},${v - 3},${v - 8},0.35)`; g.fillRect(rnd() * AW, rnd() * ATLAS, 2 + rnd() * 3, 1); }
+    // rain streaks and grime
+    for(let k = 0; k < 900; k++){ g.fillStyle = 'rgba(40,36,30,0.05)'; g.fillRect(rnd() * AW, rnd() * ATLAS * 0.75, 1 + rnd() * 2, 10 + rnd() * 40); }
   }
   const cell = (cx, cy, cw, ch, W, Hm, draw) => { g.save(); g.translate(cx * CELL, cy * CELL); g.scale(cw * CELL / W, ch * CELL / Hm); draw(Hm); g.restore(); };
   const glow = () => { const r = lrnd(); if(r < 0.38) return '#0a0806'; const k = 0.65 + lrnd() * 0.35; return `rgb(${255 * k | 0},${(200 + lrnd() * 40) * k | 0},${(120 + lrnd() * 50) * k | 0})`; };
   const win = (x, y, w, h) => {
     if(lit){ g.fillStyle = glow(); g.fillRect(x, y, w, h); g.fillStyle = '#000'; g.fillRect(x + w / 2 - 0.05, y, 0.1, h); g.fillRect(x, y + h / 2 - 0.05, w, 0.1); return; }
-    g.fillStyle = '#f4f4f0'; g.fillRect(x - 0.12, y - 0.15, w + 0.24, h + 0.27); g.fillStyle = '#26323b'; g.fillRect(x, y, w, h);
-    g.fillStyle = '#f4f4f0'; g.fillRect(x + w / 2 - 0.04, y, 0.08, h); g.fillRect(x, y + h / 2 - 0.04, w, 0.08); g.fillStyle = 'rgba(160,200,220,0.25)'; g.fillRect(x + 0.08, y + 0.08, w * 0.3, h * 0.3);
-    g.fillStyle = '#cfcac0'; g.fillRect(x - 0.18, y + h, w + 0.36, 0.14); };
-  const door = (x, y, w, h, col) => { if(lit) return; g.fillStyle = '#efefea'; g.fillRect(x - 0.12, y - 0.12, w + 0.24, h + 0.12); g.fillStyle = col; g.fillRect(x, y, w, h); g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(x + 0.1, y + 0.15, w - 0.2, 0.35); };
+    g.fillStyle = '#c8c2b4'; g.fillRect(x - 0.22, y - 0.32, w + 0.44, 0.2);                 // stone lintel
+    g.fillStyle = '#f4f4f0'; g.fillRect(x - 0.12, y - 0.15, w + 0.24, h + 0.27);
+    const gr = g.createLinearGradient(x, y, x + w, y + h); gr.addColorStop(0, '#3a4c5a'); gr.addColorStop(0.55, '#1e2a33'); gr.addColorStop(1, '#2c3c48');
+    g.fillStyle = gr; g.fillRect(x, y, w, h);
+    const cur = rnd();                                                                       // curtains, drawn back or half closed
+    if(cur < 0.75){ const cc = ['#b8463a', '#e8dcc0', '#5a6e8a', '#8a7a4a', '#f0ece0', '#6a8a5a'][Math.floor(rnd() * 6)], cw = w * (cur < 0.3 ? 0.42 : 0.18);
+      g.fillStyle = cc; g.fillRect(x, y, cw, h); g.fillRect(x + w - cw, y, cw, h); g.fillStyle = 'rgba(0,0,0,0.15)'; g.fillRect(x + cw - 0.05, y, 0.05, h); g.fillRect(x + w - cw, y, 0.05, h); }
+    g.fillStyle = '#f4f4f0'; g.fillRect(x + w / 2 - 0.04, y, 0.08, h); g.fillRect(x, y + h / 2 - 0.04, w, 0.08);
+    g.fillStyle = 'rgba(190,220,235,0.28)'; g.beginPath(); g.moveTo(x + 0.05, y + 0.05); g.lineTo(x + w * 0.45, y + 0.05); g.lineTo(x + 0.05, y + h * 0.45); g.fill();
+    g.fillStyle = '#d8d2c6'; g.fillRect(x - 0.2, y + h, w + 0.4, 0.16); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x - 0.2, y + h + 0.16, w + 0.4, 0.05); };
+  const door = (x, y, w, h, col) => { if(lit) return; g.fillStyle = '#efefea'; g.fillRect(x - 0.14, y - 0.5, w + 0.28, h + 0.5);
+    g.fillStyle = '#3a4c5a'; g.fillRect(x, y - 0.4, w, 0.32);                               // fanlight
+    g.fillStyle = col; g.fillRect(x, y, w, h);
+    g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(x + 0.1, y + 0.15, w * 0.36, h * 0.35); g.fillRect(x + w * 0.54, y + 0.15, w * 0.36, h * 0.35); g.fillRect(x + 0.1, y + h * 0.58, w * 0.36, h * 0.34); g.fillRect(x + w * 0.54, y + h * 0.58, w * 0.36, h * 0.34);
+    g.fillStyle = '#d8b440'; g.fillRect(x + w * 0.8, y + h * 0.5, 0.07, 0.07);              // brass knob
+    g.fillStyle = '#b8b2a6'; g.fillRect(x - 0.3, y + h - 0.02, w + 0.6, 0.12); };
   const Y = (Hm, y) => Hm - y;                              // metres up from the ground to canvas y
   // row 0: terrace front, terrace back, house front, house back
   cell(0, 0, 1, 1, 5.4, 6.2, Hm => { door(0.6, Y(Hm, 2.2), 0.95, 2.2, '#2f3d52'); win(2.4, Y(Hm, 2.4), 2.2, 1.5); win(0.8, Y(Hm, 5.3), 1.1, 1.4); win(3.0, Y(Hm, 5.3), 1.4, 1.4); });
@@ -735,6 +826,27 @@ function paintAtlas(g, lit){
       if(!lit){ g.fillStyle = '#f4f4f0'; g.beginPath(); g.arc(x + 0.8, Y(Hm, 6.4), 0.95, Math.PI, 0); g.fill(); g.fillRect(x - 0.15, Y(Hm, 6.4), 1.9, 4.6); }
       g.fillStyle = lit ? glow() : '#26323b'; g.beginPath(); g.arc(x + 0.8, Y(Hm, 6.4), 0.8, Math.PI, 0); g.fill(); g.fillRect(x, Y(Hm, 6.4), 1.6, 4.4); }
     win(7.6, Y(Hm, 7.4), 2.8, 1.6); });
+  // the shop variants: a fascia with the shop's name, a striped awning, a display window, the door, flats above
+  SHOP_KINDS.forEach((k, i) => cell(4 + i % 4, Math.floor(i / 4), 1, 1, 5.4, 9.0, Hm => {
+    if(lit){ g.fillStyle = k.glow; g.fillRect(0.35, Y(Hm, 2.8), 3.7, 2.35); g.fillStyle = '#000'; g.fillRect(2.15, Y(Hm, 2.8), 0.08, 2.35); }
+    else {
+      g.fillStyle = k.fascia; g.fillRect(0, Y(Hm, 3.65), 5.4, 0.75); g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(0, Y(Hm, 3.65), 5.4, 0.06); g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(0, Y(Hm, 2.95), 5.4, 0.06);
+      g.fillStyle = k.ink; g.font = `bold ${k.name.length > 10 ? 0.3 : 0.4}px Georgia`; g.textAlign = 'center'; g.fillText(k.name, 2.7, Y(Hm, 3.14)); g.textAlign = 'left';
+      g.fillStyle = k.frame; g.fillRect(0.2, Y(Hm, 2.95), 3.95, 2.95); g.fillRect(0, Y(Hm, 0.45), 5.4, 0.45);      // window frame and stallriser
+      const gr = g.createLinearGradient(0, Y(Hm, 2.8), 0, Y(Hm, 0.5)); gr.addColorStop(0, '#2a3640'); gr.addColorStop(1, '#141c22');
+      g.fillStyle = gr; g.fillRect(0.35, Y(Hm, 2.8), 3.7, 2.3);
+      for(let q = 0; q < 9; q++){ g.fillStyle = k.goods[q % k.goods.length]; const gx = 0.5 + (q % 3) * 1.2 + rnd() * 0.2, gy = Y(Hm, 0.95 + Math.floor(q / 3) * 0.6); g.fillRect(gx, gy, 0.55 + rnd() * 0.3, 0.32); }
+      g.fillStyle = k.frame; g.fillRect(2.15, Y(Hm, 2.8), 0.08, 2.3);
+      g.fillStyle = 'rgba(200,230,240,0.18)'; g.fillRect(0.45, Y(Hm, 2.7), 1.2, 0.9);
+      if(k.awning){
+        for(let q = 0; q < 9; q++){ g.fillStyle = q % 2 ? '#f2f0ea' : k.awning; g.fillRect(q * 0.6, Y(Hm, 2.95), 0.6, 0.4); }
+        for(let q = 0; q < 9; q++){ g.fillStyle = q % 2 ? '#f2f0ea' : k.awning; g.beginPath(); g.arc(q * 0.6 + 0.3, Y(Hm, 2.55), 0.3, 0, Math.PI); g.fill(); }
+      }
+      if(k.sign){ g.fillStyle = k.fascia; g.fillRect(4.55, Y(Hm, 5.1), 0.8, 0.9); g.fillStyle = k.ink; g.font = 'bold 0.26px Georgia'; g.textAlign = 'center'; g.fillText(k.sign, 4.95, Y(Hm, 4.5)); g.textAlign = 'left'; }
+    }
+    door(4.4, Y(Hm, 2.4), 0.8, 2.4, k.frame);
+    for(const y of [5.9, 8.4]) { win(0.8, Y(Hm, y), 1.2, 1.5); win(3.2, Y(Hm, y), 1.2, 1.5); }
+  }));
   if(lit) return;
   // row 3: roof tiles (two cells), plain stone, corrugated metal
   cell(0, 3, 2, 1, 10, 5, Hm => { g.fillStyle = '#d8d8d4'; g.fillRect(0, 0, 10, 5);
@@ -742,7 +854,7 @@ function paintAtlas(g, lit){
   cell(2, 3, 1, 1, 6, 6, Hm => { g.fillStyle = '#d6d2c8'; g.fillRect(0, 0, 6, 6); for(let y = 0; y < 6; y += 0.45) for(let x = (y * 1.7) % 0.9; x < 6; x += 0.9){ g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 0.04; g.strokeRect(x, y, 0.9, 0.45); } });
   cell(3, 3, 1, 1, 6, 6, Hm => { g.fillStyle = '#dcdcd8'; g.fillRect(0, 0, 6, 6); for(let x = 0; x < 6; x += 0.3){ g.fillStyle = 'rgba(0,0,0,0.16)'; g.fillRect(x, 0, 0.1, 6); } });
 }
-const atlasTex = canvasTex(ATLAS, ATLAS, g => paintAtlas(g, false)), litTex = canvasTex(ATLAS, ATLAS, g => paintAtlas(g, true));
+const atlasTex = canvasTex(AW, ATLAS, g => paintAtlas(g, false)), litTex = canvasTex(AW, ATLAS, g => paintAtlas(g, true));
 atlasTex.anisotropy = 8;
 // Lit windows come on at dusk; a hash of each building's position keeps some houses dark all night.
 const winU = {value: 0};
@@ -757,9 +869,10 @@ atlasMat.onBeforeCompile = sh => {
   #endif`);
   sh.fragmentShader = 'uniform float uWin; varying float vLit;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= uWin * vLit;');
 };
-const UVC = (cx, cy, cw = 1, ch = 1) => [cx / 4, 1 - (cy + ch) / 4, (cx + cw) / 4, 1 - cy / 4];
+const UVC = (cx, cy, cw = 1, ch = 1) => [cx / 8, 1 - (cy + ch) / 4, (cx + cw) / 8, 1 - cy / 4];
 const CELLS = {terraceF: UVC(0, 0), terraceB: UVC(1, 0), houseF: UVC(2, 0), houseB: UVC(3, 0), cottageF: UVC(0, 1), shopF: UVC(1, 1), villaF: UVC(2, 1), side: UVC(3, 1),
   wareF: UVC(0, 2, 2, 1), barnF: UVC(2, 2), civicF: UVC(3, 2), roof: UVC(0, 3, 2, 1), stone: UVC(2, 3), metal: UVC(3, 3)};
+for(let i = 0; i < 8; i++) CELLS['shop' + (i + 1)] = UVC(4 + i % 4, Math.floor(i / 4));
 // Walls (with gable ends on the left and right) and a pitched roof, ridge along the street.
 function archGeo(A){
   const {w, h, d, rh} = A, hw = w / 2, hd = d / 2, P = [], U = [], N = [], I = [];
@@ -801,7 +914,7 @@ function archGeo(A){
 const ARCH = {
   terrace:  {w: 5.4, h: 6.2, d: 9.0, rh: 2.6, front: 'terraceF', back: 'terraceB', chimney: true, setback: 1.6, gap: 0,
     walls: [0xa0523a, 0x8e4532, 0xb5603f, 0xc9a46a, 0xe8dcc0, 0xf0ece0, 0x9a958a], roofs: [0x4a4f58, 0x3e434b, 0x55585c]},
-  shop:     {w: 5.4, h: 9.0, d: 11, rh: 2.8, front: 'shopF', back: 'terraceB', chimney: true, setback: 0.6, gap: 0,
+  shop:     {w: 5.4, h: 9.0, d: 11, rh: 2.8, front: 'shopF', back: 'terraceB', chimney: true, setback: 1.6, gap: 0,
     walls: [0xe8dcc0, 0xf0ece0, 0xd8e4ec, 0xe8d0c8, 0xd8e8d0, 0xf2e2a8, 0xa0523a], roofs: [0x4a4f58, 0x3e434b]},
   house:    {w: 7.6, h: 5.8, d: 8.5, rh: 3.0, front: 'houseF', back: 'houseB', chimney: true, setback: 5, gap: 3.5,
     walls: [0xa0523a, 0xe8dcc0, 0xf0ece0, 0xc9a46a, 0x9a958a, 0xe6d39a], roofs: [0x4a4f58, 0x8a3a2a, 0x6b4a3a, 0x3e434b]},
@@ -816,6 +929,8 @@ const ARCH = {
   civic:    {w: 18, h: 9, d: 14, rh: 4.0, front: 'civicF', back: 'houseB', side: 'side', setback: 6, gap: 10,
     walls: [0x9a958a, 0xc9a46a, 0xa0523a], roofs: [0x4a4f58]},
 };
+for(let i = 1; i <= 8; i++) ARCH['shop' + i] = Object.assign({}, ARCH.shop, {front: 'shop' + i});
+const SHOPS = ['shop', 'shop1', 'shop2', 'shop3', 'shop4', 'shop5', 'shop6', 'shop7', 'shop8'];
 Object.values(ARCH).forEach(A => Object.assign(A, archGeo(A)));
 // Office towers and skyscrapers for the city centres: their own facade tile (4 bays by 4 floors of glazing between
 // concrete bands), repeated up the walls by UV, a flat roof with a plant room, and windows lit at random after dark.
@@ -910,8 +1025,9 @@ function lineStreet(t, rd, r){
       else type = r() < 0.55 ? 'house' : r() < 0.7 ? 'villa' : 'cottage';
       if(row && (row.type === 'terrace' || row.type === 'shop') && row.left > 0 && (type === 'terrace' || type === 'shop')) type = row.type === 'shop' && qd < 0.22 ? 'shop' : 'terrace';
       const base = type;
+      if(type === 'shop') type = SHOPS[Math.floor(r() * SHOPS.length)];       // the baker, the grocer, the post office, the pub
       if(t.style && !ARCH[type].mat) type = styledType(type, t.style);
-      const A = ARCH[type], ss = (t.style && t.style.scale) || 1, sc = (A.front === 'terraceF' || A.front === 'shopF' || A.mat ? 1 : 0.9 + r() * 0.2) * (A.mat ? 1 : ss);
+      const A = ARCH[type], ss = (t.style && t.style.scale) || 1, sc = (A.front === 'terraceF' || /^shop/.test(A.front) || A.mat ? 1 : 0.9 + r() * 0.2) * (A.mat ? 1 : ss);
       const back = rd.hw + A.setback * M + A.d * sc * M / 2;
       const x = x0 + nx * back, z = z0 + nz * back, yaw = Math.atan2(-nx, -nz);
       const rec = tryPlace(t, type, x, z, yaw, sc, r);
@@ -1328,7 +1444,39 @@ function mergeGeos(parts){
 const poleGeo = mergeGeos([[new THREE.CylinderGeometry(0.12, 0.16, 8, 6), 0, 4, 0], [new THREE.BoxGeometry(2.2, 0.12, 0.12), 0, 7.5, 0], [new THREE.BoxGeometry(1.6, 0.12, 0.12), 0, 6.9, 0]]);
 const sigPostGeo = mergeGeos([[new THREE.BoxGeometry(0.25, 7, 0.25), 0, 3.5, 0], [new THREE.ConeGeometry(0.2, 0.5, 6), 0, 7.25, 0], [new THREE.BoxGeometry(0.6, 0.1, 0.6), 0, 0.05, 0], [new THREE.BoxGeometry(0.1, 5, 0.1), 0.35, 2.5, 0]]);
 const sigArmGeo = mergeGeos([[new THREE.BoxGeometry(0.06, 0.28, 1.4), 0.17, 6.2, 0.75], [new THREE.BoxGeometry(0.07, 0.28, 0.12), 0.17, 6.2, 1.2]]);
-const lampGeo = mergeGeos([[new THREE.CylinderGeometry(0.07, 0.1, 5, 6), 0, 2.5, 0], [new THREE.BoxGeometry(0.06, 0.06, 1.0), 0, 4.9, 0.45], [new THREE.CylinderGeometry(0.22, 0.16, 0.45, 6), 0, 4.75, 0.9]]);
+// a Victorian street lamp: a moulded base, a fluted column, a scroll bracket and a lantern with a cap
+const lampGeo = mergeGeos([[new THREE.CylinderGeometry(0.2, 0.26, 0.7, 8), 0, 0.35, 0], [new THREE.CylinderGeometry(0.15, 0.2, 0.25, 8), 0, 0.82, 0],
+  [new THREE.CylinderGeometry(0.07, 0.11, 4.2, 8), 0, 3.0, 0], [new THREE.TorusGeometry(0.22, 0.025, 4, 10, Math.PI), 0, 4.75, 0.22, 0, Math.PI / 2, 0],
+  [new THREE.BoxGeometry(0.05, 0.05, 0.95), 0, 5.0, 0.45], [new THREE.CylinderGeometry(0.2, 0.13, 0.5, 6), 0, 4.82, 0.92], [new THREE.ConeGeometry(0.27, 0.25, 6), 0, 5.2, 0.92], [new THREE.SphereGeometry(0.06, 6, 4), 0, 5.36, 0.92]]);
+// coloured props: each part carries its own colour in the vertex colours, so one draw does them all
+function mergeColored(parts){
+  const geos = parts.map(([g, col, x, y, z, rx = 0, ry = 0, rz = 0]) => { const c = (g.index ? g.toNonIndexed() : g.clone()); c.applyMatrix4(new THREE.Matrix4().compose(new V3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new V3(1, 1, 1))); c.userData.col = new THREE.Color(col); return c; });
+  let n = 0; geos.forEach(g => n += g.attributes.position.count);
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), colr = new Float32Array(n * 3); let o = 0;
+  geos.forEach(g => { const k = g.attributes.position.count; pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); for(let i = 0; i < k; i++) colr.set([g.userData.col.r, g.userData.col.g, g.userData.col.b], (o + i) * 3); o += k; });
+  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); out.setAttribute('color', new THREE.BufferAttribute(colr, 3)); return out;
+}
+const B_ = (w, h, d) => new THREE.BoxGeometry(w, h, d), C_ = (r0, r1, h, n = 8) => new THREE.CylinderGeometry(r0, r1, h, n);
+const PROP_GEO = {
+  // a bus shelter: green steel frame, glass back and sides, a roof, a bench inside, a timetable panel; the stop flag beside it
+  shelter: mergeColored([[B_(3.2, 0.12, 1.5), 0x2e4a3a, 0, 2.45, 0], [B_(3.3, 0.06, 1.6), 0xd8d8d0, 0, 2.53, 0],
+    ...[-1.55, 1.55].flatMap(x => [[B_(0.08, 2.45, 0.08), 0x2e4a3a, x, 1.22, -0.65], [B_(0.08, 2.45, 0.08), 0x2e4a3a, x, 1.22, 0.65]]),
+    [B_(3.1, 2.0, 0.04), 0x9ab8c4, 0, 1.25, -0.68], [B_(0.04, 2.0, 1.2), 0x9ab8c4, -1.55, 1.25, -0.05], [B_(0.04, 2.0, 1.2), 0x9ab8c4, 1.55, 1.25, -0.05],
+    [B_(2.4, 0.08, 0.38), 0x6a4a2a, 0, 0.48, -0.42], [B_(0.06, 0.45, 0.3), 0x2e4a3a, -1.0, 0.24, -0.42], [B_(0.06, 0.45, 0.3), 0x2e4a3a, 1.0, 0.24, -0.42],
+    [B_(0.9, 1.2, 0.06), 0xf2f2ee, 1.0, 1.4, -0.64], [B_(3.2, 0.25, 0.08), 0xb3201c, 0, 2.3, 0.72],
+    [C_(0.05, 0.05, 2.8), 0x3a3a3a, 2.2, 1.4, 0.7], [C_(0.32, 0.32, 0.06, 16), 0xb3201c, 2.2, 2.75, 0.7, Math.PI / 2, 0, 0], [C_(0.25, 0.25, 0.07, 16), 0xf2f2ee, 2.2, 2.75, 0.7, Math.PI / 2, 0, 0],
+    [B_(0.5, 0.35, 0.05), 0xe8c030, 2.2, 2.25, 0.7]]),
+  bench: mergeColored([[B_(1.8, 0.06, 0.45), 0x7a5230, 0, 0.45, 0], [B_(1.8, 0.4, 0.05), 0x7a5230, 0, 0.72, -0.22], ...[-0.8, 0.8].flatMap(x => [[B_(0.06, 0.45, 0.45), 0x2a2a2a, x, 0.22, 0], [B_(0.06, 0.5, 0.06), 0x2a2a2a, x, 0.7, -0.22]])]),
+  bin: mergeColored([[C_(0.24, 0.2, 0.85, 10), 0x2e3a32, 0, 0.42, 0], [C_(0.27, 0.27, 0.08, 10), 0xc8a040, 0, 0.88, 0], [C_(0.06, 0.06, 0.05), 0x2e3a32, 0, 0.95, 0]]),
+  pillar: mergeColored([[C_(0.27, 0.29, 1.3, 12), 0xc4161c, 0, 0.65, 0], [new THREE.SphereGeometry(0.29, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0xc4161c, 0, 1.3, 0], [B_(0.32, 0.05, 0.06), 0x1a1a1a, 0, 1.05, 0.27], [C_(0.31, 0.31, 0.06, 12), 0x1a1a1a, 0, 0.03, 0], [B_(0.2, 0.14, 0.04), 0xf2f2ee, 0, 0.8, 0.27]]),
+  phone: mergeColored([[B_(1.0, 2.4, 1.0), 0xc4161c, 0, 1.2, 0], [B_(1.08, 0.12, 1.08), 0xc4161c, 0, 2.46, 0], [new THREE.SphereGeometry(0.62, 8, 4, 0, Math.PI * 2, 0, 0.6), 0xc4161c, 0, 2.18, 0],
+    [B_(0.8, 1.5, 0.02), 0x2a3a40, 0, 1.25, 0.51], [B_(0.8, 1.5, 0.02), 0x2a3a40, 0, 1.25, -0.51], [B_(0.02, 1.5, 0.8), 0x2a3a40, 0.51, 1.25, 0], [B_(0.7, 0.14, 0.02), 0xf2f2ee, 0, 2.27, 0.53]]),
+  bollard: mergeColored([[C_(0.09, 0.11, 0.9, 8), 0x1a1a1a, 0, 0.45, 0], [C_(0.1, 0.1, 0.06, 8), 0xd8b440, 0, 0.8, 0]]),
+  planter: mergeColored([[B_(1.2, 0.5, 0.6), 0x8a7a6a, 0, 0.25, 0], [new THREE.SphereGeometry(0.45, 8, 6), 0x3a6a2a, -0.25, 0.62, 0], [new THREE.SphereGeometry(0.35, 8, 6), 0xd84a6a, 0.3, 0.6, 0.05]]),
+  tree: mergeColored([[C_(0.12, 0.16, 2.6, 6), 0x5a4030, 0, 1.3, 0], [new THREE.IcosahedronGeometry(1.5, 1), 0x3e6e2e, 0, 3.4, 0], [new THREE.IcosahedronGeometry(1.0, 1), 0x4a7a36, 0.6, 4.2, 0.2], [C_(0.6, 0.6, 0.05, 10), 0x2a2a2a, 0, 0.02, 0]]),
+  sign: mergeColored([[C_(0.04, 0.04, 2.4), 0x8a8d91, 0, 1.2, 0], [B_(0.9, 0.6, 0.04), 0x1f4fa8, 0, 2.2, 0], [B_(0.8, 0.5, 0.045), 0xf2f2ee, 0, 2.2, 0.002], [B_(0.7, 0.36, 0.05), 0x1f4fa8, 0, 2.2, 0.004]]),
+};
+const PROP_MAT = new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.75, metalness: 0.1});
 (function(){
   const poles = [], posts = [], arms = [];
   RAIL.lines.forEach(line => {
@@ -1376,7 +1524,36 @@ towns.forEach(t => {
       list.push({x, y: Math.max(rd.ys ? rd.ys[i] : 0, H(x, z)) - 0.1 * M, z, yaw: Math.atan2(-nx, -nz)});
     }
   });
-  if(list.length){ t.lamps = instanced(lampGeo, mat(0x2a3a32, 0.5, 0.4), list, false); t.lampList = list; }
+  if(list.length){ t.lamps = instanced(lampGeo, mat(0x1f2a24, 0.45, 0.5), list, false); t.lampList = list; }
+  // the furniture of the pavements: bus shelters on the through roads, benches, bins, pillar boxes and phone
+  // boxes along the shopping streets, bollards and planters and young trees in the middle of town
+  const r = rng(t.seed + 91), props = {}, stops = [];
+  const put = (k, x, z, yaw, y) => (props[k] || (props[k] = [])).push({x, y: y === undefined ? H(x, z) : y, z, yaw});
+  t.roads.forEach(rd => {
+    if(rd.cls === 'lane' || rd.cls === 'M') return;
+    const n = rd.pts.length, busRoad = rd.cls === 'A' || rd.cls === 'B' || (rd.cls === 'street' && !rd.grid);
+    let nextStop = 60 * M + r() * 120 * M;
+    for(let i = 1; i < n - 1; i++){
+      const p = rd.pts[i], q = rd.pts[i + 1] || p, tx = q.x - rd.pts[i - 1].x, tz = q.z - rd.pts[i - 1].z, tl = Math.hypot(tx, tz) || 1;
+      const qd = Math.hypot(p.x - t.x, p.z - t.z) / t.R; if(qd > 0.85) continue;
+      if(rd.mods.some(c => Math.abs(rd.s[i] - c.s) < 35 * M)) continue;
+      const side = r() < 0.5 ? 1 : -1, nx = tz / tl * side, nz = -tx / tl * side, yaw = Math.atan2(-nx, -nz);
+      const at = off => { const x = p.x + nx * (rd.hw + off), z = p.z + nz * (rd.hw + off); return roadClear(x, z, 12 * M) > off - 0.4 * M - 0.01 && !K.nearTrack(x, z, 5 * M) && !inZone(x, z) && H(x, z) > 0.5 * M ? [x, z] : null; };
+      const y = Math.max(rd.ys ? rd.ys[i] : 0, 0) + 0.3 * M;
+      if(busRoad && rd.s[i] > nextStop && t.cls >= 2){
+        const c = at(1.0 * M); if(c){ put('shelter', c[0], c[1], yaw, y); stops.push({rd, s: rd.s[i], side, x: c[0], z: c[1]}); nextStop = rd.s[i] + 230 * M + r() * 150 * M; continue; }
+      }
+      const roll = r(), c = at(1.1 * M); if(!c) continue;
+      if(qd < 0.3 && t.cls >= 2){
+        if(roll < 0.08) put('bench', c[0], c[1], yaw, y); else if(roll < 0.16) put('bin', c[0], c[1], yaw, y); else if(roll < 0.19) put('pillar', c[0], c[1], yaw, y);
+        else if(roll < 0.21) put('phone', c[0], c[1], yaw, y); else if(roll < 0.28 && t.cls === 3) put('bollard', c[0], c[1], yaw, y); else if(roll < 0.36 && t.cls === 3) put('tree', c[0], c[1], yaw, y);
+        else if(roll < 0.4) put('planter', c[0], c[1], yaw, y);
+      } else if(qd < 0.6){ if(roll < 0.05) put('bin', c[0], c[1], yaw, y); else if(roll < 0.07) put('pillar', c[0], c[1], yaw, y); else if(roll < 0.1 && t.cls >= 2) put('tree', c[0], c[1], yaw, y); else if(roll < 0.11) put('sign', c[0], c[1], yaw, y); }
+      else if(roll < 0.02) put('pillar', c[0], c[1], yaw, y);
+    }
+  });
+  t.props = Object.keys(props).map(k => instanced(PROP_GEO[k], PROP_MAT, props[k], k === 'shelter' || k === 'tree'));
+  t.busStops = stops;
 });
 
 lap('props');
@@ -1396,6 +1573,7 @@ function buildOwner(owner){
   });
   if(owner.lm){ owner.lm.forEach(l => g.add(l)); }
   if(owner.lamps) g.add(owner.lamps);
+  (owner.props || []).forEach(m => g.add(m));
   scene.add(g); g.visible = false;
   owner.group = g;
   return g;
@@ -1507,7 +1685,24 @@ if(terrainMesh){
     // woodland: a dappled canopy of crowns rather than a flat dark patch
     float crowns = 0.78 + 0.22 * lnoise(pm / 9.0) + 0.14 * lnoise(pm / 41.0 + 3.0);
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.22, 0.36, 0.17) * crowns * detail, land.g * 0.9);
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.45, 0.50, 0.38) * detail, land.b * 0.85);
+    // built-up ground: back gardens and allotments, yards and paved squares in plots behind the houses,
+    // more of it paved towards the middle of town; blended to a plain tone at a distance
+    {
+      vec2 gq = pm / vec2(11.0, 15.0) + 0.37 * vec2(lnoise(pm / 70.0), lnoise(pm / 70.0 + 5.0));
+      vec2 iq = floor(gq); vec2 fq = fract(gq);
+      float h1 = lh1(iq), h2 = lh1(iq + 7.3), centre = smoothstep(0.55, 0.97, land.b);
+      vec3 lawn = vec3(0.36, 0.53, 0.26) * (0.86 + 0.22 * lnoise(pm / 2.5) + 0.1 * h2);
+      vec3 beds = mix(vec3(0.33, 0.27, 0.19), vec3(0.30, 0.42, 0.20), step(0.5, fract(pm.x / 0.9 + h2 * 3.0)));
+      vec3 paved = vec3(0.62, 0.60, 0.56) * (0.92 + 0.08 * h2) * (1.0 - 0.12 * (step(fract(pm.x / 0.6), 0.05) + step(fract(pm.y / 0.6), 0.05)));
+      vec3 gravel = vec3(0.58, 0.53, 0.45) * (0.88 + 0.2 * lh1(floor(pm * 7.0)));
+      vec3 plot = h1 < 0.55 - 0.4 * centre ? lawn : h1 < 0.66 - 0.3 * centre ? beds : h1 < 0.88 ? paved : gravel;
+      float edge = min(min(fq.x, 1.0 - fq.x), min(fq.y, 1.0 - fq.y));
+      plot = mix(plot, vec3(0.20, 0.27, 0.14), (1.0 - smoothstep(0.0, 0.05, edge)) * 0.7);          // hedges and fences between plots
+      float shrub = step(0.86, lh1(floor(pm / 2.3) + iq)) * (1.0 - smoothstep(0.25, 0.45, length(fract(pm / 2.3) - 0.5)));
+      plot = mix(plot, vec3(0.18, 0.30, 0.14), shrub * 0.8 * (1.0 - centre));
+      plot = mix(plot, vec3(0.47, 0.51, 0.40), clamp(distM / 2200.0, 0.0, 1.0));
+      diffuseColor.rgb = mix(diffuseColor.rgb, plot * detail, land.b * 0.9);
+    }
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.80, 0.60) * detail, land.a * 0.5);
     // the true shoreline from the height itself: dry sand with wind ripples, wet darker sand at the water's edge, and
     // marram dunes behind; on steep ground grass gives way to grey rock and scree
