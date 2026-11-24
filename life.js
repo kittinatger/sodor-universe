@@ -181,7 +181,9 @@ const STOPS = new Map();
 // slows to take the corner, gives way to traffic on the road it is joining, and swings round onto the new
 // road smoothly; at a dead end it stops and makes a three-point turn.
 const ON_ROAD = new Map();                         // road -> vehicles on it this frame
-function indexTraffic(){ ON_ROAD.clear(); for(const v of VEHICLES){ if(!v.stepped) continue; let a = ON_ROAD.get(v.rd); if(!a) ON_ROAD.set(v.rd, a = []); a.push(v); } }
+const EXTRA = [];                                  // the named road characters (crew.js), which traffic queues behind too
+function indexTraffic(){ ON_ROAD.clear(); for(const v of VEHICLES){ if(!v.stepped) continue; let a = ON_ROAD.get(v.rd); if(!a) ON_ROAD.set(v.rd, a = []); a.push(v); }
+  for(const v of EXTRA){ if(v.parked || !v.rd) continue; let a = ON_ROAD.get(v.rd); if(!a) ON_ROAD.set(v.rd, a = []); a.push(v); } }
 // the gap to the nearest vehicle ahead in this lane (Infinity if none within 60 m)
 function gapAhead(v){
   const list = ON_ROAD.get(v.rd); if(!list) return Infinity;
@@ -439,6 +441,6 @@ frameHooks.push(dt => {
   } else PEOPLE.forEach(p => { p.g.visible = false; });
 });
 
-window.SODOR_LIFE = {VEHICLES, PEOPLE, CRANES};
+window.SODOR_LIFE = {VEHICLES, PEOPLE, CRANES, EXTRA, gapAhead, laneBusy, roadFrame};
 console.log(`Life: ${VEHICLES.length} road vehicles, ${PEOPLE.length} people, built in ${Math.round(performance.now() - t0)} ms`);
 })();

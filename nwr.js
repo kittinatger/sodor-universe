@@ -3096,6 +3096,6 @@ window.SODOR_NWR = {FLEET, RUNS, DEPOTS, NWR_RUNNERS, STOCK_STD, byId, show: x =
 // The standard-gauge kit, depot builders and roster, shared with cfr.js.
 window.SODOR_STD = {bakeVC, faceMat, faceOn, letter, nameplate, lining, hazard, wheelS, rodsS, addWheels, finish, chimneyS, halfDrumX, gable, lamp, buffers,
   findSite, siteKit, shedOver, building, heap, label, bakeSite, depotGroup, depotLabels, allNWR, taken, roadMat, frameOnLine, rosterGroup: group, rosterRow: row, STYLES, rrect,
-  portalCrane, latticeBox, lattice, NONRAIL};
+  portalCrane, latticeBox, lattice, NONRAIL, RESCUE_ANIM};
 console.log(`NWR fleet: ${FLEET.length} engines, ${NWR_RUNNERS.length} running, built in ${Math.round(performance.now() - t0)} ms`);
 })();
