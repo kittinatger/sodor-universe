@@ -2241,7 +2241,7 @@ function buildRescue(D){
   D.noLabel = true;                                         // the station's own name board stands over it
   const kit = siteKit(site), G = kit.G, lx = kit.lx;
   let s = 31; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  const seaY = (0 - kit.base) / M, pierY = Math.min(0, seaY + 2.4);
+  const seaY = (0 - kit.base) / M, pierY = 0;                 // the piers stand level with the quay, on piles above the beach
   // a concrete apron out over the beach to deep enough water for the piers
   let FRONT = 0;
   for(const a of [46, LEN / 2, 118]){ let d = 0; while(d < 90){ const w = kit.pt(a, -d); if(heightAt(w.x, w.z) < -0.8 * M) break; d += 2; } FRONT = Math.min(FRONT, -Math.max(0, Math.min(84, d) - 5)); }

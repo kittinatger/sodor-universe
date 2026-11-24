@@ -321,7 +321,7 @@ function mapToWorld(px,py){ return {x:(px-T.imgW/2)*MAP_SCALE, z:(py-T.imgH/2)*M
   const s = RAIL.stations.find(s=>s.name==="Culdee Fell Summit"); if(!s) return;
   const w = mapToWorld(s.px[0], s.px[1]);
   let max = 0; for(let i=0;i<HEIGHTS.length;i++) if(REGION[i]===1 && HEIGHTS[i]>max) max = HEIGHTS[i];
-  const amp = max + 25*METRE - heightAt(w.x, w.z), sig = 0.9;
+  const amp = max + 25*METRE - heightAtRaw(w.x, w.z), sig = 0.9;
   if(amp <= 0) return;
   for(let r=0;r<T.rows;r++) for(let c=0;c<T.cols;c++){
     const p = mapToWorld(c*T.step, r*T.step), d2 = (p.x-w.x)**2 + (p.z-w.z)**2;
@@ -330,13 +330,35 @@ function mapToWorld(px,py){ return {x:(px-T.imgW/2)*MAP_SCALE, z:(py-T.imgH/2)*M
 })();
 // Height of the rendered surface itself (same triangle split as the mesh), so life-size
 // vehicles and track sit exactly on the ground rather than on a bilinear approximation.
-function heightAt(x,z){
+function heightAtRaw(x,z){
   const c = Math.max(0, Math.min(T.cols-1.001, (x/MAP_SCALE + T.imgW/2)/T.step));
   const r = Math.max(0, Math.min(T.rows-1.001, (z/MAP_SCALE + T.imgH/2)/T.step));
   const c0=Math.floor(c), r0=Math.floor(r), fc=c-c0, fr=r-r0, i=r0*T.cols+c0;
   const a=HEIGHTS[i], b=HEIGHTS[i+1], d=HEIGHTS[i+T.cols], e=HEIGHTS[i+T.cols+1];
   return fc+fr<=1 ? a+(b-a)*fc+(d-a)*fr : e+(d-e)*(1-fc)+(b-e)*(1-fr);
 }
+
+// Graded ground: the Sodor Search and Rescue Centre stands on a bench cut into the hillside and levelled out
+// to the beach. The coarse map cells (about 260 m across) cannot hold a flat 150 m yard, so the ground over
+// the Centre is re-made on a fine grid (see buildTerrain); heightAt answers for it everywhere.
+const GRADE = (()=>{
+  const a0 = mapToWorld(455,639.5), p1 = mapToWorld(462.9,640.9);
+  let ux = p1.x-a0.x, uz = p1.z-a0.z; const ul = Math.hypot(ux,uz); ux /= ul; uz /= ul;
+  const g = {x:p1.x, z:p1.z, ux, uz, nx:uz, nz:-ux};
+  g.L0 = heightAtRaw(p1.x - ux*80*METRE, p1.z - uz*80*METRE);
+  const S0 = -215, S1 = 48, Q0 = -45, Q1 = 72, xs = [], zs = [];
+  for(const s of [S0,S1]) for(const q of [Q0,Q1]){ xs.push(g.x + (ux*s + g.nx*q)*METRE); zs.push(g.z + (uz*s + g.nz*q)*METRE); }
+  g.x0 = Math.min(...xs); g.x1 = Math.max(...xs); g.z0 = Math.min(...zs); g.z1 = Math.max(...zs);
+  return g;
+})();
+const gsm = t => { t = Math.max(0, Math.min(1, t)); return t*t*(3-2*t); };
+function gradeAt(x, z, h){
+  if(x < GRADE.x0 || x > GRADE.x1 || z < GRADE.z0 || z > GRADE.z1) return h;
+  const dx = (x-GRADE.x)/METRE, dz = (z-GRADE.z)/METRE, s = dx*GRADE.ux + dz*GRADE.uz, q = dx*GRADE.nx + dz*GRADE.nz;
+  const w = gsm((s+215)/45) * (1 - gsm((s-8)/40)) * gsm((q+45)/35) * (1 - gsm((q-52)/20));
+  return w > 0 ? h + (GRADE.L0 - h)*w : h;
+}
+function heightAt(x,z){ return gradeAt(x, z, heightAtRaw(x,z)); }
 
 // ===================== SCENE =====================
 const wrap = document.getElementById('canvas-wrap');
@@ -496,14 +518,18 @@ function buildTerrain(){
   }
   const idx = new Uint32Array((cols-1)*(rows-1)*6);
   let k=0;
+  // the coarse cells that the graded ground covers are re-made finely below
+  const cOf = x => (x/MAP_SCALE + T.imgW/2)/step, rOf = z => (z/MAP_SCALE + T.imgH/2)/step;
+  const pc0 = Math.floor(cOf(GRADE.x0)), pc1 = Math.floor(cOf(GRADE.x1)), pr0 = Math.floor(rOf(GRADE.z0)), pr1 = Math.floor(rOf(GRADE.z1));
   for(let r=0;r<rows-1;r++) for(let c=0;c<cols-1;c++){
+    if(c>=pc0 && c<=pc1 && r>=pr0 && r<=pr1) continue;
     const a=r*cols+c, b=a+1, d=a+cols, e=d+1;
     idx[k++]=a; idx[k++]=d; idx[k++]=b;
     idx[k++]=b; idx[k++]=d; idx[k++]=e;
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
-  geo.setIndex(new THREE.BufferAttribute(idx,1));
+  geo.setIndex(new THREE.BufferAttribute(idx.slice(0,k),1));
   geo.computeVertexNormals();
 
   const nrm = geo.attributes.normal.array, col = new Float32Array(n*3);
@@ -552,6 +578,22 @@ function buildTerrain(){
   mesh.castShadow = true; mesh.receiveShadow = true;
   relief.add(mesh);
   terrainMesh = mesh;
+  // the fine patch: the cells' heights from the same map (graded), colours and texture coordinates carried over
+  {
+    const SUB = 64, P = [], Cc = [], U = [], I = [], nc = pc1-pc0+1, nr = pr1-pr0+1, W = nc*SUB+1, Hh = nr*SUB+1;
+    for(let j=0;j<Hh;j++) for(let i=0;i<W;i++){
+      const cf = pc0 + i/SUB, rf = pr0 + j/SUB, w = mapToWorld(cf*step, rf*step), x = w.x, z = w.z;
+      P.push(x, heightAt(x, z), z); U.push(x/TILE, z/TILE);
+      const c0 = Math.min(cols-2, Math.floor(cf)), r0 = Math.min(rows-2, Math.floor(rf)), fc = cf-c0, fr = rf-r0, q = r0*cols+c0;
+      for(let ch=0;ch<3;ch++) Cc.push((col[q*3+ch]*(1-fc) + col[(q+1)*3+ch]*fc)*(1-fr) + (col[(q+cols)*3+ch]*(1-fc) + col[(q+cols+1)*3+ch]*fc)*fr);
+    }
+    for(let j=0;j<Hh-1;j++) for(let i=0;i<W-1;i++){ const a=j*W+i, b=a+1, d=a+W, e=d+1; I.push(a,d,b, b,d,e); }
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', new THREE.Float32BufferAttribute(P,3)); pg.setAttribute('color', new THREE.Float32BufferAttribute(Cc,3)); pg.setAttribute('uv', new THREE.Float32BufferAttribute(U,2));
+    pg.setIndex(I); pg.computeVertexNormals();
+    const pm = new THREE.Mesh(pg, mesh.material); pm.castShadow = true; pm.receiveShadow = true; pm.frustumCulled = false;
+    relief.add(pm);
+  }
 
   // Diorama skirt: walls down each map edge so the cut-off Isle of Man / England read as a map border.
   const BASE=-9/OVERVIEW_EX, sk=[], skc=[], skIdx=[];
@@ -804,14 +846,7 @@ function buildTrack(line){
     }
     viaduct = Object.assign({j0: Math.round(jc-half/step), j1: Math.round(jc+half/step)}, V);
   }
-  // The Search and Rescue branch comes down off the hill and runs level along the quay at the Centre.
-  let levelY;
-  if(line.id === 'rescue'){
-    const step = guideLen/(M-1), nL = Math.round(340*METRE/step), nB = Math.round(420*METRE/step);
-    let top = -Infinity; for(let j = Math.max(0, M-1-nL); j < M; j++) top = Math.max(top, hg[j] + 0.55*METRE);
-    for(let j = 0; j < M; j++){ const d = (M-1-nL) - j, k = d <= 0 ? 1 : d < nB ? (t=>t*t*(3-2*t))(1 - d/nB) : 0; ry[j] = ry[j]*(1-k) + top*k; }
-    levelY = top;
-  }
+  const levelY = line.id === 'rescue' ? ry[M-1] : undefined;           // the Search and Rescue yard is built to this level
   // a Knapford branch lies level with the Main Line along its platform, then eases onto its own grade
   if(knapEdit){
     const step = guideLen/(M-1), sl = knapEdit.stationLen, blend = 70*METRE;
@@ -1324,7 +1359,7 @@ animate();
 <script src="characters.js?v=23"></script>
 <script src="arlesdale.js?v=2"></script>
 <script src="duties.js?v=8"></script>
-<script src="nwr.js?v=28"></script>
+<script src="nwr.js?v=29"></script>
 <script src="cfr.js?v=3"></script>
 <script src="knapford.js?v=3"></script>
 <script src="tidmouth.js?v=2"></script>
