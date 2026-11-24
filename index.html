@@ -233,7 +233,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="terrain.js?v=6"></script>
-<script src="railways.js?v=8"></script>
+<script src="railways.js?v=9"></script>
 <script>
 // ===================== DATA =====================
 // Network (stations + track paths, in outline-map pixels) comes from railways.js,
@@ -804,6 +804,14 @@ function buildTrack(line){
     }
     viaduct = Object.assign({j0: Math.round(jc-half/step), j1: Math.round(jc+half/step)}, V);
   }
+  // The Search and Rescue branch comes down off the hill and runs level along the quay at the Centre.
+  let levelY;
+  if(line.id === 'rescue'){
+    const step = guideLen/(M-1), nL = Math.round(340*METRE/step), nB = Math.round(420*METRE/step);
+    let top = -Infinity; for(let j = Math.max(0, M-1-nL); j < M; j++) top = Math.max(top, hg[j] + 0.55*METRE);
+    for(let j = 0; j < M; j++){ const d = (M-1-nL) - j, k = d <= 0 ? 1 : d < nB ? (t=>t*t*(3-2*t))(1 - d/nB) : 0; ry[j] = ry[j]*(1-k) + top*k; }
+    levelY = top;
+  }
   // a Knapford branch lies level with the Main Line along its platform, then eases onto its own grade
   if(knapEdit){
     const step = guideLen/(M-1), sl = knapEdit.stationLen, blend = 70*METRE;
@@ -813,7 +821,7 @@ function buildTrack(line){
       ry[j] = yS*k + ry[j]*(1-k);
     }
   }
-  line.real = {x:rx, y:ry, z:rz, n:M, len:guideLen, tun: tun.map(([a,b])=>[a/(M-1), b/(M-1)]), viaduct};
+  line.real = {x:rx, y:ry, z:rz, n:M, len:guideLen, tun: tun.map(([a,b])=>[a/(M-1), b/(M-1)]), viaduct, levelY};
   if(line.id==='main') KNAP.init(line);
 
   const bed = BED_M[line.kind]*METRE/2, rep = (line.kind==='standard'?0.75:0.9)*METRE;
@@ -1313,10 +1321,10 @@ updateCam();
 document.getElementById('loading').style.display='none';
 animate();
 </script>
-<script src="characters.js?v=22"></script>
+<script src="characters.js?v=23"></script>
 <script src="arlesdale.js?v=2"></script>
 <script src="duties.js?v=8"></script>
-<script src="nwr.js?v=24"></script>
+<script src="nwr.js?v=28"></script>
 <script src="cfr.js?v=3"></script>
 <script src="knapford.js?v=3"></script>
 <script src="tidmouth.js?v=2"></script>

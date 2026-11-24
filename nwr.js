@@ -2151,27 +2151,120 @@ function rockWall(G, pts, h0, rnd){
   const BUSH = [mat(0x2e5a24, 0.9), mat(0x3e6a2c, 0.9), mat(0x4a7a30, 0.9)];
   pts.forEach((pt, i) => { if(i % 2) return; for(let k = 0; k < 2; k++){ const s = 1.2 + rnd() * 2.2, y = k ? pt.top - 0.5 : pt.top * (0.3 + rnd() * 0.4); const b = add(G, new THREE.IcosahedronGeometry(s, 0), BUSH[(i + k) % 3], pt.x - pt.nx * (k ? 1.2 : 2.5), y, pt.z - pt.nz * (k ? 1.2 : 2.5)); b.scale.y = 0.75; } });
 }
+// The site laid along the end of the rescue line, which runs level along the quay: the line is the front
+// road (b = LINE_B), the sea lies off b < 0 and the land rises behind.
+const LINE_B = 5;
+function quaySite(D, LEN, WID){
+  const line = LINES[D.line], R = line && line.real; if(!R || R.levelY === undefined) return null;
+  const n = R.n, step = R.len / (n - 1), j1 = n - 1 - Math.round(4 * M / step), j0 = Math.max(0, j1 - Math.round(LEN * M / step));
+  const P0 = new THREE.Vector3(R.x[j0], 0, R.z[j0]), P1 = new THREE.Vector3(R.x[j1], 0, R.z[j1]);
+  const t = P1.clone().sub(P0).normalize(), nn = new THREE.Vector3(t.z, 0, -t.x), mid = P0.clone().lerp(P1, 0.5);
+  const up = heightAt(mid.x + nn.x * 60 * M, mid.z + nn.z * 60 * M), dn = heightAt(mid.x - nn.x * 60 * M, mid.z - nn.z * 60 * M);
+  let start = P0, Ld = nn;
+  if(up < dn){ t.negate(); start = P1; Ld = new THREE.Vector3(t.z, 0, -t.x); }
+  const o = start.clone().addScaledVector(Ld, -LINE_B * M);
+  return {o, t, n: Ld, len: LEN * M, wid: WID * M, side: 1, base: R.levelY - 0.04 * M};
+}
+// A mountain behind the Centre: a sheer grey cliff straight up from the back of the yard, broken into
+// buttresses and gullies, climbing to wooded slopes and a crest of bare rock towers well over a hundred
+// metres up, then falling away inland into the fields. A heightfield in the site's own frame (local b
+// inland, a along the quay), never lower than the ground it stands on, its rim sunk into the hillside.
+function mountainBehind(kit, LEN, WID, rnd){
+  const G = kit.G, lx = kit.lx, A0 = -230, A1 = LEN + 230, B0 = WID + 1, B1 = WID + 520;
+  const as = [], bs = [];
+  for(let a = A0; a <= A1 + 1e-6; a += 5) as.push(a);
+  for(let b = B0; b < B0 + 40; b += 1.6) bs.push(b);
+  for(let b = B0 + 40; b <= B1 + 1e-6; b += 7) bs.push(b);
+  const n1 = (x, y) => { const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return s - Math.floor(s); };
+  const vn = (x, y) => { const i = Math.floor(x), j = Math.floor(y), f = x - i, g = y - j, u = f * f * (3 - 2 * f), v = g * g * (3 - 2 * g);
+    return (n1(i, j) * (1 - u) + n1(i + 1, j) * u) * (1 - v) + (n1(i, j + 1) * (1 - u) + n1(i + 1, j + 1) * u) * v; };
+  const fbm = (x, y) => vn(x, y) * 0.5 + vn(x * 2.1, y * 2.1) * 0.27 + vn(x * 4.3, y * 4.3) * 0.15 + vn(x * 8.7, y * 8.7) * 0.08;
+  const sm = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  // rock towers along the crest
+  const towers = []; for(let k = 0; k < 9; k++) towers.push({a: A0 + 60 + k * (A1 - A0 - 120) / 8 + (rnd() - 0.5) * 30, b: B0 + 70 + rnd() * 90, r: 14 + rnd() * 14, h: 22 + rnd() * 30});
+  const ground = (a, b) => (heightAt(kit.pt(a, b).x, kit.pt(a, b).z) - kit.base) / M;
+  const height = (a, b) => {
+    const d = b - B0, ea = Math.min(a - A0, A1 - a);
+    const env = sm(0, 160, ea) * (1 - sm(260, 500, d));                 // the massif's extent along the coast and inland
+    const crest = 95 + 40 * fbm(a / 90, 3.1) - Math.abs(a - LEN / 2) * 0.12;
+    const cliff = 34 + 16 * fbm(a / 18, 7.7) + 10 * Math.sin(a / 23);   // the sheer face behind the yard
+    let h = cliff * sm(0, 7, d) + (crest - cliff) * sm(14, 130, d);
+    h += (fbm(a / 26, b / 26) - 0.5) * 22 * sm(4, 30, d);                 // buttresses, gullies and ledges
+    for(const T of towers){ const r = Math.hypot(a - T.a, (b - T.b) * 0.8) / T.r; if(r < 1.6) h += T.h * Math.pow(Math.max(0, 1 - r * r / 2.56), 0.6) * (0.85 + 0.3 * fbm(a / 6, b / 6)); }
+    return h * env;
+  };
+  const NA = as.length, NB = bs.length, P = new Float32Array(NA * NB * 3), C = new Float32Array(NA * NB * 3), H = new Float32Array(NA * NB);
+  for(let i = 0; i < NA; i++) for(let j = 0; j < NB; j++){
+    const a = as[i], b = bs[j], g = ground(a, b), h = height(a, b), k = i * NB + j;
+    H[k] = Math.max(h, g - 1.5);                                        // sunk into the hillside where the land stands higher
+    const bj = b + (fbm(a / 9, h / 11) - 0.5) * 9 * (1 - sm(18, 40, b - B0)) * sm(0, 3, b - B0);    // buttresses and gullies in the face
+    P[k * 3] = lx(bj); P[k * 3 + 1] = H[k]; P[k * 3 + 2] = a;
+  }
+  const I = [];
+  for(let i = 0; i < NA - 1; i++) for(let j = 0; j < NB - 1; j++){ const a = i * NB + j, b = a + NB; I.push(a, b, a + 1, a + 1, b, b + 1); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(P, 3)); geo.setIndex(I); geo.computeVertexNormals();
+  // colour: bare grey rock where steep, scrub and woodland on the ledges and gentler slopes, lichen and streaks
+  const nor = geo.attributes.normal.array, col = new THREE.Color();
+  for(let k = 0; k < NA * NB; k++){
+    const i = Math.floor(k / NB), j = k % NB, a = as[i], b = bs[j], ny = Math.abs(nor[k * 3 + 1]);
+    const steep = 1 - sm(0.45, 0.78, ny), veg = (1 - steep) * (0.75 + 0.25 * fbm(a / 11, b / 11)), streak = vn(a / 3, H[k] / 14);
+    const rock = 0.46 + 0.14 * fbm(a / 7, H[k] / 7) - 0.08 * streak;
+    col.setRGB(rock, rock * 0.985, rock * 0.95);
+    if(veg > 0.35){ const g2 = 0.8 + 0.4 * fbm(a / 5 + 3, b / 5); col.lerp(new THREE.Color(0.2 * g2, 0.34 * g2, 0.15 * g2), Math.min(1, (veg - 0.35) * 2.2)); }
+    else if(fbm(a / 4, H[k] / 4) > 0.62) col.lerp(new THREE.Color(0.32, 0.42, 0.2), 0.55);        // ivy and scrub clinging to the face
+    C[k * 3] = col.r; C[k * 3 + 1] = col.g; C[k * 3 + 2] = col.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(C, 3));
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.95, flatShading: true}));
+  m.castShadow = m.receiveShadow = true; m.userData.keep = true; G.add(m);
+  // woodland: rounded crowns on the gentler ground, thickest on the ledges and the lower slopes
+  const crowns = [];
+  for(let k = 0; k < 5200; k++){
+    const i = 1 + Math.floor(rnd() * (NA - 2)), j = 2 + Math.floor(rnd() * (NB - 3)), q = i * NB + j, ny = Math.abs(nor[q * 3 + 1]);
+    if(ny < 0.7 || H[q] < ground(as[i], bs[j]) - 0.5) continue;
+    const ea = Math.min(as[i] - A0, A1 - as[i]); if(ea < 30) continue;
+    crowns.push({x: P[q * 3] + (rnd() - 0.5) * 4, y: H[q], z: P[q * 3 + 2] + (rnd() - 0.5) * 4, s: 1.3 + rnd() * 1.9, c: rnd()});
+  }
+  if(crowns.length){
+    const cg = new THREE.IcosahedronGeometry(1, 1), im = new THREE.InstancedMesh(cg, new THREE.MeshStandardMaterial({roughness: 0.9, flatShading: true}), crowns.length);
+    const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), cc = new THREE.Color();
+    crowns.forEach((c, k) => { m4.compose(v.set(c.x, c.y + c.s * 0.55, c.z), q4, sc.set(c.s, c.s * 0.8, c.s)); im.setMatrixAt(k, m4); im.setColorAt(k, cc.setRGB(0.16 + c.c * 0.1, 0.3 + c.c * 0.12, 0.12 + c.c * 0.05)); });
+    im.castShadow = true; im.userData.keep = true; G.add(im);
+  }
+  // no field trees growing inside the rock
+  for(let a = A0; a <= A1; a += 40) for(let b = B0; b <= B1; b += 40){ const w = kit.pt(a, b); K.clearArea(w.x, w.z, 32 * M); }
+}
 function buildRescue(D){
   const roads = D.roads.map(ids => vehiclesFor(ids, D));
   const LEN = 150, WID = 50;
-  const site = rescueSite(D, LEN, WID) || findSite(D.station, D.line, LEN, WID);
+  const site = quaySite(D, LEN, WID) || rescueSite(D, LEN, WID) || findSite(D.station, D.line, LEN, WID);
+  D.noLabel = true;                                         // the station's own name board stands over it
   const kit = siteKit(site), G = kit.G, lx = kit.lx;
   let s = 31; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const seaY = (0 - kit.base) / M, pierY = Math.min(0, seaY + 2.4);
+  // a concrete apron out over the beach to deep enough water for the piers
+  let FRONT = 0;
+  for(const a of [46, LEN / 2, 118]){ let d = 0; while(d < 90){ const w = kit.pt(a, -d); if(heightAt(w.x, w.z) < -0.8 * M) break; d += 2; } FRONT = Math.min(FRONT, -Math.max(0, Math.min(84, d) - 5)); }
+  // timber jetties on piles carry the piers out across the beach to the water
+  if(FRONT < 0) for(const [a, w] of [[46, 4.5], [118, 6]]){
+    const j = new THREE.Group(); j.position.set(lx(0), 0, a); j.rotation.y = -Math.PI / 2; G.add(j);
+    pier(j, -w / 2, w / 2, 0, -FRONT + 1, pierY + 0.02, seaY - 4);
+    railing(j, -w / 2, 0, -w / 2, -FRONT + 1, pierY, 0xd8d6ce); railing(j, w / 2, 0, w / 2, -FRONT + 1, pierY, 0xd8d6ce);
+    // steps down from the quay to the jetty deck
+    const drop = -pierY; for(let k = 0; k < Math.ceil(drop / 0.2); k++) box(j, w, 0.2, 0.4, mat(0x9a968e, 0.9), 0, -0.1 - k * 0.2, 0.2 + k * 0.32);
+  }
   // the quay: the levelled yard faced in white concrete down into the sea
   const pad = G.children[0]; if(pad) pad.material = mat(0xd9d6cc, 0.9);
   const GRAV = mat(0xa8a49a, 0.95), GRASS = mat(0x6a9a46, 0.95), DIRT = mat(0x7a5236, 0.95), CONC = mat(0xe4e2da, 0.85), WHITE = mat(0xf0eee6, 0.7);
-  box(G, lx(1) * 0 + 1.4, 0.5, LEN + 4, CONC, lx(0.2), 0.25, LEN / 2);                       // coping along the quay edge
+  box(G, 1.4, 0.5, LEN + 4, CONC, lx(0.2), 0.25, LEN / 2);                       // coping along the quay edge
   box(G, 21, 0.03, LEN, GRAV, lx(12.5), 0.02, LEN / 2);                                        // ballast round the tracks
   box(G, 26, 0.03, LEN, GRASS, lx(36), 0.015, LEN / 2);                                        // grass behind
   box(G, 4.5, 0.03, LEN, DIRT, lx(24.5), 0.022, LEN / 2);                                      // the earth roadway along the yard
   box(G, 4, 0.03, 60, DIRT, lx(47), 0.022, 30);
   for(let a = 4; a < LEN; a += 9) cylY(G, 0.22, 0.26, 0.7, mat(0x1a1a1a, 0.6), lx(0.8), 0.35, a, 8);   // bollards
   // the tracks: two through roads along the quay, the yard roads where Flynn and Rocky stand
-  [5, 9.5].forEach(b => kit.road(0, b, LEN, b));
-  kit.road(20, 5, 34, 9.5); kit.road(118, 9.5, 132, 14);
   roads.forEach((units, i) => {
-    const b = 14 + i * 4.5;
+    const b = 14.5 + i * 4.5;
     kit.road(i ? 30 : 0, b, LEN, b);
     kit.row(units.flat(), 60, b, 1, 0);
     K.yards.push({D, label: D.label, rail: 'nwr', units, ids: D.roads[i], at: (s2, out) => out.copy(kit.pt(s2, b)), yaw: kit.yaw + Math.PI, face: -1, sMin: 32, sMax: LEN - 1, shed: 0});
@@ -2191,7 +2284,7 @@ function buildRescue(D){
     for(let z = -R + 0.8; z < R; z += 0.75) box(deck, 2.4, 0.08, 0.22, mat(0x4a3a2a, 0.9), 0, 0.09, z);
     box(deck, 1.6, 2.0, 1.6, mat(0xe8e2d0, 0.8), 2.6, 0.9, R - 1.4); box(deck, 1.9, 0.15, 1.9, mat(0x3a4a5a, 0.7), 2.6, 1.95, R - 1.4);
     for(const ang of [0.35, 1.1, -0.45, Math.PI + 0.35]){ const ca = Math.cos(ang), sa = Math.sin(ang); kit.road(ta + ca * (R + 0.6), tb + sa * (R + 0.6), ta + ca * (R + 9), tb + sa * (R + 9)); }
-    kit.road(ta + Math.cos(0.35 + Math.PI) * -(R + 0.6), tb - Math.sin(0.35) * (R + 0.6), 52, 18.5);
+    kit.road(ta + Math.cos(0.35 + Math.PI) * -(R + 0.6), tb - Math.sin(0.35) * (R + 0.6), 52, 19);
   }
   // the goods shed at the far end: brown timber, two doors on to the quay
   { const g = new THREE.Group(); g.position.set(lx(36), 0, 4 + 6); g.rotation.y = -Math.PI / 2; G.add(g);
@@ -2270,7 +2363,7 @@ function buildRescue(D){
     box(wt, 0.5, 0.15, 3, GRN, 2.0, 7.2, 0); box(wt, 0.12, 7.2, 0.12, GRN, 2.2, 3.6, 1.6);
   }
   // the wooden platform by the yard roads, a red water crane, crates and lamps
-  box(G, 3, 0.9, 26, plankMat([1, 7]), lx(21.6), 0.45, 64);
+  box(G, 2.4, 0.9, 26, plankMat([1, 7]), lx(23.3), 0.45, 64);
   { const wc = new THREE.Group(); wc.position.set(lx(21.8), 0, 112); G.add(wc); const RD = mat(0xb8261e, 0.5);
     cylY(wc, 0.3, 0.38, 3.6, RD, 0, 1.8, 0, 10); cylY(wc, 0.55, 0.55, 0.4, RD, 0, 0.2, 0, 10); const arm = cylX(wc, 0.18, 0.18, 3.4, RD, -1.5, 3.5, 0, 8); add(wc, new THREE.TorusGeometry(0.4, 0.17, 6, 10, Math.PI / 2), RD, 0, 3.1, 0);
     cylY(wc, 0.14, 0.18, 1.0, mat(0x2a2a2a, 0.6), -3.2, 2.9, 0, 8); }
@@ -2278,7 +2371,7 @@ function buildRescue(D){
   for(let k = 0; k < 4; k++) cylY(G, 0.45, 0.45, 1.1, mat(k % 2 ? 0x2a4a8a : 0xc8201e, 0.6, 0.3), lx(27.5), 0.55, 100 + k * 1.0, 10);
   for(let a = 8; a < LEN; a += 24){ cylY(G, 0.09, 0.12, 6, mat(0x2a2a2a, 0.5, 0.5), lx(1.8), 3, a, 6); box(G, 0.12, 0.12, 1.2, mat(0x2a2a2a), lx(1.8), 6, a + 0.5); box(G, 0.4, 0.3, 0.6, mat(0xf2f0e0, 0.4), lx(1.8), 5.8, a + 1.0); }
   // the boathouse on its pier, with the slipway down into the sea
-  { const bh = new THREE.Group(); bh.position.set(lx(-1), 0, 46); bh.rotation.y = -Math.PI / 2; G.add(bh);
+  { const bh = new THREE.Group(); bh.position.set(lx(FRONT - 1), 0, 46); bh.rotation.y = -Math.PI / 2; G.add(bh);
     pier(bh, -8, 8, 0, 16, pierY, seaY - 4);
     const CR = clapMat('#e8dcb0', [3, 1.2]), RD = mat(0xc22a1e, 0.55), TR = mat(0x8a2a20, 0.6);
     box(bh, 9, 5, 9, CR, 0, pierY + 2.5, 6.5); gable(bh, 9.8, 9.8, pierY + 5, mat(0x3a4a6a, 0.7), 0, 6.5, 0, 0.6);
@@ -2299,7 +2392,7 @@ function buildRescue(D){
     const boat = lifeboat(); boat.position.set(3, seaY + 0.1, 24); boat.rotation.y = 0.3; bh.add(boat); boat.userData.keep = true; RESCUE_ANIM.push({boat, y0: boat.position.y, ph: 0});
   }
   // the helipad pier: the pad, the hangar with its great red door, the control tower and a hut
-  { const hp = new THREE.Group(); hp.position.set(lx(-1), 0, 118); hp.rotation.y = -Math.PI / 2; G.add(hp);
+  { const hp = new THREE.Group(); hp.position.set(lx(FRONT - 1), 0, 118); hp.rotation.y = -Math.PI / 2; G.add(hp);
     pier(hp, -22, 22, 0, 30, pierY, seaY - 5);
     const pad2 = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), new THREE.MeshStandardMaterial({map: helipadTex(), roughness: 0.8}));
     pad2.rotation.x = -Math.PI / 2; pad2.position.set(-6, pierY + 0.02, 15); hp.add(pad2); pad2.userData.keep = true;
@@ -2334,15 +2427,8 @@ function buildRescue(D){
     // the red davit crane at the corner of the pier
     const dv = new THREE.Group(); dv.position.set(-20.5, pierY, 28.5); hp.add(dv); cylY(dv, 0.2, 0.25, 5, mat(0xb8261e, 0.5), 0, 2.5, 0, 8); const da = add(dv, new THREE.TorusGeometry(1.6, 0.16, 6, 12, Math.PI / 2), mat(0xb8261e, 0.5), 0, 5, 1.6); da.rotation.y = Math.PI / 2;
   }
-  // the cliffs behind
-  { const pts = [];
-    for(let a = -14; a <= LEN + 14; a += 4){
-      const w = kit.pt(a, WID + 2), gh = Math.max(0, (heightAt(w.x, w.z) - kit.base) / M);
-      pts.push({x: lx(WID + 2 + Math.sin(a * 0.11) * 1.5), z: a, nx: 1, nz: 0, top: Math.max(16, gh + 7) + rnd() * 7 + Math.max(0, 14 - Math.abs(a - 75) * 0.18)});
-    }
-    rockWall(G, pts, 0, rnd);
-    for(const [a0, a1] of [[-14, -14], [LEN + 14, LEN + 14]]){ const side = []; for(let b = WID + 2; b >= 26; b -= 4){ const w = kit.pt(a0, b), gh = Math.max(0, (heightAt(w.x, w.z) - kit.base) / M); side.push({x: lx(b), z: a0, nx: 0, nz: a0 < 0 ? 1 : -1, top: Math.max(3, gh + 2) * ((b - 24) / (WID - 22)) + 1}); } rockWall(G, side, 0, rnd); }
-  }
+  // the mountain behind
+  mountainBehind(kit, LEN, WID, rnd);
   // the helicopter and the lifeboat move, so they stand apart from the baked site
   G.updateMatrixWorld(true);
   RESCUE_ANIM.forEach(o => { const ob = o.heli || o.boat; G.attach(ob); ob.userData.keep = true; if(o.boat) o.y0 = ob.position.y; });
@@ -2364,7 +2450,7 @@ function finishSite(D, kit){
   K.clearArea(c.x, c.z, rad + 6 * M);
   taken.push({x: c.x, z: c.z, r: rad + 4 * M});
   D.center = c;
-  D.labelSprite = label(D.label, c.clone().setY(c.y + 26 * M));
+  D.labelSprite = D.noLabel ? null : label(D.label, c.clone().setY(c.y + 26 * M));
 }
 function bakeSite(G){
   // merge static parts; keep road strips (their own material) and any sub-groups already baked
