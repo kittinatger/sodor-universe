@@ -790,88 +790,151 @@ function bogieDiesel(S){
 // "really red" with a grey-green face plate between two flared mudguards, big round headlamps on stalks,
 // chrome bumpers, a yellow lining stripe along the side, roller-shutter lockers, a ladder on the roof and two
 // red standpipe nozzles behind the cab. Road tyres run outside the small steel rail wheels.
+// Flynn: the road-rail fire engine of the Sodor Search and Rescue Centre, after the series model. A tall grey
+// face plate stands between two big rounded red mudguards with yellow edging and chrome headlamps; a wide
+// silver bumper carries a red winch. Behind the face a short louvred bonnet and the cab, roofed by a red
+// canopy with a guard rail and two red water cannons, braced by chrome rods from the mudguards. The body
+// behind has double yellow lining, a wooden ladder rack, hose lines, brass extinguishers and grey lockers,
+// with a silver lattice aerial ladder on top. Knobbly road tyres on red hubs run outside small rail wheels.
+function rodBetween(p, a, b, r, m){
+  const d = new THREE.Vector3().subVectors(b, a), len = d.length();
+  const me = add(p, new THREE.CylinderGeometry(r, r, len, 8), m, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  me.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  return me;
+}
 function flynnModel(){
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
-  const RED = mat(0xc8201e, 0.38), DRED = mat(0x9c1a18, 0.45), YEL = mat(0xf2c419, 0.45), BLK = mat(BLACK, 0.7), CH = mat(0xc4c8cc, 0.28, 0.7),
-        PLATE = mat(0x8f9c90, 0.55), TYRE = mat(0x161616, 0.92), FEND = mat(0xc8201e, 0.4, 0, 'double'), WHITE = mat(0xf4f1ea, 0.5), GL = glassMat();
-  const L = 10.0, F = L / 2, W2 = 1.05, ZF = F - 1.3, ZR = -F + 1.9;     // half width of the body; road axle positions
-  // frame and rail wheels' mounting
-  box(body, 1.5, 0.45, L - 0.4, BLK, 0, 0.8, 0);
-  box(body, 1.9, 0.12, L - 0.8, mat(0x2a2c30, 0.7), 0, 1.02, 0);
-  // the cab and front: a grey-green face plate, cowl, windscreen, then the roof
-  box(body, 2.1, 2.5, 2.8, RED, 0, 2.25, F - 1.5);
-  box(body, 1.8, 1.4, 0.07, PLATE, 0, 1.8, F - 0.07);
-  for(const [x, y, w, h] of [[0, 2.52, 1.9, 0.08], [0, 1.08, 1.9, 0.08], [-0.94, 1.8, 0.08, 1.4], [0.94, 1.8, 0.08, 1.4]]) box(body, w, h, 0.09, CH, x, y, F - 0.06);
-  faceOn(body, 0.6, {smile: 0.8, brow: -0.2}, 0, 1.82, F - 0.027);
-  box(body, 2.14, 0.2, 0.12, RED, 0, 2.62, F - 0.08);
-  add(body, new THREE.PlaneGeometry(1.8, 0.78), GL, 0, 3.1, F + 0.0);
-  for(const x of [-0.92, 0.92]) box(body, 0.1, 0.84, 0.1, RED, x, 3.1, F + 0.01);
-  box(body, 0.06, 0.8, 0.06, RED, 0, 3.1, F + 0.01);
-  roof(body, 2.16, 3.0, 3.52, RED, F - 1.5);
-  box(body, 2.2, 0.08, 3.0, WHITE, 0, 3.5, F - 1.5);
-  for(const s of [-1, 1]){
-    const w = add(body, new THREE.PlaneGeometry(1.3, 0.8), GL, s * (W2 + 0.006), 3.05, F - 1.55); w.rotation.y = s * Math.PI / 2;
-    box(body, 0.02, 2.4, 0.05, DRED, s * (W2 + 0.006), 2.2, F - 2.2);                      // the door edges
-    box(body, 0.02, 2.4, 0.05, DRED, s * (W2 + 0.006), 2.2, F - 0.8);
-    const sp = box(body, 0.34, 0.05, 1.6, CH, s * (W2 + 0.16), 0.98, F - 1.55);                // running board
-    // the emblem on the cab door: a white disc with a red centre and a white star
-    for(const [r, col, dx] of [[0.42, 0xf4f1ea, 0.008], [0.33, 0xc8201e, 0.012], [0.15, 0xf4f1ea, 0.016]]){ const e = add(body, new THREE.CircleGeometry(r, 20), mat(col, 0.5, 0, 'double'), s * (W2 + dx), 2.05, F - 1.5); e.rotation.y = s * Math.PI / 2; }
-    box(body, 0.022, 0.08, 0.7, mat(0xf4f1ea, 0.5), s * (W2 + 0.02), 2.05, F - 1.5); const bar = box(body, 0.022, 0.7, 0.08, mat(0xf4f1ea, 0.5), s * (W2 + 0.02), 2.05, F - 1.5);
-    box(body, 0.03, 0.05, 0.3, CH, s * (W2 + 0.02), 2.0, F - 0.95);                          // door handle
-  }
-  // the equipment body behind the cab: roller-shutter lockers each side
-  box(body, 2.1, 2.1, 6.7, RED, 0, 2.05, -1.25);
-  for(const s of [-1, 1]) for(let k = 0; k < 4; k++){
-    const z = -3.9 + k * 1.55;
-    box(body, 0.025, 1.4, 1.3, DRED, s * (W2 + 0.008), 1.95, z);
-    for(let r = 0; r < 7; r++) box(body, 0.03, 0.03, 1.28, mat(0x7a1412, 0.5), s * (W2 + 0.012), 1.4 + r * 0.19, z);
-    box(body, 0.035, 0.05, 0.5, CH, s * (W2 + 0.02), 2.7, z);
-    box(body, 0.04, 0.22, 0.04, CH, s * (W2 + 0.02), 1.3, z + 0.5);
-  }
-  // the yellow lining along both sides
-  for(const s of [-1, 1]){ box(body, 0.014, 0.11, 9.4, YEL, s * (W2 + 0.012), 1.38, 0.15); box(body, 0.014, 0.08, 6.6, YEL, s * (W2 + 0.012), 2.93, -1.25); box(body, 0.014, 0.08, 2.8, YEL, s * (W2 + 0.012), 2.5, F - 1.5); }
-  // the roof of the body: a ladder on a rack, hose bed, standpipe nozzles
-  box(body, 2.0, 0.08, 6.5, mat(0x9c1a18, 0.5), 0, 3.14, -1.25);
-  const LAD = mat(0xc0c4c8, 0.4, 0.6);
-  for(const s of [-1, 1]) box(body, 0.07, 0.14, 6.4, LAD, s * 0.3, 3.45, -1.2);
-  for(let z = -4.3; z <= 1.9; z += 0.38) box(body, 0.6, 0.04, 0.05, LAD, 0, 3.45, z);
-  for(const z of [-4.0, -1.2, 1.6]) for(const s of [-1, 1]) box(body, 0.07, 0.3, 0.07, BLK, s * 0.3, 3.3, z);
-  for(const s of [-1, 1]){
-    cylY(body, 0.09, 0.09, 1.1, RED, s * 0.82, 3.65, 1.55, 12);
-    cylZ(body, 0.075, 0.075, 0.7, RED, s * 0.82, 4.2, 1.9, 12);
-    cylZ(body, 0.12, 0.1, 0.16, CH, s * 0.82, 4.2, 2.3, 12);
-    cylY(body, 0.13, 0.13, 0.12, CH, s * 0.82, 3.12, 1.55, 12);
-  }
-  // beacons and siren on the cab roof
-  for(const s of [-1, 1]){ cylY(body, 0.14, 0.14, 0.18, mat(0x2a6aff, 0.25), s * 0.55, 3.66, F - 0.9, 12); domeCap(body, 0.14, mat(0x6a9aff, 0.2), s * 0.55, 3.74, F - 0.9); }
-  cylY(body, 0.1, 0.16, 0.2, CH, 0, 3.64, F - 1.6, 10);
-  // mudguards over each road wheel, big headlamps on stalks, chrome bumpers
-  const arch = (s, z) => {
-    const a = add(body, new THREE.CylinderGeometry(0.82, 0.82, 0.62, 22, 1, true, 0, Math.PI).rotateZ(Math.PI / 2), FEND, s * 1.2, 0.95, z);
-    for(const e of [-1, 1]) box(body, 0.62, 0.05, 0.05, YEL, s * 1.2, 0.95 + 0.82, z + e * 0.0);                   // yellow edge along the crown
-    box(body, 0.62, 0.35, 0.05, RED, s * 1.2, 1.1, z + 0.78); box(body, 0.62, 0.35, 0.05, RED, s * 1.2, 1.1, z - 0.78);
-    cylX(body, 0.62, 0.62, 0.46, TYRE, s * 1.2, 0.95, z, 24);
-    cylX(body, 0.33, 0.33, 0.5, CH, s * 1.2, 0.95, z, 14);
-    cylX(body, 0.12, 0.12, 0.54, mat(0xc8201e, 0.4), s * 1.2, 0.95, z, 10);
-    for(let k = 0; k < 8; k++){ const sp = box(body, 0.08, 0.04, 0.46, mat(0x3a3a3a, 0.8), s * 1.2 + s * 0.2, 0.95, z); sp.rotation.x = k * Math.PI / 8; }
+  const RED = mat(0xd42a1e, 0.36), DRED = mat(0xa81c16, 0.45), YEL = mat(0xf2c632, 0.45), BLK = mat(BLACK, 0.7), CH = mat(0xd0d4d8, 0.25, 0.75),
+        SILV = mat(0xb4b8bc, 0.4, 0.5), GREY = mat(0x8a8e8c, 0.6), FACE = mat(0x9c9a8e, 0.55), TYRE = mat(0x1a1a1a, 0.95),
+        FEND = mat(0xd42a1e, 0.36, 0, 'double'), BRASS = brassMat(), GL = glassMat();
+  const L = 9.4, F = L / 2, ZF = F - 1.05, ZR = -F + 1.45, WX = 1.18, V = (x, y, z) => new THREE.Vector3(x, y, z);
+  // chassis and the silver skirt along each side
+  box(body, 1.4, 0.4, L - 0.6, BLK, 0, 0.8, -0.1);
+  for(const s of [-1, 1]) box(body, 0.08, 0.24, L - 4.0, SILV, s * 1.17, 1.0, -0.4);
+  // ---- the front
+  box(body, 2.95, 0.4, 0.34, SILV, 0, 0.98, F + 0.05);                                       // bumper
+  for(const s of [-1, 1]){ box(body, 0.16, 0.18, 0.05, CH, s * 1.15, 1.0, F + 0.23); add(body, new THREE.TorusGeometry(0.07, 0.022, 6, 10), CH, s * 1.15, 1.0, F + 0.26); }
+  const W = mat(0xd8341e, 0.4);
+  box(body, 0.75, 0.46, 0.34, W, 0, 1.0, F + 0.24);                                           // the winch
+  cylX(body, 0.13, 0.13, 0.55, mat(0x9a9a9a, 0.4, 0.6), 0, 1.02, F + 0.42, 14);
+  for(let k = 0; k < 6; k++) cylX(body, 0.135, 0.135, 0.02, mat(0x6a6a6a, 0.5, 0.5), -0.22 + k * 0.088, 1.02, F + 0.42, 14);
+  cylX(body, 0.05, 0.05, 0.6, CH, 0, 0.88, F + 0.42, 8);
+  for(const s of [-1, 1]){ box(body, 0.08, 0.46, 0.4, W, s * 0.36, 1.0, F + 0.36); for(const y of [0.88, 1.12]) cylX(body, 0.035, 0.035, 0.04, CH, s * 0.41, y, F + 0.47, 8); }
+  // the face plate, slightly narrower at the top, framed
+  { const g = new THREE.CylinderGeometry(0.7, 0.8, 2.15, 4, 1); g.rotateY(Math.PI / 4); const fp = add(body, g, FACE, 0, 2.15, F - 0.5); fp.scale.set(1.08, 1, 0.16); }
+  
+  faceOn(body, 0.7, {smile: 0.75, brow: -0.25}, 0, 2.05, F - 0.39);
+  // mudguards: a deep red arch over each front wheel, swept forward, yellow along the edge
+  const guard = (s, z, front) => {
+    const g = new THREE.Group(); g.position.set(s * WX, 0.98, z); body.add(g);
+    const arch = add(g, new THREE.CylinderGeometry(0.9, 0.9, 0.8, 26, 1, true, -Math.PI * 0.55, Math.PI * 1.1).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), FEND, 0, 0, 0);
+    arch.rotation.x = front ? 0 : 0;
+    add(g, new THREE.CylinderGeometry(0.92, 0.92, 0.06, 26, 1, true, -Math.PI * 0.55, Math.PI * 1.1).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), mat(0xf2c632, 0.45, 0, 'double'), s * 0.39, 0, 0);
+    if(front){                                                       // the long sweep down the front to the bumper
+      cylX(g, 0.5, 0.5, 0.8, RED, 0, 0.32, 0.62, 22);
+      box(g, 0.8, 0.5, 0.62, RED, 0, 0.32, 0.31);
+      box(g, 0.8, 0.42, 0.5, RED, 0, -0.14, 0.75);
+    }
+    box(g, 0.8, 0.12, 0.7, RED, 0, 0.84, front ? -0.7 : 0.7);                               // the flat run on to the body
   };
-  for(const s of [-1, 1]){ arch(s, ZF); arch(s, ZR); }
+  // headlamps on the mudguards, chrome bowls with glass fronts
   for(const s of [-1, 1]){
-    box(body, 0.13, 0.1, 0.55, CH, s * 1.12, 1.7, F - 0.35);                                  // lamp stalks
-    cylZ(body, 0.24, 0.24, 0.3, CH, s * 1.2, 1.78, F - 0.3, 18);
-    const lamp = add(body, new THREE.CircleGeometry(0.19, 18), mat(0xfff0c8, 0.2), s * 1.2, 1.78, F - 0.148);
-    cylZ(body, 0.05, 0.05, 0.1, mat(0xff8a2a, 0.3), s * 0.98, 1.2, F + 0.02, 8);
+    guard(s, ZF, true); guard(s, ZR, false);
+    cylZ(body, 0.27, 0.22, 0.32, CH, s * 1.2, 1.98, F - 0.22, 20);
+    add(body, new THREE.CircleGeometry(0.24, 20), mat(0xf4f0e0, 0.15, 0.3), s * 1.2, 1.98, F - 0.055);
+    box(body, 0.1, 0.18, 0.1, CH, s * 1.2, 1.8, F - 0.3);
   }
-  box(body, 2.4, 0.2, 0.22, CH, 0, 0.98, F + 0.04); box(body, 2.4, 0.2, 0.22, CH, 0, 0.98, -F - 0.04);
-  box(body, 0.08, 0.6, 0.18, CH, -0.7, 0.95, F + 0.1); box(body, 0.08, 0.6, 0.18, CH, 0.7, 0.95, F + 0.1);
-  // the rear: a step plate, a pair of red lamps, a ladder to the roof
-  box(body, 2.0, 0.08, 0.55, CH, 0, 1.0, -F - 0.25);
-  for(const s of [-1, 1]){ cylZ(body, 0.1, 0.1, 0.06, mat(0xff3020, 0.3), s * 0.85, 1.55, -F + 0.02, 10); box(body, 0.06, 2.1, 0.04, CH, s * 0.2, 2.1, -F + 0.02); }
-  for(let k = 0; k < 6; k++) box(body, 0.4, 0.04, 0.04, CH, 0, 1.3 + k * 0.28, -F + 0.04);
-  for(const z of [-F + 0.18, F - 0.12]) box(body, 2.0, 0.34, 0.08, mat(0x2a2a2a, 0.5), 0, 0.78, z);
-  const axles = addWheels(root, [{z: F - 0.9, r: 0.35}, {z: -F + 0.9, r: 0.35}], {color: BLACK, spokes: 0});
-  const v = finish(root, body, axles); v.len = L + 0.3;
+  // ---- bonnet and cab
+  box(body, 1.6, 1.5, 1.2, RED, 0, 2.25, F - 1.15);
+  for(const s of [-1, 1]){ for(let k = 0; k < 6; k++) box(body, 0.03, 0.04, 0.7, DRED, s * 0.76, 2.0 + k * 0.1, F - 1.05);
+    box(body, 0.02, 0.06, 1.0, YEL, s * 0.77, 2.82, F - 1.05); box(body, 0.02, 0.04, 1.0, YEL, s * 0.77, 2.72, F - 1.05); }
+  box(body, 2.24, 2.4, 1.9, RED, 0, 2.2, F - 2.6);                                             // the cab
+  add(body, new THREE.PlaneGeometry(1.9, 0.75), GL, 0, 3.0, F - 1.645);
+  box(body, 2.24, 0.12, 0.1, RED, 0, 2.6, F - 1.64);
+  for(const s of [-1, 1]){
+    const w = add(body, new THREE.PlaneGeometry(1.1, 0.72), GL, s * 1.125, 3.0, F - 2.25); w.rotation.y = s * Math.PI / 2;
+    box(body, 0.02, 2.2, 0.06, DRED, s * 1.125, 2.15, F - 1.78); box(body, 0.02, 2.2, 0.06, DRED, s * 1.125, 2.15, F - 3.42);
+    box(body, 0.03, 0.05, 0.3, CH, s * 1.13, 2.25, F - 3.15);
+    for(const y of [2.76, 2.64]) box(body, 0.015, 0.07, 1.9, YEL, s * 1.126, y, F - 2.6);
+    // the SSRC emblem on the door: white disc, crossed axes, the letters
+    const em = new THREE.Mesh(new THREE.CircleGeometry(0.42, 24), flynnEmblem()); em.position.set(s * 1.13, 1.95, F - 2.6); em.rotation.y = s * Math.PI / 2; body.add(em);
+  }
+  // ---- the canopy over the cab, its guard rail and the two water cannons
+  box(body, 2.3, 0.16, 2.7, RED, 0, 3.52, F - 2.15);
+  box(body, 2.34, 0.05, 2.74, YEL, 0, 3.43, F - 2.15);
+  const rail = (x0, z0, x1, z1) => { rodBetween(body, V(x0, 4.25, z0), V(x1, 4.25, z1), 0.035, CH); rodBetween(body, V(x0, 3.92, z0), V(x1, 3.92, z1), 0.025, CH); };
+  rail(-1.08, F - 0.85, 1.08, F - 0.85); rail(-1.08, F - 0.85, -1.08, F - 3.45); rail(1.08, F - 0.85, 1.08, F - 3.45);
+  for(const [x, z] of [[-1.08, F - 0.85], [1.08, F - 0.85], [-1.08, F - 2.15], [1.08, F - 2.15], [-1.08, F - 3.45], [1.08, F - 3.45]]) cylY(body, 0.035, 0.035, 0.7, CH, x, 3.95, z, 6);
+  for(const s of [-1, 1]){
+    const cz = F - (s < 0 ? 1.4 : 2.9), cx = s * 0.45;
+    cylY(body, 0.1, 0.12, 0.9, RED, cx, 4.05, cz, 12);
+    cylY(body, 0.16, 0.16, 0.14, RED, cx, 4.55, cz, 12);
+    const barrel = add(body, new THREE.CylinderGeometry(0.06, 0.09, 0.85, 10), RED, cx, 4.75, cz + 0.32); barrel.rotation.x = Math.PI / 2 - 0.45;
+    add(body, new THREE.CylinderGeometry(0.075, 0.075, 0.08, 10), CH, cx, 4.93, cz + 0.68).rotation.x = Math.PI / 2 - 0.45;
+  }
+  // red lamps at the front corners of the canopy, and the braces down to the mudguards
+  for(const s of [-1, 1]){ add(body, new THREE.SphereGeometry(0.15, 14, 10), mat(0xe02018, 0.3), s * 1.0, 3.38, F - 0.95); add(body, new THREE.SphereGeometry(0.12, 12, 8), mat(0xe02018, 0.3), s * 1.12, 3.0, F - 1.6);
+    rodBetween(body, V(s * 0.95, 1.82, F - 0.4), V(s * 1.02, 3.48, F - 1.05), 0.045, CH); }
+  // ---- the body behind the cab
+  const BZ0 = F - 3.55, BZ1 = -F + 0.25, BL = BZ0 - BZ1, BC = (BZ0 + BZ1) / 2;
+  box(body, 2.3, 2.0, BL, RED, 0, 2.0, BC);
+  box(body, 2.36, 0.12, BL + 0.04, RED, 0, 3.05, BC);
+  for(const s of [-1, 1]){
+    for(const y of [2.78, 2.66]) box(body, 0.015, 0.07, BL, YEL, s * 1.157, y, BC);
+    box(body, 0.015, 0.06, BL, YEL, s * 1.157, 1.36, BC);
+    // the wooden ladder in its rack along the top of the side
+    box(body, 0.06, 0.06, BL - 1.0, mat(0xc89a4a, 0.7), s * 1.2, 2.98, BC + 0.3); box(body, 0.06, 0.06, BL - 1.0, mat(0xc89a4a, 0.7), s * 1.2, 3.38, BC + 0.3);
+    for(let z = BZ1 + 0.9; z < BZ0 - 0.3; z += 0.36) box(body, 0.05, 0.4, 0.05, mat(0xe8b830, 0.6), s * 1.2, 3.18, z);
+    // two lengths of hose along the side, a hose reel, brass extinguishers and nozzles on clips
+    for(const y of [2.36, 2.22]) cylZ(body, 0.07, 0.07, BL - 1.6, mat(0x2a2a2a, 0.8), s * 1.18, y, BC + 0.6, 8);
+    box(body, 0.02, 0.72, 0.72, mat(0x3a3a3a, 0.7), s * 1.16, 1.85, BZ0 - 0.6); add(body, new THREE.TorusGeometry(0.24, 0.07, 6, 16), mat(0x2a2a2a, 0.8), s * 1.18, 1.85, BZ0 - 0.6).rotation.y = Math.PI / 2;
+    for(const z of [BZ0 - 1.4, BZ0 - 3.2]){ cylY(body, 0.11, 0.11, 0.6, BRASS, s * 1.2, 1.55, z, 12); domeCap(body, 0.11, BRASS, s * 1.2, 1.85, z); }
+    box(body, 0.02, 0.05, 0.7, BRASS, s * 1.17, 2.05, BC - 0.4);
+    // grey lockers at the rear
+    box(body, 0.02, 1.25, 1.3, GREY, s * 1.156, 1.9, BZ1 + 0.8); box(body, 0.03, 0.05, 0.4, CH, s * 1.165, 2.2, BZ1 + 0.8);
+    box(body, 0.02, 1.1, 0.8, DRED, s * 1.156, 1.9, BZ0 - 2.2);
+  }
+  // rear: a grey mesh panel, lockers, red lamps, a silver bumper
+  box(body, 1.5, 1.6, 0.03, mat(0x6a6e70, 0.6, 0.3), 0, 1.95, BZ1 - 0.02);
+  for(let k = 0; k < 9; k++) box(body, 1.5, 0.02, 0.035, mat(0x4a4e50, 0.6), 0, 1.25 + k * 0.17, BZ1 - 0.035);
+  for(const s of [-1, 1]){ box(body, 0.32, 1.6, 0.03, GREY, s * 0.98, 1.95, BZ1 - 0.02); cylZ(body, 0.08, 0.08, 0.05, mat(0xff3020, 0.3), s * 0.98, 1.3, BZ1 - 0.05, 10); }
+  box(body, 2.4, 0.26, 0.24, SILV, 0, 0.98, BZ1 - 0.16);
+  box(body, 0.45, 0.2, 0.3, RED, 0, 0.98, BZ1 - 0.35);
+  // ---- the aerial ladder: a silver lattice truss on top of the body, its turntable at the cab end
+  const LZ0 = BZ0 + 0.3, LZ1 = BZ1 + 0.1, LY = 3.55, LADM = mat(0xc8ccd0, 0.35, 0.65);
+  cylY(body, 0.42, 0.48, 0.25, RED, 0, 3.24, BZ0 - 0.4, 16);
+  box(body, 0.5, 0.5, 0.7, RED, 0, 3.4, BZ0 - 0.4);
+  for(const s of [-1, 1]){
+    rodBetween(body, V(s * 0.42, LY, LZ0), V(s * 0.42, LY, LZ1), 0.04, LADM);
+    rodBetween(body, V(s * 0.42, LY + 0.42, LZ0 - 0.2), V(s * 0.42, LY + 0.42, LZ1 + 0.2), 0.035, LADM);
+    for(let z = LZ0 - 0.2, k = 0; z > LZ1 + 0.3; z -= 0.45, k++){ rodBetween(body, V(s * 0.42, LY, z), V(s * 0.42, LY + 0.42, z - 0.45), 0.02, LADM); rodBetween(body, V(s * 0.42, LY, z), V(s * 0.42, LY + 0.42, z), 0.02, LADM); }
+  }
+  for(let z = LZ0 - 0.1; z > LZ1; z -= 0.32) box(body, 0.84, 0.035, 0.04, LADM, 0, LY, z);
+  // ---- wheels: knobbly road tyres on red hubs, outside the small rail wheels
+  for(const s of [-1, 1]) for(const z of [ZF, ZR]){
+    cylX(body, 0.64, 0.64, 0.44, TYRE, s * WX, 0.98, z, 28);
+    for(let k = 0; k < 18; k++){ const a = k / 18 * Math.PI * 2, lug = box(body, 0.46, 0.09, 0.14, TYRE, s * WX, 0.98 + Math.cos(a) * 0.64, z + Math.sin(a) * 0.64); lug.rotation.x = -a; }
+    cylX(body, 0.4, 0.4, 0.46, mat(0xd8dadc, 0.3, 0.6), s * WX, 0.98, z, 22);
+    cylX(body, 0.32, 0.32, 0.48, RED, s * WX, 0.98, z, 20);
+    cylX(body, 0.11, 0.11, 0.52, CH, s * WX, 0.98, z, 10);
+    for(let k = 0; k < 6; k++){ const a = k / 6 * Math.PI * 2; cylX(body, 0.025, 0.025, 0.5, CH, s * WX, 0.98 + Math.cos(a) * 0.22, z + Math.sin(a) * 0.22, 6); }
+  }
+  const axles = addWheels(root, [{z: F - 0.35, r: 0.34}, {z: ZF - 1.0, r: 0.34}, {z: ZR - 0.85, r: 0.34}], {color: BLACK, spokes: 0});
+  const v = finish(root, body, axles); v.len = L + 0.5;
   return v;
+}
+let flynnEmblemMat = null;
+function flynnEmblem(){
+  if(flynnEmblemMat) return flynnEmblemMat;
+  return flynnEmblemMat = new THREE.MeshStandardMaterial({roughness: 0.5, side: THREE.DoubleSide, map: canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#d42a1e'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#f6f2ea'; g.beginPath(); g.arc(w / 2, h / 2, w * 0.47, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#d42a1e'; g.beginPath(); g.arc(w / 2, h / 2, w * 0.4, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#f6f2ea'; g.lineWidth = 16; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(w * 0.3, h * 0.22); g.lineTo(w * 0.68, h * 0.62); g.moveTo(w * 0.7, h * 0.22); g.lineTo(w * 0.32, h * 0.62); g.stroke();
+    g.fillStyle = '#f6f2ea'; for(const [x, sx] of [[0.28, -1], [0.72, 1]]){ g.beginPath(); g.moveTo(w * x, h * 0.17); g.lineTo(w * (x + sx * 0.1), h * 0.22); g.lineTo(w * (x + sx * 0.02), h * 0.32); g.fill(); }
+    g.font = 'bold 46px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('SSRC', w / 2, h * 0.76);
+  })});
 }
 function winstonModel(){
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
