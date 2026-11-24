@@ -1273,21 +1273,98 @@ function latticeBox(p, w, h, d, m, x, y, z){
   m.map.wrapS = m.map.wrapT = THREE.RepeatWrapping;
   return add(p, g, m, x, y, z);
 }
+// Big Mickey: the hammerhead crane at Brendam Docks, after the series' CGI model and his basis, a US Navy
+// 20-ton tower crane. A stepped concrete plinth; a tapering lattice tower with a platform and slewing ring;
+// on top, turning as one, a deep lattice jib reaching out over the water with a walkway and handrails, a
+// short counter-jib carrying the machinery house and its winch drum with the counterweight slung beneath,
+// an A-frame peak with tie bars, and his cab hung under the jib in front of the tower, his face on its
+// front; a trolley runs out along the jib, lowering a double hook on twin cables. Weathered warm grey.
 function bigMickeyModel(){
-  const g = new THREE.Group(), GR = mat(0x9a948a, 0.55, 0.2), LAT = lattice(0x9a948a), BLK = mat(BLACK, 0.7);
-  box(g, 5.0, 1.0, 5.0, mat(0x777777, 0.8), 0, 0.5, 0);
-  latticeBox(g, 3.0, 30, 3.0, LAT, 0, 16, 0);
-  const top = new THREE.Group(); top.position.y = 31; g.add(top);
-  box(top, 4.0, 3.2, 3.6, GR, 0, 1.6, 0);
-  roof(top, 4.1, 3.7, 3.4, GR, 0);
-  faceOn(top, 1.0, {smile: 0.5, brow: 0.3}, 0, 1.4, 1.82);
-  latticeBox(top, 2.0, 2.0, 38, LAT, 0, 4.4, 13);
-  latticeBox(top, 2.0, 2.0, 14, LAT, 0, 4.4, -7);
-  box(top, 3.0, 2.5, 3.0, mat(0x6a6d70, 0.7), 0, 3.2, -12.5);
-  box(top, 1.4, 0.8, 1.6, GR, 0, 3.0, 18);
-  cylY(top, 0.03, 0.03, 22, BLK, 0, -8, 18, 4);
-  box(top, 0.8, 0.8, 0.6, mat(0xc8201e, 0.5), 0, -19, 18);
-  g.remove(top); bakeVC(g); bakeVC(top); g.add(top); g.userData.crane = top;        // he slews to unload the ships (life.js)
+  const V = THREE.Vector3, g = new THREE.Group();
+  const GR = mat(0x9a948a, 0.62, 0.2), DG = mat(0x7a756c, 0.6, 0.25), LG = mat(0xb0aa9e, 0.6, 0.15), RU = mat(0x8a6e58, 0.8, 0.1), CON = mat(0xb8b2a4, 0.9), BLK = mat(BLACK, 0.7);
+  const bar = (p, a, b, t, m) => { const d = new V().subVectors(b, a), L = d.length(); const me = add(p, new THREE.BoxGeometry(t, t, L), m, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+    me.quaternion.setFromUnitVectors(new V(0, 0, 1), d.normalize()); return me; };
+  // the plinth
+  box(g, 7.6, 1.4, 7.6, CON, 0, 0.7, 0); box(g, 6.2, 1.2, 6.2, CON, 0, 2.0, 0); box(g, 5.2, 0.5, 5.2, mat(0xa09a8e, 0.9), 0, 2.85, 0);
+  // the tower: four legs tapering from 2.5 m to 1.7 m off the centre, braced in six panels
+  const y0 = 3.1, y1 = 25, NP = 6, hw = y => 2.5 + (1.7 - 2.5) * (y - y0) / (y1 - y0);
+  const corner = (sx, sz, y) => new V(sx * hw(y), y, sz * hw(y));
+  for(const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) bar(g, corner(sx, sz, y0), corner(sx, sz, y1), 0.42, DG);
+  for(let k = 0; k < NP; k++){
+    const ya = y0 + (y1 - y0) * k / NP, yb = y0 + (y1 - y0) * (k + 1) / NP;
+    for(const [a, b] of [[[-1, -1], [1, -1]], [[1, -1], [1, 1]], [[1, 1], [-1, 1]], [[-1, 1], [-1, -1]]]){
+      bar(g, corner(a[0], a[1], yb), corner(b[0], b[1], yb), 0.22, GR);
+      bar(g, corner(a[0], a[1], ya), corner(b[0], b[1], yb), 0.16, GR); bar(g, corner(b[0], b[1], ya), corner(a[0], a[1], yb), 0.16, GR);
+    }
+  }
+  // a ladder up one face, and the platform with its handrail at the top
+  for(let y = y0 + 0.5; y < y1; y += 0.6) box(g, 0.5, 0.05, 0.05, BLK, 0, y, -hw(y) - 0.25);
+  for(const s of [-1, 1]) bar(g, new V(s * 0.25, y0, -hw(y0) - 0.25), new V(s * 0.25, y1, -hw(y1) - 0.25), 0.05, BLK);
+  box(g, 5.6, 0.35, 5.6, DG, 0, y1 + 0.17, 0);
+  for(const s of [-1, 1]){ box(g, 5.6, 0.05, 0.05, LG, 0, y1 + 1.3, s * 2.8); box(g, 0.05, 0.05, 5.6, LG, s * 2.8, y1 + 1.3, 0); }
+  for(const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) box(g, 0.06, 1.1, 0.06, LG, sx * 2.8, y1 + 0.85, sz * 2.8);
+  // everything above the slewing ring turns together
+  const top = new THREE.Group(); top.position.y = y1 + 0.35; g.add(top);
+  cylY(top, 1.7, 1.9, 1.1, DG, 0, 0.55, 0, 24); add(top, new THREE.TorusGeometry(1.8, 0.12, 6, 28), BLK, 0, 0.2, 0).rotation.x = Math.PI / 2;
+  box(top, 4.6, 0.6, 6.4, GR, 0, 1.4, 0);
+  // the jib: two side trusses, deep at the tower and shallower at the tip, joined top and bottom
+  const zB = -15, zT = 40, yBot = 2.0, depth = z => z < 0 ? 3.2 : 3.2 - (3.2 - 1.6) * z / zT, xs = 1.25;
+  const topY = z => yBot + depth(z), step = 2.75;
+  for(const s of [-1, 1]){
+    const x = s * xs;
+    bar(top, new V(x, yBot, zB), new V(x, yBot, zT), 0.34, DG);
+    bar(top, new V(x, topY(zB), zB), new V(x, topY(0), 0), 0.34, DG); bar(top, new V(x, topY(0), 0), new V(x, topY(zT), zT), 0.34, DG);
+    for(let z = zB, k = 0; z < zT - 0.01; z += step, k++){
+      const z2 = Math.min(zT, z + step);
+      bar(top, new V(x, yBot, z), new V(x, topY(z), z), 0.18, GR);
+      if(k % 2) bar(top, new V(x, yBot, z), new V(x, topY(z2), z2), 0.14, GR); else bar(top, new V(x, topY(z), z), new V(x, yBot, z2), 0.14, GR);
+    }
+    bar(top, new V(x, yBot, zT), new V(x, topY(zT), zT), 0.2, GR);
+  }
+  for(let z = zB; z <= zT + 0.01; z += step){ bar(top, new V(-xs, yBot, z), new V(xs, yBot, z), 0.14, GR); bar(top, new V(-xs, topY(z), z), new V(xs, topY(z), z), 0.14, GR); }
+  for(let z = zB; z < zT - 0.01; z += step * 2) bar(top, new V(-xs, yBot, z), new V(xs, yBot, Math.min(zT, z + step * 2)), 0.1, GR);
+  // the walkway along the top of the jib, with handrails
+  for(let z = zB; z < zT; z += 5){ const z2 = Math.min(zT, z + 5), ym = (topY(z) + topY(z2)) / 2 + 0.12, p = box(top, 2.4, 0.08, z2 - z, mat(0x6a655c, 0.8), 0, ym, (z + z2) / 2); p.rotation.x = Math.atan2(topY(z) - topY(z2), z2 - z); }
+  for(const s of [-1, 1]){ bar(top, new V(s * 1.2, topY(zB) + 1.1, zB), new V(s * 1.2, topY(0) + 1.1, 0), 0.05, LG); bar(top, new V(s * 1.2, topY(0) + 1.1, 0), new V(s * 1.2, topY(zT) + 1.1, zT), 0.05, LG);
+    for(let z = zB; z <= zT; z += 3) box(top, 0.05, 1.0, 0.05, LG, s * 1.2, topY(z) + 0.6, z); }
+  // the A-frame peak over the tower, and the tie bars out to the jib and back to the counter-jib
+  const apex = new V(0, topY(0) + 6.5, 0);
+  for(const s of [-1, 1]) for(const e of [-1, 1]) bar(top, new V(s * xs, topY(0), e * 1.6), apex, 0.3, DG);
+  box(top, 0.9, 0.6, 0.9, DG, apex.x, apex.y, apex.z);
+  for(const s of [-1, 1]){ bar(top, apex, new V(s * xs, topY(24), 24), 0.08, BLK); bar(top, apex, new V(s * xs, topY(zB + 1), zB + 1), 0.08, BLK); }
+  // the machinery house on the counter-jib, its winch drum at the back, the counterweight slung beneath
+  box(top, 4.4, 3.8, 7.0, GR, 0, topY(-10) + 2.0, -10.2);
+  box(top, 4.7, 0.25, 7.4, DG, 0, topY(-10) + 4.0, -10.2); box(top, 3.6, 0.5, 6.0, DG, 0, topY(-10) + 4.35, -10.2);
+  for(const s of [-1, 1]){ for(let k = 0; k < 3; k++) add(top, new THREE.PlaneGeometry(0.9, 0.8), glassMat(), s * 2.21, topY(-10) + 2.8, -12.2 + k * 2).rotation.y = s * Math.PI / 2;
+    box(top, 0.06, 1.8, 1.4, RU, s * 2.22, topY(-10) + 1.4, -7.6); }
+  cylZ(top, 1.55, 1.55, 1.3, DG, 0, topY(-10) + 1.9, -14.3, 24); cylZ(top, 0.5, 0.5, 1.4, BLK, 0, topY(-10) + 1.9, -14.4, 14);
+  box(top, 3.8, 3.2, 3.4, mat(0x6f6a62, 0.75, 0.1), 0, yBot - 1.6, -12.6);
+  for(const s of [-1, 1]) bar(top, new V(s * 1.5, yBot - 0.05, -11.2), new V(s * 1.5, yBot - 0.05, -14.0), 0.2, DG);
+  // his cab, hung under the jib in front of the tower: a band of windows, his face below, a drum at the side
+  const cy = -0.5, cz = 3.4;
+  box(top, 3.8, 3.6, 3.2, GR, 0, cy, cz); box(top, 4.0, 0.25, 3.4, DG, 0, cy + 1.9, cz);
+  add(top, new THREE.PlaneGeometry(3.2, 0.95), glassMat(), 0, cy + 1.1, cz + 1.61);
+  for(const s of [-1, 1]) add(top, new THREE.PlaneGeometry(2.4, 0.95), glassMat(), s * 1.91, cy + 1.1, cz).rotation.y = s * Math.PI / 2;
+  for(let k = 0; k < 3; k++) box(top, 0.08, 0.95, 0.06, DG, -1.0 + k, cy + 1.1, cz + 1.63);
+  faceOn(top, 1.05, {smile: 0.25, brow: 0.35, skin: '#c9c4ba'}, 0, cy - 0.55, cz + 1.62);
+  cylX(top, 1.0, 1.0, 0.5, DG, -2.15, cy + 0.2, cz - 0.2, 22); cylX(top, 0.3, 0.3, 0.55, BLK, -2.18, cy + 0.2, cz - 0.2, 10);
+  for(const s of [-1, 1]) bar(top, new V(s * 1.6, cy + 1.8, cz - 1.4), new V(s * xs, yBot, cz - 1.4), 0.2, DG);
+  box(top, 3.0, 0.4, 2.0, DG, 0, cy - 2.0, cz - 0.2);
+  // the trolley, its twin cables and the double hook (these move, so they are kept apart from the bake)
+  const trolley = new THREE.Group(); trolley.position.set(0, yBot - 0.2, 26);
+  box(trolley, 2.2, 0.9, 2.4, GR, 0, 0, 0); for(const s of [-1, 1]) for(const e of [-1, 1]) cylX(trolley, 0.25, 0.25, 0.2, BLK, s * 1.2, 0.45, e * 0.8, 10);
+  bakeVC(trolley);
+  const cables = new THREE.Group(); trolley.add(cables);
+  for(const s of [-1, 1]) add(cables, new THREE.CylinderGeometry(0.04, 0.04, 1, 4).translate(0, -0.5, 0), BLK, s * 0.45, -0.45, 0);
+  const hook = new THREE.Group(); trolley.add(hook);
+  box(hook, 1.5, 1.0, 0.6, mat(0xb8b2a4, 0.5, 0.3), 0, 0, 0); for(const s of [-1, 1]) cylZ(hook, 0.35, 0.35, 0.65, DG, s * 0.42, 0.25, 0, 12);
+  for(const s of [-1, 1]){ cylY(hook, 0.09, 0.09, 0.8, DG, s * 0.35, -0.9, 0, 8); const h = add(hook, new THREE.TorusGeometry(0.32, 0.09, 6, 14, Math.PI * 1.4), mat(0xc8a21e, 0.4, 0.4), s * 0.35, -1.55, 0); h.rotation.set(0, Math.PI / 2, Math.PI * 0.8); }
+  bakeVC(hook);
+  g.remove(top); bakeVC(g); bakeVC(top); top.add(trolley); g.add(top);
+  g.userData.crane = top;                  // he slews to unload the ships (life.js)
+  const hookTop = y1 + 0.35 + yBot - 0.65;
+  g.userData.setHook = (z, drop) => { trolley.position.z = z; const d = Math.max(1, Math.min(hookTop - 2, drop)); cables.scale.y = d; hook.position.y = -0.45 - d; };
+  g.userData.setHook(26, 14);
   return g;
 }
 function portalCrane(o){
@@ -2889,6 +2966,7 @@ function buildDocks(D){
   const carly = portalCrane({color: 0xf2d21a, rail: 0x2ab0b0, counter: 0x8a8d91, legH: 9, span: 7, tower: 6, jib: 20, jibUp: 0.6, knuckle: true, stripes: true, face: {smile: 0.85, lashes: true, look: 0.3}, name: 'CARLY', nameStyle: {fg: '#1a9a9a', line: null, font: 'bold 92px Arial'}, animate: true});
   carly.position.set(18, 0, 0.5); G.add(carly); nonRail('carly', G, carly); window.SODOR_CRANES.push(carly);
   const mickey = bigMickeyModel(); mickey.position.set(50, 0, -2); G.add(mickey); nonRail('bigmickey', G, mickey); window.SODOR_CRANES.push(mickey);
+  { let ph = Math.random() * 10; frameHooks.push(dt => { if(camDist > 9) return; ph += dt * 0.1; mickey.userData.setHook(24 + Math.sin(ph) * 12, 15 + Math.sin(ph * 1.6) * 8); }); }   // his trolley runs out and the hook goes up and down
   const ship = new THREE.Group(); ship.position.set(5, -base / M, 22); G.add(ship);
   const hull = new THREE.Shape(); hull.moveTo(-40, -6); hull.lineTo(30, -6); hull.lineTo(42, 0); hull.lineTo(30, 6); hull.lineTo(-40, 6); hull.closePath();
   const hg = new THREE.ExtrudeGeometry(hull, {depth: 7, bevelEnabled: false}); hg.rotateX(-Math.PI / 2); hg.translate(0, -2, 0);
