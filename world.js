@@ -105,7 +105,8 @@ function clearAreaW(x, z, r){ K.clearArea(x, z, r); addZone(x, z, r); }
 // Every open station on Sodor gets a settlement, sized by importance; stations close together share one.
 const CITY = new Set(['Tidmouth', 'Knapford', 'Vicarstown', 'Suddery', 'Wellsworth']);
 const NOT_TOWN = new Set(['China Clay Works', 'Vicarstown Dieselworks', 'Sodor Search and Rescue Centre', 'Blue Mountain Quarry', 'Culdee Fell Summit',
-  "Devil's Back", 'Skarloey Road', 'Sodor Ironworks', 'The Wharf', 'Hawin Tea Room', 'Elephant Park', 'Shiloh', 'Lakeside']);
+  "Devil's Back", 'Skarloey Road', 'Sodor Ironworks', 'The Wharf', 'Hawin Tea Room', 'Elephant Park', 'Shiloh', 'Lakeside',
+  'Anopha Quarry', 'Ulfstead Castle']);
 const towns = [];
 (function(){
   const cand = [];
@@ -126,6 +127,33 @@ const towns = [];
     if(!c) c = new V3(st.x, 0, st.z);
     if(st.name === 'Tidmouth' && window.TIDMOUTH && window.TIDMOUTH.centre) c = window.TIDMOUTH.centre.clone();     // the city sits on the hill between the forecourt and the harbour
     towns.push({name: st.name, st, cls, R, x: c.x, z: c.z, axis: d, n, seed: Math.floor(hash(st.x, st.z) * 1e9), inst: {}, roads: [], group: null});
+  });
+})();
+// Towns and villages on the Sodor map that have no open station of their own (map px on the outline map,
+// carried over from the detailed railway map): they get streets, houses and a name on the map like the rest.
+const PLACES = [['Kellsthorpe', 810.5, 632.4, 2], ['Killaban', 523.5, 616.9, 1], ['Cabalnoo', 617.7, 715.9, 1],
+  ['Ballaswein', 443.2, 47.7, 1], ['Kirkleas', 372.0, 334.6, 1], ['Ballamoddey', 439.6, 291.8, 1], ['Balladwal', 982.1, 719.4, 1],
+  ['Strawberry Grove', 570.3, 324.0, 1]];
+(function(){
+  const R_M = {2: 600, 1: 260};
+  PLACES.forEach(([name, px, py, cls]) => {
+    const w0 = mapToWorld(px, py), R = R_M[cls] * M;
+    let c = null;
+    for(let k = 0; k < 40 && !c; k++){                       // the nearest dry, free ground
+      const a = k * 2.4, r = k ? (40 + k * 25) * M : 0, x = w0.x + Math.cos(a) * r, z = w0.z + Math.sin(a) * r;
+      if(!wet(x, z) && !inTaken(x, z)) c = new V3(x, 0, z);
+    }
+    if(!c || towns.some(t => Math.hypot(t.x - c.x, t.z - c.z) < t.R * 0.75 + R * 0.4)) return;
+    let st = null, bd = Infinity;
+    STATIONS.forEach(s => { if(s.kind === 'closed') return; const dd = Math.hypot(s.x - c.x, s.z - c.z); if(dd < bd){ bd = dd; st = s; } });
+    const d = new V3(st.x - c.x, 0, st.z - c.z).normalize(), n = new V3(d.z, 0, -d.x);
+    towns.push({name, st: {x: c.x, z: c.z}, noStation: true, cls, R, x: c.x, z: c.z, axis: d, n, seed: Math.floor(hash(c.x, c.z) * 1e9), inst: {}, roads: [], group: null});
+  });
+  towns.filter(t => t.noStation).forEach(t => {
+    const y = H(t.x, t.z), label = makeLabelSprite(t.name);
+    label.position.set(t.x, y + 2.8, t.z);
+    label.userData = {type: 'town', aspect: label.scale.x / label.scale.y, major: t.cls >= 2, baseY: y};
+    scene.add(label); labels.push(label);
   });
 })();
 
@@ -350,7 +378,7 @@ towns.forEach(t => {
   }
   // station road: from the station forecourt towards the centre (it stops where it meets the grid)
   const fore = t.name === 'Tidmouth' && window.TIDMOUTH && window.TIDMOUTH.fore ? window.TIDMOUTH.fore.clone() : new V3(t.st.x, 0, t.st.z).addScaledVector(t.n, 22 * M);
-  if(Math.hypot(fore.x - t.x, fore.z - t.z) > 35 * M && !wet(fore.x, fore.z)){
+  if(!t.noStation && Math.hypot(fore.x - t.x, fore.z - t.z) > 35 * M && !wet(fore.x, fore.z)){
     let pts = cut(polyFrom([{x: fore.x, z: fore.z}, {x: (fore.x + t.x) / 2, z: (fore.z + t.z) / 2}, {x: t.x, z: t.z}]), p => wet(p.x, p.z));
     if(gR){ let i = 0; while(i < pts.length && Math.hypot(pts[i].x - t.x, pts[i].z - t.z) > gR * 0.85) i++; pts = pts.slice(0, Math.min(pts.length, i + 2)); }
     if(pts.length > 3) freeRuns(pts, ROAD_W.street * M, 30 * M).forEach(run => t.roads.push(registerRoad({pts: run, hw: ROAD_W.street * M, cls: 'street', town: t, stationRoad: true})));
@@ -1047,7 +1075,7 @@ lap('townBuildings');
 // Industry by the railway in the cities and towns: warehouses and mills with chimneys.
 const landmarkFns = [];
 towns.forEach(t => {
-  if(t.cls < 2) return;
+  if(t.cls < 2 || t.noStation) return;
   const r = rng(t.seed + 11), line = LINES[t.st.lines[0]];
   const tries = t.cls === 3 ? 26 : 10;
   for(let k = 0; k < tries; k++){
