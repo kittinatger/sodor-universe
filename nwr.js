@@ -786,27 +786,90 @@ function bogieDiesel(S){
 }
 
 // ------------------------------------------------------------------ small and unusual vehicles
+// Flynn: the road-rail fire engine of the Sodor Search and Rescue Centre. A tall, boxy cab-forward tender in
+// "really red" with a grey-green face plate between two flared mudguards, big round headlamps on stalks,
+// chrome bumpers, a yellow lining stripe along the side, roller-shutter lockers, a ladder on the roof and two
+// red standpipe nozzles behind the cab. Road tyres run outside the small steel rail wheels.
 function flynnModel(){
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
-  const RED = mat(0xc8201e, 0.4), YEL = mat(0xf2c419, 0.45), BLK = mat(BLACK, 0.7), CH = mat(0x9a9da1, 0.35, 0.7), L = 10.0, F = L / 2;
-  box(body, 1.4, 0.4, L - 0.6, BLK, 0, 0.75, 0);
-  box(body, 2.55, 2.3, 2.0, RED, 0, 2.15, F - 1.3);
-  box(body, 2.55, 2.2, L - 2.6, RED, 0, 2.1, -1.0);
-  roof(body, 2.6, 2.1, 3.38, RED, F - 1.3);
-  for(const s of [-1, 1]){ box(body, 0.012, 0.12, L - 0.6, YEL, s * 1.282, 1.35, -0.2); box(body, 0.012, 0.06, L - 2.6, YEL, s * 1.282, 2.9, -1.0); }
-  add(body, new THREE.PlaneGeometry(2.2, 0.9), glassMat(), 0, 2.75, F - 0.29);
-  for(const s of [-1, 1]){ const w = add(body, new THREE.PlaneGeometry(0.9, 0.7), glassMat(), s * 1.283, 2.75, F - 1.2); w.rotation.y = s * Math.PI / 2; }
-  for(const s of [-1, 1]) for(let k = 0; k < 4; k++){ const d = box(body, 0.02, 1.6, 0.9, mat(0xa81a1a, 0.4), s * 1.285, 2.0, -F + 1.0 + k * 1.3); }
-  box(body, 2.4, 0.4, 0.3, CH, 0, 1.0, F - 0.15);
-  add(body, new THREE.PlaneGeometry(1.6, 0.6), grilleMat, 0, 1.6, F - 0.29);
-  faceOn(body, 0.55, {smile: 0.8, brow: -0.2}, 0, 1.55, F - 0.27);
-  cylY(body, 0.25, 0.3, 0.3, CH, 0, 3.55, F - 1.4, 14);
-  const turret = cylZ(body, 0.09, 0.12, 1.4, CH, 0, 3.75, F - 0.8, 10);
-  for(const s of [-1, 1]) box(body, 0.3, 0.1, 0.15, mat(0x2a6aff, 0.3), s * 0.5, 3.48, F - 1.3);
-  letter(body, 'SODOR SEARCH & RESCUE', 'white', 0.18, 1.27, 2.0, F - 1.3);
-  for(const z of [F - 1.6, -F + 1.8]) for(const s of [-1, 1]){ const t = cylX(body, 0.62, 0.62, 0.45, mat(0x1a1a1a, 0.9), s * 1.1, 0.95, z, 20); cylX(body, 0.3, 0.3, 0.47, CH, s * 1.1, 0.95, z, 12); }
-  for(const e of [1, -1]){ box(body, 2.5, 0.35, 0.12, mat(0x2a2a2a, 0.5), 0, 1.0, e * (F - 0.06)); }
-  const axles = addWheels(root, [{z: F - 0.6, r: 0.35}, {z: -F + 0.6, r: 0.35}], {color: BLACK, spokes: 0});
+  const RED = mat(0xc8201e, 0.38), DRED = mat(0x9c1a18, 0.45), YEL = mat(0xf2c419, 0.45), BLK = mat(BLACK, 0.7), CH = mat(0xc4c8cc, 0.28, 0.7),
+        PLATE = mat(0x8f9c90, 0.55), TYRE = mat(0x161616, 0.92), FEND = mat(0xc8201e, 0.4, 0, 'double'), WHITE = mat(0xf4f1ea, 0.5), GL = glassMat();
+  const L = 10.0, F = L / 2, W2 = 1.05, ZF = F - 1.3, ZR = -F + 1.9;     // half width of the body; road axle positions
+  // frame and rail wheels' mounting
+  box(body, 1.5, 0.45, L - 0.4, BLK, 0, 0.8, 0);
+  box(body, 1.9, 0.12, L - 0.8, mat(0x2a2c30, 0.7), 0, 1.02, 0);
+  // the cab and front: a grey-green face plate, cowl, windscreen, then the roof
+  box(body, 2.1, 2.5, 2.8, RED, 0, 2.25, F - 1.5);
+  box(body, 1.8, 1.4, 0.07, PLATE, 0, 1.8, F - 0.07);
+  for(const [x, y, w, h] of [[0, 2.52, 1.9, 0.08], [0, 1.08, 1.9, 0.08], [-0.94, 1.8, 0.08, 1.4], [0.94, 1.8, 0.08, 1.4]]) box(body, w, h, 0.09, CH, x, y, F - 0.06);
+  faceOn(body, 0.6, {smile: 0.8, brow: -0.2}, 0, 1.82, F - 0.027);
+  box(body, 2.14, 0.2, 0.12, RED, 0, 2.62, F - 0.08);
+  add(body, new THREE.PlaneGeometry(1.8, 0.78), GL, 0, 3.1, F + 0.0);
+  for(const x of [-0.92, 0.92]) box(body, 0.1, 0.84, 0.1, RED, x, 3.1, F + 0.01);
+  box(body, 0.06, 0.8, 0.06, RED, 0, 3.1, F + 0.01);
+  roof(body, 2.16, 3.0, 3.52, RED, F - 1.5);
+  box(body, 2.2, 0.08, 3.0, WHITE, 0, 3.5, F - 1.5);
+  for(const s of [-1, 1]){
+    const w = add(body, new THREE.PlaneGeometry(1.3, 0.8), GL, s * (W2 + 0.006), 3.05, F - 1.55); w.rotation.y = s * Math.PI / 2;
+    box(body, 0.02, 2.4, 0.05, DRED, s * (W2 + 0.006), 2.2, F - 2.2);                      // the door edges
+    box(body, 0.02, 2.4, 0.05, DRED, s * (W2 + 0.006), 2.2, F - 0.8);
+    const sp = box(body, 0.34, 0.05, 1.6, CH, s * (W2 + 0.16), 0.98, F - 1.55);                // running board
+    // the emblem on the cab door: a white disc with a red centre and a white star
+    for(const [r, col, dx] of [[0.42, 0xf4f1ea, 0.008], [0.33, 0xc8201e, 0.012], [0.15, 0xf4f1ea, 0.016]]){ const e = add(body, new THREE.CircleGeometry(r, 20), mat(col, 0.5, 0, 'double'), s * (W2 + dx), 2.05, F - 1.5); e.rotation.y = s * Math.PI / 2; }
+    box(body, 0.022, 0.08, 0.7, mat(0xf4f1ea, 0.5), s * (W2 + 0.02), 2.05, F - 1.5); const bar = box(body, 0.022, 0.7, 0.08, mat(0xf4f1ea, 0.5), s * (W2 + 0.02), 2.05, F - 1.5);
+    box(body, 0.03, 0.05, 0.3, CH, s * (W2 + 0.02), 2.0, F - 0.95);                          // door handle
+  }
+  // the equipment body behind the cab: roller-shutter lockers each side
+  box(body, 2.1, 2.1, 6.7, RED, 0, 2.05, -1.25);
+  for(const s of [-1, 1]) for(let k = 0; k < 4; k++){
+    const z = -3.9 + k * 1.55;
+    box(body, 0.025, 1.4, 1.3, DRED, s * (W2 + 0.008), 1.95, z);
+    for(let r = 0; r < 7; r++) box(body, 0.03, 0.03, 1.28, mat(0x7a1412, 0.5), s * (W2 + 0.012), 1.4 + r * 0.19, z);
+    box(body, 0.035, 0.05, 0.5, CH, s * (W2 + 0.02), 2.7, z);
+    box(body, 0.04, 0.22, 0.04, CH, s * (W2 + 0.02), 1.3, z + 0.5);
+  }
+  // the yellow lining along both sides
+  for(const s of [-1, 1]){ box(body, 0.014, 0.11, 9.4, YEL, s * (W2 + 0.012), 1.38, 0.15); box(body, 0.014, 0.08, 6.6, YEL, s * (W2 + 0.012), 2.93, -1.25); box(body, 0.014, 0.08, 2.8, YEL, s * (W2 + 0.012), 2.5, F - 1.5); }
+  // the roof of the body: a ladder on a rack, hose bed, standpipe nozzles
+  box(body, 2.0, 0.08, 6.5, mat(0x9c1a18, 0.5), 0, 3.14, -1.25);
+  const LAD = mat(0xc0c4c8, 0.4, 0.6);
+  for(const s of [-1, 1]) box(body, 0.07, 0.14, 6.4, LAD, s * 0.3, 3.45, -1.2);
+  for(let z = -4.3; z <= 1.9; z += 0.38) box(body, 0.6, 0.04, 0.05, LAD, 0, 3.45, z);
+  for(const z of [-4.0, -1.2, 1.6]) for(const s of [-1, 1]) box(body, 0.07, 0.3, 0.07, BLK, s * 0.3, 3.3, z);
+  for(const s of [-1, 1]){
+    cylY(body, 0.09, 0.09, 1.1, RED, s * 0.82, 3.65, 1.55, 12);
+    cylZ(body, 0.075, 0.075, 0.7, RED, s * 0.82, 4.2, 1.9, 12);
+    cylZ(body, 0.12, 0.1, 0.16, CH, s * 0.82, 4.2, 2.3, 12);
+    cylY(body, 0.13, 0.13, 0.12, CH, s * 0.82, 3.12, 1.55, 12);
+  }
+  // beacons and siren on the cab roof
+  for(const s of [-1, 1]){ cylY(body, 0.14, 0.14, 0.18, mat(0x2a6aff, 0.25), s * 0.55, 3.66, F - 0.9, 12); domeCap(body, 0.14, mat(0x6a9aff, 0.2), s * 0.55, 3.74, F - 0.9); }
+  cylY(body, 0.1, 0.16, 0.2, CH, 0, 3.64, F - 1.6, 10);
+  // mudguards over each road wheel, big headlamps on stalks, chrome bumpers
+  const arch = (s, z) => {
+    const a = add(body, new THREE.CylinderGeometry(0.82, 0.82, 0.62, 22, 1, true, 0, Math.PI).rotateZ(Math.PI / 2), FEND, s * 1.2, 0.95, z);
+    for(const e of [-1, 1]) box(body, 0.62, 0.05, 0.05, YEL, s * 1.2, 0.95 + 0.82, z + e * 0.0);                   // yellow edge along the crown
+    box(body, 0.62, 0.35, 0.05, RED, s * 1.2, 1.1, z + 0.78); box(body, 0.62, 0.35, 0.05, RED, s * 1.2, 1.1, z - 0.78);
+    cylX(body, 0.62, 0.62, 0.46, TYRE, s * 1.2, 0.95, z, 24);
+    cylX(body, 0.33, 0.33, 0.5, CH, s * 1.2, 0.95, z, 14);
+    cylX(body, 0.12, 0.12, 0.54, mat(0xc8201e, 0.4), s * 1.2, 0.95, z, 10);
+    for(let k = 0; k < 8; k++){ const sp = box(body, 0.08, 0.04, 0.46, mat(0x3a3a3a, 0.8), s * 1.2 + s * 0.2, 0.95, z); sp.rotation.x = k * Math.PI / 8; }
+  };
+  for(const s of [-1, 1]){ arch(s, ZF); arch(s, ZR); }
+  for(const s of [-1, 1]){
+    box(body, 0.13, 0.1, 0.55, CH, s * 1.12, 1.7, F - 0.35);                                  // lamp stalks
+    cylZ(body, 0.24, 0.24, 0.3, CH, s * 1.2, 1.78, F - 0.3, 18);
+    const lamp = add(body, new THREE.CircleGeometry(0.19, 18), mat(0xfff0c8, 0.2), s * 1.2, 1.78, F - 0.148);
+    cylZ(body, 0.05, 0.05, 0.1, mat(0xff8a2a, 0.3), s * 0.98, 1.2, F + 0.02, 8);
+  }
+  box(body, 2.4, 0.2, 0.22, CH, 0, 0.98, F + 0.04); box(body, 2.4, 0.2, 0.22, CH, 0, 0.98, -F - 0.04);
+  box(body, 0.08, 0.6, 0.18, CH, -0.7, 0.95, F + 0.1); box(body, 0.08, 0.6, 0.18, CH, 0.7, 0.95, F + 0.1);
+  // the rear: a step plate, a pair of red lamps, a ladder to the roof
+  box(body, 2.0, 0.08, 0.55, CH, 0, 1.0, -F - 0.25);
+  for(const s of [-1, 1]){ cylZ(body, 0.1, 0.1, 0.06, mat(0xff3020, 0.3), s * 0.85, 1.55, -F + 0.02, 10); box(body, 0.06, 2.1, 0.04, CH, s * 0.2, 2.1, -F + 0.02); }
+  for(let k = 0; k < 6; k++) box(body, 0.4, 0.04, 0.04, CH, 0, 1.3 + k * 0.28, -F + 0.04);
+  for(const z of [-F + 0.18, F - 0.12]) box(body, 2.0, 0.34, 0.08, mat(0x2a2a2a, 0.5), 0, 0.78, z);
+  const axles = addWheels(root, [{z: F - 0.9, r: 0.35}, {z: -F + 0.9, r: 0.35}], {color: BLACK, spokes: 0});
   const v = finish(root, body, axles); v.len = L + 0.3;
   return v;
 }
@@ -1593,7 +1656,7 @@ def({id: 'philip', name: 'Philip', no: '68', cat: 'Diesel', wheels: '4wDE', basi
     extra: (b, k) => { for(const s of [-1, 1]){ const d = add(b, new THREE.CircleGeometry(0.36, 20), mat(0xffffff, 0.5), s * (k.W / 2 + 0.012), k.deck + 0.9, 0); d.rotation.y = s * Math.PI / 2; } letter(b, '68', 'black', 0.36, k.W / 2 + 0.006, k.deck + 0.9, 0); }})});
 
 // Other engines
-def({id: 'flynn', name: 'Flynn', no: '', cat: 'Other', wheels: 'road-rail fire engine', basis: 'an Oshkosh W800 airport fire engine, converted for road and rail',
+def({id: 'flynn', name: 'Flynn', no: '', cat: 'Other', wheels: 'road-rail fire engine', basis: 'a hybrid of a Tatra T111, a 1964 Oshkosh W800 ARFF and a Latil fire engine, built as a road-rail vehicle',
   livery: 'red with yellow lining and the Sodor Search and Rescue Centre emblem on his doors', dot: 0xc8201e,
   about: 'the fire engine of the Search and Rescue Centre, who can drive on roads and rails.',
   build: () => flynnModel()});
