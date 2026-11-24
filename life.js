@@ -167,62 +167,121 @@ function makeVehicle(rd, kind){
   else g = carModel(color, false);
   scene.add(g); g.scale.setScalar(M); g.frustumCulled = false; if(trailer) trailer.frustumCulled = false;
   const len = g.userData.len * M, span = rd.s[rd.s.length - 1];
-  const v = {g, trailer, kind, len, v: 0, pause: 0, cool: 0};
+  const v = {g, trailer, kind, len, v: 0, pause: 0, cool: 0, id: VEHICLES.length};
   onto(v, rd, Math.max(len, Math.min(span - len, rnd() * span)), rnd() < 0.5 ? 1 : -1);
   stepVehicle(v, 0);                   // place it at its spawn point now, not wherever (0,0,0) happens to be
   VEHICLES.push(v);
   return v;
 }
-// pick a way on at a junction: most of the time carry straight on along this road, sometimes turn off
-function turnAt(v, j, atEnd){
-  if(!atEnd && rnd() > 0.3) return false;
-  const B = j.to, spanB = B.s[B.s.length - 1];
-  if(spanB < Math.max(40 * M, 4 * v.len) || (v.kind === 'tractor' && B.cls === 'M') || ((v.kind === 'bus' || v.kind === 'lorry') && B.cls === 'lane')) return false;
-  const nearStart = j.sTo < 25 * M, nearEnd = j.sTo > spanB - 25 * M;
-  const dir = nearStart ? 1 : nearEnd ? -1 : rnd() < 0.5 ? 1 : -1;
-  onto(v, B, Math.max(v.len, Math.min(spanB - v.len, j.sTo + dir * 6 * M)), dir);
-  v.v = Math.min(v.v, 4 * M);
-  return true;
-}
 // the bus stops each town laid out along its through roads (world.js)
 const STOPS = new Map();
 (W.towns || []).forEach(t => (t.busStops || []).forEach(b => { if(!STOPS.has(b.rd)) STOPS.set(b.rd, []); STOPS.get(b.rd).push(b); }));
+// ---- driving: every vehicle looks ahead along its road for the vehicle in front (keeping a safe gap),
+// a train at a level crossing, a bus stop, and the next junction. It decides early whether to turn there,
+// slows to take the corner, gives way to traffic on the road it is joining, and swings round onto the new
+// road smoothly; at a dead end it stops and makes a three-point turn.
+const ON_ROAD = new Map();                         // road -> vehicles on it this frame
+function indexTraffic(){ ON_ROAD.clear(); for(const v of VEHICLES){ if(!v.stepped) continue; let a = ON_ROAD.get(v.rd); if(!a) ON_ROAD.set(v.rd, a = []); a.push(v); } }
+// the gap to the nearest vehicle ahead in this lane (Infinity if none within 60 m)
+function gapAhead(v){
+  const list = ON_ROAD.get(v.rd); if(!list) return Infinity;
+  let best = Infinity;
+  for(const o of list){
+    if(o === v || o.dir !== v.dir || Math.abs(o.lane - v.lane) > v.rd.hw * 0.3) continue;
+    const c = (o.s - v.s) * v.dir;
+    if(c <= 0 && !(c === 0 && o.id > v.id)) continue;      // behind us (or level, and the other gives way)
+    const d = c - (o.len + v.len) / 2;
+    if(d < best) best = d;
+  }
+  return best < 60 * M ? Math.max(0, best) : Infinity;
+}
+// is anything coming along road B towards the point where we would join it?
+function joinBusy(v, j){
+  const list = ON_ROAD.get(j.to); if(!list) return false;
+  for(const o of list){
+    if(o === v) continue;
+    if(Math.abs(o.s - j.sTo) < (o.len + v.len) / 2 + 5 * M) return true;                  // standing where we would turn in
+    const toward = (j.sTo - o.s) * o.dir; if(o.v > 0.5 * M && toward > 0 && toward < 8 * M + o.v * 3) return true;   // coming up to it
+  }
+  return false;
+}
+function canTake(v, j){
+  const B = j.to, spanB = B.s[B.s.length - 1];
+  return !(spanB < Math.max(40 * M, 4 * v.len) || (v.kind === 'tractor' && B.cls === 'M') || ((v.kind === 'bus' || v.kind === 'lorry') && B.cls === 'lane'));
+}
+// choose at the next junction ahead: carry on, or turn (always, where the road ends there)
+function decide(v){
+  const rd = v.rd, span = rd.s[rd.s.length - 1];
+  v.plan = null;
+  let next = null;
+  for(const j of rd.jn){ if(j === v.skip) continue; const a = (j.s - v.s) * v.dir; if(a > 2 * M && a < 60 * M && (!next || a < (next.s - v.s) * v.dir)) next = j; }
+  const endS = v.dir > 0 ? span : 0, atEnd = j => Math.abs(j.s - endS) < 30 * M;
+  if(!next) return;
+  if(atEnd(next)){ const ways = rd.jn.filter(j => j !== v.skip && atEnd(j) && canTake(v, j)); if(ways.length) v.plan = ways[Math.floor(rnd() * ways.length)]; return; }
+  if(v.cool <= 0 && canTake(v, next) && rnd() < 0.3) v.plan = next;
+  else v.passed = next;                                    // going straight on here
+}
+function doTurn(v, j){
+  const B = j.to, spanB = B.s[B.s.length - 1];
+  const nearStart = j.sTo < 25 * M, nearEnd = j.sTo > spanB - 25 * M;
+  const dir = nearStart ? 1 : nearEnd ? -1 : rnd() < 0.5 ? 1 : -1;
+  startBlend(v, 1.6);
+  onto(v, B, Math.max(v.len, Math.min(spanB - v.len, j.sTo + dir * 4 * M)), dir);
+  v.v = Math.min(v.v, 4 * M); v.plan = null; v.passed = null; v.waitJ = 0; v.skip = null;
+}
+function startBlend(v, secs){ const g = v.g; v.blend = {x: g.position.x, y: g.position.y, z: g.position.z, yaw: g.rotation.y, t: 0, d: secs}; }
 function stepVehicle(v, dt){
   let rd = v.rd, span = rd.s[rd.s.length - 1];
   if(v.pause > 0){ v.pause -= dt; v.v = Math.max(0, v.v - 3 * M * dt); }
   else {
-    const stopAt = laneBusy(rd, v.s, v.dir);
     let target = v.vmax;
-    if(stopAt >= 0){ const d = Math.abs(stopAt - v.s) - 7 * M; target = d < 0 ? 0 : Math.min(v.vmax, Math.sqrt(Math.max(0, 2 * 2.5 * M * d))); }
-    const distToEnd = v.dir > 0 ? span - v.s : v.s;
-    const way = rd.jn.some(j => Math.abs(j.s - (v.dir > 0 ? span : 0)) < 30 * M);
-    if(distToEnd < 18 * M) target = Math.min(target, Math.max(way ? 3 * M : 0.3 * M, distToEnd / 18 * v.vmax));
-    // buses call at the stops on their side of the road: draw up by the shelter, wait, pull away
+    const brake = (d, to = 0) => { target = Math.min(target, Math.sqrt(to * to + 2 * 2.2 * M * Math.max(0, d))); };
+    // the vehicle in front: two seconds' gap, never closer than 3 m
+    const gap = gapAhead(v);
+    if(gap < Infinity) brake(gap - 3 * M - v.v * 1.2);
+    // a train at the level crossing
+    const stopAt = laneBusy(rd, v.s, v.dir);
+    if(stopAt >= 0) brake(Math.abs(stopAt - v.s) - 8 * M);
+    // bus stops on its side
     if(v.kind === 'bus'){ const st = STOPS.get(rd); if(st) for(const b of st){
       if(b === v.lastStop || b.side !== (v.dir > 0 ? 1 : -1)) continue;
       const d = (b.s - v.s) * v.dir;
-      if(d > -1 * M && d < 45 * M){ target = Math.min(target, Math.sqrt(Math.max(0, 2 * 1.4 * M * Math.max(0, d - 0.5 * M)))); if(d < 1.5 * M && v.v < 1 * M){ v.pause = 10 + rnd() * 18; v.lastStop = b; } }
+      if(d > -1 * M && d < 45 * M){ brake(d - 0.5 * M); if(d < 1.5 * M && v.v < 1 * M){ v.pause = 10 + rnd() * 18; v.lastStop = b; } }
     } }
-    v.v += Math.sign(target - v.v) * Math.min(Math.abs(target - v.v), 2.5 * M * dt);
+    // the junction ahead: decide in good time, slow for the corner, give way when joining
+    if(!v.plan && (!v.passed || (v.passed.s - v.s) * v.dir < 0)) decide(v);
+    if(v.plan){
+      const d = (v.plan.s - v.s) * v.dir;
+      brake(d - 2 * M, 3.5 * M);
+      if(d < 14 * M && joinBusy(v, v.plan)){ brake(d - 10 * M); v.waitJ = (v.waitJ || 0) + dt; if(v.waitJ > 25){ v.skip = v.plan; v.plan = null; v.waitJ = 0; } }   // give up on this turn: carry on, or turn round at the end
+    }
+    // the end of the road with nowhere to go: draw up, then turn round
+    const distToEnd = v.dir > 0 ? span - v.s : v.s;
+    if(!v.plan) brake(distToEnd - v.len - 2 * M);
+    const acc = target > v.v ? (v.kind === 'lorry' || v.kind === 'bus' ? 1.0 : 1.8) * M : 4.5 * M;
+    v.v += Math.sign(target - v.v) * Math.min(Math.abs(target - v.v), acc * dt);
   }
   const s0 = v.s, step = v.dir * v.v * dt;
   v.s += step; v.cool -= Math.abs(step);
-  // junctions passed this step: maybe turn off here
-  let turned = false;
-  if(v.cool <= 0) for(const j of rd.jn){ if((j.s - s0) * v.dir > 0 && (j.s - v.s) * v.dir <= 0 && turnAt(v, j, false)){ turned = true; break; } }
-  if(!turned && ((v.dir < 0 && v.s <= v.len) || (v.dir > 0 && v.s >= span - v.len))){        // only when heading into the end
-    // at the end of the road: take any road that meets it here, else turn round
-    const endS = v.s <= v.len ? 0 : span, ways = rd.jn.filter(j => Math.abs(j.s - endS) < 30 * M);
-    if(ways.length && turnAt(v, ways[Math.floor(rnd() * ways.length)], true)) turned = true;
-    else { v.s = Math.max(v.len, Math.min(span - v.len, v.s)); v.dir = -v.dir; v.v = 0; v.pause = 2 + rnd() * 5; }
+  if(v.plan && (v.plan.s - s0) * v.dir > 0 && (v.plan.s - v.s) * v.dir <= 0.5 * M) doTurn(v, v.plan);
+  else if(!v.plan && (v.dir > 0 ? span - v.s : v.s) < v.len + 3.5 * M && v.v < 0.4 * M && v.pause <= 0
+    && !(ON_ROAD.get(rd) || []).some(o => o !== v && o.dir !== v.dir && Math.abs(o.s - v.s) < (o.len + v.len) / 2 + 6 * M)){        // drawn up at the end, the other side clear: turn round
+    v.s = Math.max(v.len, Math.min(span - v.len, v.s));
+    { startBlend(v, 3.5); v.dir = -v.dir; v.v = 0; v.pause = 3.5 + rnd() * 3; v.plan = null; v.passed = null; v.skip = null; v.waitJ = 0; }   // a three-point turn
   }
   rd = v.rd;
   const fr = roadFrame(rd, v.s, {_i: v._i});
   v._i = fr._i;
   const side = v.dir > 0 ? 1 : -1;                     // keep left, relative to travel direction
-  const lx = fr.x + fr.nx * v.lane * side, lz = fr.z + fr.nz * v.lane * side;
-  v.g.position.set(lx, fr.y, lz);
-  v.g.rotation.y = Math.atan2(v.dir * fr.tx, v.dir * fr.tz);
+  let lx = fr.x + fr.nx * v.lane * side, lz = fr.z + fr.nz * v.lane * side, ly = fr.y, yaw = Math.atan2(v.dir * fr.tx, v.dir * fr.tz);
+  if(v.blend){                                         // swinging round a corner or turning in the road
+    const B = v.blend; B.t += dt; const k = B.t >= B.d ? 1 : smooth(0, 1, B.t / B.d);
+    let dy = yaw - B.yaw; while(dy > Math.PI) dy -= Math.PI * 2; while(dy < -Math.PI) dy += Math.PI * 2;
+    lx = B.x + (lx - B.x) * k; lz = B.z + (lz - B.z) * k; ly = B.y + (ly - B.y) * k; yaw = B.yaw + dy * k;
+    if(k >= 1) v.blend = null;
+  }
+  v.g.position.set(lx, ly, lz);
+  v.g.rotation.y = yaw;
   if(v.trailer){
     const back = roadFrame(rd, v.s - v.dir * (v.len + 0.4 * M), {_i: v._i});
     const tlx = back.x + back.nx * v.lane * side, tlz = back.z + back.nz * v.lane * side;
@@ -234,11 +293,23 @@ function stepVehicle(v, dt){
 // so close up the streets and lanes are always busy, wherever on the island that is
 const ROADBOX = (W.roads || []).map(rd => { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; rd.pts.forEach(p => { x0 = Math.min(x0, p.x); z0 = Math.min(z0, p.z); x1 = Math.max(x1, p.x); z1 = Math.max(z1, p.z); }); return {rd, x0, z0, x1, z1}; });
 let nearRoads = [], nearAt = null, nearLen = 0, nearReal = 0;
+// How busy a road is: the streets of a city are thick with traffic, a market town's less so, a village's
+// lanes see a car now and then; out of town the motorway and A roads are busy, B roads quiet, farm lanes empty.
+function busyOf(rd){
+  const t = rd.town;
+  if(t){
+    const town = t.cls === 3 ? 1.0 : t.cls === 2 ? 0.5 : 0.18, size = Math.max(0.6, Math.min(1.4, t.R / (900 * M)));
+    const mid = rd.pts[rd.pts.length >> 1], q = Math.min(1.3, Math.hypot(mid.x - t.x, mid.z - t.z) / t.R);
+    return town * size * (1.5 - q) * (rd.cls === 'A' ? 1.3 : rd.cls === 'lane' ? 0.3 : 1);
+  }
+  return rd.cls === 'M' ? 1.1 : rd.cls === 'A' ? 0.45 : rd.cls === 'B' ? 0.22 : rd.cls === 'lane' ? 0.05 : 0.3;
+}
 function refreshNear(cx, cz, R){
   nearRoads = []; nearLen = 0; nearReal = 0;
   ROADBOX.forEach(b => { if(cx > b.x0 - R && cx < b.x1 + R && cz > b.z0 - R && cz < b.z1 + R && b.rd.s[b.rd.s.length - 1] > 40 * M){
     const pts = b.rd.pts; let ok = false; for(let i = 0; i < pts.length && !ok; i += 3) if(Math.hypot(pts[i].x - cx, pts[i].z - cz) < R) ok = true;
-    if(ok){ const w = b.rd.s[b.rd.s.length - 1] * (b.rd.cls === 'M' ? 2.5 : b.rd.cls === 'A' ? 1.6 : b.rd.cls === 'lane' ? 0.35 : 1); nearRoads.push({rd: b.rd, w}); nearLen += w; nearReal += Math.min(b.rd.s[b.rd.s.length - 1], 2 * R) * (b.rd.cls === 'M' ? 2 : 1); } } });
+    if(ok){ const busy = b.rd.busy === undefined ? (b.rd.busy = busyOf(b.rd)) : b.rd.busy, w = b.rd.s[b.rd.s.length - 1] * busy * (b.rd.cls === 'M' ? 2 : 1);
+      nearRoads.push({rd: b.rd, w}); nearLen += w; nearReal += Math.min(b.rd.s[b.rd.s.length - 1], 2 * R) * busy * (b.rd.cls === 'M' ? 2 : 1); } } });
   nearAt = {x: cx, z: cz};
 }
 function relocate(v, cx, cz, R){
@@ -250,7 +321,8 @@ function relocate(v, cx, cz, R){
     const span = rd.s[rd.s.length - 1], s = v.len + rnd() * (span - 2 * v.len), fr = roadFrame(rd, s, {_i: 0});
     const d = Math.hypot(fr.x - cx, fr.z - cz);
     if(d > R || d < R * 0.25 && camDist < 0.6) continue;             // not popping up right under your nose
-    onto(v, rd, s, rnd() < 0.5 ? 1 : -1); v.v = v.vmax * 0.6; v.cool = 0; stepVehicle(v, 0); return true;
+    if((ON_ROAD.get(rd) || []).some(o => o !== v && Math.abs(o.s - s) < (o.len + v.len) / 2 + 10 * M)) continue;   // nor on top of another
+    onto(v, rd, s, rnd() < 0.5 ? 1 : -1); v.v = v.vmax * 0.6; v.cool = 0; v.blend = null; v.plan = null; v.passed = null; v.pause = 0; stepVehicle(v, 0); return true;
   }
   return false;
 }
@@ -318,20 +390,24 @@ const _cp = new THREE.Vector3();
 frameHooks.push(dt => {
   const cp = camera.position, d = dt * Math.min(timeScale, 40);
   const vOn = camDist < 2.2, pOn = camDist < 1.1, bOn = camDist < 9;
-  // keep the roads round the view busy: about one vehicle to every 28 m of road in sight
+  // keep the roads round the view as busy as the place is: in a city centre a vehicle every 20 m or so, a village street now and then
   if(vOn && (relocT -= dt) <= 0){
     relocT = 0.35;
     const R = Math.min(1.0, Math.max(0.3, camDist * 0.9)), cx = camCenter.x, cz = camCenter.z;
     if(!nearAt || Math.hypot(cx - nearAt.x, cz - nearAt.z) > R * 0.3 || Math.abs(R - (nearAt.R || 0)) > R * 0.3){ refreshNear(cx, cz, R); nearAt.R = R; }
     const inView = VEHICLES.filter(v => Math.hypot(v.g.position.x - cx, v.g.position.z - cz) < R * 1.3).length;
-    let want = Math.min(VEHICLES.length, Math.round(nearReal / (28 * M))) - inView, moved = 0;
+    let want = Math.min(VEHICLES.length, Math.round(nearReal / (20 * M))) - inView, moved = 0;
+    if(want < -3){ for(const v of VEHICLES){ if(want >= 0 || moved > 12) break; const dv = Math.hypot(v.g.position.x - cx, v.g.position.z - cz);
+      if(dv < R * 1.3 && dv > R * 0.7 && !(v.rd.busy > 0.6) && relocate(v, cx, cz, R)){ want++; moved++; } } }
     for(const v of VEHICLES){ if(want <= 0 || moved > 24) break; if(Math.hypot(v.g.position.x - cx, v.g.position.z - cz) > R * 1.8 && relocate(v, cx, cz, R)){ want--; moved++; } }
   }
+  indexTraffic();
   VEHICLES.forEach(v => {
     const near = vOn && cp.distanceTo(v.g.position) < 1.0;
     v.g.visible = vOn && Math.hypot(v.g.position.x - camCenter.x, v.g.position.z - camCenter.z) < Math.max(0.6, Math.min(1.4, camDist * 1.3));
     if(v.trailer) v.trailer.visible = v.g.visible;
-    if(v.g.visible || near) stepVehicle(v, d);
+    v.stepped = v.g.visible || near;
+    if(v.stepped) stepVehicle(v, d);
   });
   if(bOn){
     const t = performance.now() * 0.001;
