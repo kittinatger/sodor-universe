@@ -37,6 +37,7 @@ const AP = (() => {
   return {c, t, n, L, WID, side, at, yaw: Math.atan2(t.x, t.z)};
 })();
 // A search for a quiet, level patch of ground round a station: dry, away from the track and other stations.
+const CLAIMED = [];
 function findPatch(name, r0, r1, half, rangeMax){
   const st = stn(name); if(!st) return null;
   let best = null;
@@ -50,6 +51,7 @@ function findPatch(name, r0, r1, half, rangeMax){
     }
     if(!ok || hi - lo > rangeMax * M) continue;
     if(STATIONS.some(s => s.kind !== 'closed' && s !== st && Math.hypot(s.x - x, s.z - z) < 700 * M)) continue;
+    if(CLAIMED.some(p => Math.hypot(p.x - x, p.z - z) < 500 * M)) continue;
     const sc = (hi - lo) / M + r * 0.004;
     if(!best || sc < best.sc) best = {x, z, sc};
   }
@@ -58,9 +60,9 @@ function findPatch(name, r0, r1, half, rangeMax){
 // Wellsworth Vicarage Orchard, where Trevor lives (just outside the town); Farmer Finney's field by
 // Thomas' Branch Line, near Maithwaite, where Terence ploughs.
 const ORCHARD = findPatch('Wellsworth', 1500, 2700, 140, 6);
-if(ORCHARD) K.clearArea(ORCHARD.x, ORCHARD.z, 115 * M);
+if(ORCHARD){ K.clearArea(ORCHARD.x, ORCHARD.z, 115 * M); CLAIMED.push(ORCHARD); }
 const FIELD = findPatch('Maithwaite', 650, 1800, 230, 7);
-if(FIELD) K.clearArea(FIELD.x, FIELD.z, 150 * M);
+if(FIELD){ K.clearArea(FIELD.x, FIELD.z, 150 * M); CLAIMED.push(FIELD); }
 // a beach near Knapford for Bulstrode: dry sand right at the water's edge, away from the line
 const BEACH = (() => {
   const st = stn('Knapford'); if(!st) return null;
@@ -75,6 +77,9 @@ const BEACH = (() => {
   return null;
 })();
 if(BEACH) K.clearArea(BEACH.x, BEACH.z, 40 * M);
+// the Sodor Construction Company's building site, on the edge of Elsbridge
+const SITE = findPatch('Elsbridge', 1000, 2600, 180, 9);
+if(SITE){ SITE.ang = 0.3; K.clearArea(SITE.x, SITE.z, 130 * M); CLAIMED.push(SITE); }
 
 // ================================================================== models (metres, front towards +z)
 const face = (g, r, f, x, y, z, rotY = 0) => { const me = add(g, new THREE.CircleGeometry(r, 28), K.faceMat(f), x, y, z); me.rotation.y = rotY; return me; };
@@ -86,7 +91,8 @@ function wheel(g, r, w, x, y, z, hub, spokes){
   if(spokes) for(let k = 0; k < spokes; k++){ const s = box(wg, w + 0.03, r * 1.8, 0.07, mat(hub || 0xb3201c, 0.45), 0, 0, 0); s.rotation.x = k * PI / spokes; }
   return wg;
 }
-function finish(g){ const keep = g.userData.keep || []; keep.forEach(k => g.remove(k)); S.bakeVC(g); keep.forEach(k => g.add(k)); g.scale.setScalar(M); scene.add(g); g.traverse(o => { if(o.isMesh) o.castShadow = true; }); return g; }
+function partsBake(g){ const parts = g.userData.parts || []; parts.forEach(p => { g.remove(p); partsBake(p); }); S.bakeVC(g); parts.forEach(p => g.add(p)); }
+function finish(g){ partsBake(g); g.scale.setScalar(M * (g.userData.sc || 1)); scene.add(g); g.traverse(o => { if(o.isMesh) o.castShadow = true; }); return g; }
 // Bertie: a red single-decker; Bulgy: a double-decker, green and cream since he became a vegetable bus
 function bertieModel(){ const g = VEH.bus(0xc8262b); face(g, 0.58, {smile: 0.75, skin: '#cfd2d4'}, 0, 1.05, 5.64); return g; }
 function bulgyModel(){
@@ -105,20 +111,23 @@ function butchModel(){
   return g;
 }
 // Elizabeth: a vintage Sentinel steam waggon, cranberry with gold lining and an orange-brown tipper
-function elizabethModel(){
-  const g = new THREE.Group(), CR = mat(0x8a1c2e, 0.45), GOLD = mat(0xd4a640, 0.35, 0.5);
+function sentinelModel(body, lining, load, f){
+  const g = new THREE.Group(), CR = mat(body, 0.45), GOLD = mat(lining, 0.35, 0.3);
   box(g, 1.9, 0.25, 6.0, BLK(), 0, 0.75, 0);
   box(g, 2.2, 2.0, 1.8, CR, 0, 1.95, 2.0); box(g, 2.3, 0.12, 2.0, CR, 0, 3.0, 2.0);
   for(const s of [-1, 1]){ add(g, new THREE.PlaneGeometry(0.9, 0.7), glassMat(), s * 1.11, 2.35, 2.1).rotation.y = s * PI / 2; box(g, 0.03, 0.06, 1.7, GOLD, s * 1.115, 1.45, 2.0); }
   add(g, new THREE.PlaneGeometry(1.6, 0.6), glassMat(), 0, 2.45, 2.91);
   box(g, 2.0, 0.05, 0.03, GOLD, 0, 2.05, 2.915);
-  face(g, 0.42, {smile: 0.6, lashes: true, lips: '#a0343c', skin: '#d9d2c8'}, 0, 1.45, 2.92);
+  face(g, 0.42, f, 0, 1.45, 2.92);
   cylY(g, 0.14, 0.16, 0.9, BLK(), 0.6, 3.45, 1.7, 10); cylY(g, 0.18, 0.15, 0.12, BRASSM(), 0.6, 3.95, 1.7, 10);
-  box(g, 2.2, 0.9, 3.6, mat(0xa0562a, 0.6), 0, 1.45, -1.1);
-  for(const z of [2.0, -1.9]) for(const s of [-1, 1]) wheel(g, 0.52, 0.3, s * 0.95, 0.52, z, 0xd4a640, 8);
+  if(load === 'tipper') box(g, 2.2, 0.9, 3.6, mat(0xa0562a, 0.6), 0, 1.45, -1.1);
+  else { box(g, 2.2, 0.15, 3.8, CR, 0, 1.0, -1.1); for(const s of [-1, 1]) box(g, 0.06, 0.4, 3.8, CR, s * 1.08, 1.25, -1.1);
+    for(let k = 0; k < 5; k++) cylZ(g, 0.32, 0.32, 3.5, mat(0x8a8d91, 0.6), -0.7 + (k % 3) * 0.7 + (k > 2 ? 0.35 : 0), 1.42 + (k > 2 ? 0.56 : 0), -1.1, 12); }
+  for(const z of [2.0, -1.9]) for(const s of [-1, 1]) wheel(g, 0.52, 0.3, s * 0.95, 0.52, z, lining, 8);
   g.userData.custom = true; g.userData.len = 6;
   return g;
 }
+const elizabethModel = () => sentinelModel(0x8a1c2e, 0xd4a640, 'tipper', {smile: 0.6, lashes: true, lips: '#a0343c', skin: '#d9d2c8'});
 // Max and Monty: vermilion dump trucks with grey dumpers
 function dumpModel(silverCap){
   const g = new THREE.Group(), RD = mat(0xd23a1e, 0.45), GR = mat(0x8a8d91, 0.6);
@@ -147,12 +156,12 @@ function terenceModel(){
   return g;
 }
 // a traction engine (Trevor) or a steamroller (George): boiler, smokebox, chimney, canopy, big rear wheels
-function steamRoadModel(color, roller){
+function steamRoadModel(color, roller, faceOpt){
   const g = new THREE.Group(), C = mat(color, 0.45), RL = mat(0xb3201c, 0.45);
   cylZ(g, 0.55, 0.55, 2.4, C, 0, 1.6, 0.2, 20);
   for(const z of [-0.7, 0.2, 1.1]) add(g, new THREE.TorusGeometry(0.56, 0.035, 6, 24), BRASSM(), 0, 1.6, z);
   cylZ(g, 0.58, 0.58, 0.45, BLK(), 0, 1.6, 1.55, 20);
-  face(g, 0.45, roller ? {smile: -0.2, brow: 0.8, thick: true, skin: '#c4c7ca'} : {smile: 0.8, skin: '#c4c7ca'}, 0, 1.6, 1.79);
+  face(g, 0.45, faceOpt || (roller ? {smile: -0.2, brow: 0.8, thick: true, skin: '#c4c7ca'} : {smile: 0.8, skin: '#c4c7ca'}), 0, 1.6, 1.79);
   cylY(g, 0.13, 0.16, 1.5, BLK(), 0, 2.85, 1.45, 12); cylY(g, 0.2, 0.14, 0.18, BRASSM(), 0, 3.65, 1.45, 12);
   box(g, 1.3, 1.5, 1.0, C, 0, 1.45, -1.3); box(g, 1.32, 0.05, 1.02, RL, 0, 2.2, -1.3);
   for(const [x, z] of [[-0.6, -1.7], [0.6, -1.7], [-0.6, 0.9], [0.6, 0.9]]) box(g, 0.06, 1.4, 0.06, BLK(), x, 2.9, z);
@@ -162,7 +171,7 @@ function steamRoadModel(color, roller){
   else for(const s of [-1, 1]) wheel(g, 0.6, 0.25, s * 0.75, 0.6, 1.25, 0xb3201c, 8);
   const fly = new THREE.Group(); fly.position.set(0.8, 2.0, -0.5); g.add(fly);
   cylX(fly, 0.55, 0.55, 0.1, BLK(), 0, 0, 0, 20); for(let k = 0; k < 6; k++){ const s = box(fly, 0.11, 1.0, 0.06, RL, 0, 0, 0); s.rotation.x = k * PI / 6; }
-  g.userData.fly = fly; g.userData.keep = [fly]; g.userData.chimney = new V3(0, 3.8, 1.45); g.userData.custom = true;
+  g.userData.fly = fly; g.userData.parts = [fly]; g.userData.chimney = new V3(0, 3.8, 1.45); g.userData.custom = true;
   return g;
 }
 // Jeremy: a white jet plane with a blue drop on top of his cockpit
@@ -212,6 +221,97 @@ function bulstrodeModel(){
   for(let k = 0; k < 4; k++) cylX(g, 0.35, 0.35, 0.3, mat(0x2a2a2a, 0.8), (k % 2 ? 2.85 : -2.85), 1.5, -5 + k * 3, 10);
   return g;
 }
+// tracks under a digger or a bulldozer
+function tracks(g, w, len, col){ for(const s of [-1, 1]){ box(g, 0.6, 0.75, len, BLK(), s * w, 0.38, 0); for(let k = 0; k < 5; k++) cylX(g, 0.2, 0.2, 0.62, mat(col || 0x5a5d61, 0.5), s * w, 0.3, -len / 2 + 0.4 + k * (len - 0.8) / 4, 8); } }
+// Jack: a red front loader, white upper cab
+function jackModel(){
+  const g = new THREE.Group(), R = mat(0xc8262b, 0.45), WH = mat(0xf2f0ea, 0.5);
+  box(g, 1.9, 0.9, 3.0, R, 0, 1.05, -0.6); box(g, 1.6, 0.9, 1.4, R, 0, 1.95, 0.1); box(g, 1.6, 0.75, 1.4, WH, 0, 2.78, 0.1); box(g, 1.7, 0.08, 1.5, R, 0, 3.18, 0.1);
+  add(g, new THREE.PlaneGeometry(1.3, 0.55), glassMat(), 0, 2.8, 0.81);
+  face(g, 0.36, {smile: 0.8, skin: '#d9d2c8'}, 0, 1.95, 0.81);
+  for(const z of [0.9, -1.4]) for(const s of [-1, 1]) wheel(g, 0.62, 0.45, s * 1.05, 0.62, z, 0xf2f0ea);
+  const arm = new THREE.Group(); arm.position.set(0, 1.35, 0.6); g.add(arm);
+  for(const s of [-1, 1]) box(arm, 0.18, 0.25, 2.4, R, s * 0.75, 0, 1.2);
+  box(arm, 2.1, 0.75, 0.8, mat(0x8a8d91, 0.5), 0, -0.25, 2.55);
+  g.userData.parts = [arm]; g.userData.arm = arm; g.userData.len = 6;
+  return g;
+}
+// an excavator (Alfie, Oliver) or a steam shovel (Ned): the upper works slew, the boom digs
+function diggerModel(col, o = {}){
+  const g = new THREE.Group(), C = mat(col, 0.45);
+  tracks(g, 1.05, 3.6); box(g, 1.6, 0.4, 2.4, GREY(), 0, 0.85, 0); cylY(g, 0.7, 0.7, 0.2, BLK(), 0, 1.1, 0, 14);
+  const up = new THREE.Group(); up.position.y = 1.2; g.add(up);
+  box(up, 2.4, 1.1, 2.6, C, 0, 0.55, -0.4);
+  if(o.panel) box(up, 2.44, 0.6, 1.0, mat(o.panel, 0.5), 0, 0.6, -1.35);
+  if(o.steam){ box(up, 2.4, 1.6, 2.6, C, 0, 1.9, -0.4); box(up, 2.6, 0.12, 2.9, mat(0x8a8d91, 0.6), 0, 2.75, -0.4); cylY(up, 0.16, 0.2, 1.6, BLK(), -0.7, 3.4, -1.2, 10);
+    face(up, 0.42, o.face || {}, 0, 1.6, 0.92); }
+  else { box(up, 1.0, 1.4, 1.2, C, 0.65, 1.25, 0.6); add(up, new THREE.PlaneGeometry(0.8, 0.6), glassMat(), 0.65, 1.6, 1.21); box(up, 1.1, 0.08, 1.3, C, 0.65, 1.98, 0.6);
+    if(o.hat) box(up, 1.1, 0.12, 0.25, mat(o.hat, 0.5), 0.65, 1.95, 1.25);
+    face(up, 0.33, o.face || {}, 0.65, 0.9, 1.21); }
+  const boom = new THREE.Group(); boom.position.set(o.steam ? 0 : -0.4, o.steam ? 0.5 : 0.9, o.steam ? 1.0 : 0.9); up.add(boom);
+  const L = o.steam ? 5.2 : 3.4, ba = o.steam ? 0.75 : 0.55;
+  box(boom, 0.4, 0.5, L, C, 0, Math.sin(ba) * L / 2, Math.cos(ba) * L / 2).rotation.x = -ba;
+  const ex = Math.cos(ba) * L, ey = Math.sin(ba) * L;
+  box(boom, 0.3, 0.35, 2.6, C, 0, ey - 1.1, ex + 0.4).rotation.x = 1.25;
+  box(boom, 0.95, 0.75, 0.8, mat(o.bucket || 0x8a8d91, 0.5), 0, ey - 2.3, ex + 0.75);
+  up.userData.parts = [boom]; g.userData.parts = [up]; g.userData.up = up; g.userData.boom = boom; g.userData.sc = o.sc || 1;
+  if(o.steam) g.userData.chimney = new V3(-0.7, 4.4, -1.2);
+  return g;
+}
+// Byron: a yellow bulldozer with a black cab
+function byronModel(){
+  const g = new THREE.Group(), Y = mat(0xf2c419, 0.45), K2 = mat(0x1a1a1a, 0.5);
+  tracks(g, 0.95, 3.2); box(g, 1.7, 0.9, 2.8, Y, 0, 1.15, 0.1);
+  box(g, 1.4, 1.2, 1.3, K2, 0, 2.2, -0.6); for(const s of [-1, 1]) add(g, new THREE.PlaneGeometry(1.0, 0.8), glassMat(), s * 0.71, 2.3, -0.6).rotation.y = s * PI / 2;
+  add(g, new THREE.PlaneGeometry(1.1, 0.8), glassMat(), 0, 2.3, 0.06); box(g, 1.5, 0.1, 1.4, K2, 0, 2.85, -0.6);
+  cylY(g, 0.07, 0.07, 1.0, BLK(), 0.5, 2.1, 1.1, 8);
+  face(g, 0.36, {smile: 0.3, brow: 0.4, skin: '#d0c6b6'}, 0, 1.2, 1.51);
+  box(g, 2.9, 1.0, 0.25, Y, 0, 0.6, 2.35); for(const s of [-1, 1]) box(g, 0.15, 0.2, 1.1, Y, s * 1.0, 0.75, 1.85);
+  g.userData.len = 5;
+  return g;
+}
+// Kelly: a blue and cream mobile crane lorry
+function kellyModel(){
+  const g = VEH.lorry(0x1f3fa8, false, 'flatbed'), CR = mat(0xe9e1c4, 0.5);
+  face(g, 0.55, {smile: 0.5, brow: 0.3, skin: '#cfd2d4'}, 0, 1.25, 5.16);
+  const top = new THREE.Group(); top.position.set(0, 1.7, -2.6); g.add(top);
+  cylY(top, 0.9, 0.9, 0.4, mat(0x1f3fa8, 0.5), 0, 0.2, 0, 14); box(top, 1.2, 1.0, 1.6, mat(0x1f3fa8, 0.5), 0, 0.9, -0.4);
+  const jb = box(top, 0.45, 0.45, 9, CR, 0, 3.0, 3.4); jb.rotation.x = -0.55;
+  cylY(top, 0.03, 0.03, 4, BLK(), 0, 3.2, 7.2, 4); box(top, 0.4, 0.4, 0.3, REDM(), 0, 1.2, 7.2);
+  S.bakeVC(top); g.userData.top = top; g.userData.len = 9.9;
+  return g;
+}
+// Nelson: a black ballast tractor with a low loader
+function nelsonModel(){
+  const g = new THREE.Group(), BK = mat(0x1c1c1e, 0.45), CR = mat(0xe9e1c4, 0.5), RD = mat(0xc8262b, 0.45);
+  box(g, 2.0, 0.35, 15, BK, 0, 0.8, -2.5);
+  box(g, 2.5, 2.0, 2.0, BK, 0, 2.2, 3.6); box(g, 2.2, 1.1, 1.7, BK, 0, 1.5, 5.4); box(g, 2.5, 0.35, 0.2, RD, 0, 0.8, 6.3);
+  for(const s of [-1, 1]){ box(g, 0.03, 0.06, 1.9, CR, s * 1.26, 1.5, 3.6); box(g, 0.03, 0.06, 1.9, RD, s * 1.26, 1.38, 3.6); add(g, new THREE.PlaneGeometry(1.2, 0.7), glassMat(), s * 1.26, 2.6, 3.6).rotation.y = s * PI / 2; }
+  add(g, new THREE.PlaneGeometry(2.0, 0.7), glassMat(), 0, 2.65, 4.61);
+  face(g, 0.48, {smile: 0.6, brow: 0.1, skin: '#cfd2d4'}, 0, 1.5, 6.26);
+  box(g, 2.6, 1.0, 1.2, BK, 0, 1.4, 1.6); box(g, 2.7, 0.25, 8.5, BK, 0, 0.75, -4.6); box(g, 2.7, 0.15, 1.6, mat(0x5a5d61, 0.6), 0, 0.6, -9.6);
+  for(const z of [5.2]) for(const s of [-1, 1]) wheel(g, 0.55, 0.4, s * 1.05, 0.55, z, 0xc8262b);
+  for(const z of [2.4, 1.1]) for(const s of [-1, 1]) wheel(g, 0.55, 0.45, s * 1.05, 0.55, z, 0xc8262b);
+  for(const z of [-6.6, -7.6, -8.6]) for(const s of [-1, 1]) wheel(g, 0.4, 0.35, s * 1.15, 0.4, z, 0xc8262b);
+  g.userData.custom = true; g.userData.len = 16;
+  return g;
+}
+// Patrick: a cement mixer, purple-brown and cream, his drum always turning
+function patrickModel(){
+  const g = new THREE.Group(), PB = mat(0x5a2a3a, 0.45), CR = mat(0xe9e1c4, 0.5);
+  box(g, 2.0, 0.35, 7.4, BLK(), 0, 0.8, 0);
+  box(g, 2.4, 1.0, 1.8, CR, 0, 1.5, 2.8); box(g, 2.4, 0.9, 1.8, PB, 0, 2.45, 2.8); add(g, new THREE.PlaneGeometry(2.0, 0.6), glassMat(), 0, 2.5, 3.71);
+  face(g, 0.45, {smile: 0.7, skin: '#cfd2d4'}, 0, 1.45, 3.71);
+  const drum = new THREE.Group(); drum.position.set(0, 2.35, -1.1); g.add(drum);
+  cylZ(drum, 0.6, 1.25, 1.2, PB, 0, 0, 1.6, 16); cylZ(drum, 1.25, 1.25, 1.6, CR, 0, 0, 0.2, 16); cylZ(drum, 1.25, 0.45, 1.6, PB, 0, 0, -1.4, 16);
+  for(let k = 0; k < 3; k++){ const f = box(drum, 0.12, 2.56, 0.12, PB, 0, 0, 0.2); f.rotation.z = k * PI / 3; }
+  for(const z of [2.6, -1.6, -2.8]) for(const s of [-1, 1]) wheel(g, 0.55, 0.42, s * 1.05, 0.55, z, 0xe9e1c4);
+  g.userData.parts = [drum]; g.userData.drum = drum; g.userData.custom = true; g.userData.len = 7.6;
+  return g;
+}
+function personModel(coat, hat){ const g = new THREE.Group(); cylY(g, 0.2, 0.25, 1.2, mat(coat, 0.8), 0, 0.75, 0, 10); add(g, new THREE.SphereGeometry(0.17, 12, 10), mat(0xe8c4a0, 0.7), 0, 1.5, 0);
+  if(hat) add(g, new THREE.SphereGeometry(0.2, 12, 8, 0, TAU, 0, PI / 2), mat(hat, 0.4), 0, 1.58, 0); else add(g, new THREE.SphereGeometry(0.18, 12, 8, 0, TAU, 0, PI / 2), mat(0x8a4a2a, 0.8), 0, 1.55, 0);
+  for(const s of [-1, 1]) cylY(g, 0.07, 0.07, 0.7, mat(coat, 0.8), s * 0.27, 0.95, 0, 6); return g; }
 function childModel(c){ const g = new THREE.Group(); cylY(g, 0.13, 0.17, 0.5, mat(c, 0.8), 0, 0.35, 0, 8); add(g, new THREE.SphereGeometry(0.13, 10, 8), mat(0xe8b98c, 0.75), 0, 0.75, 0); return g; }
 
 // ================================================================== the working day
@@ -306,12 +406,12 @@ function* restUntil(a, sh, home, where){
   yield {until: t}; a.parked = false;
 }
 function* serviceJob(a, o){
-  const spots = o.stops.map(spotAt).filter(Boolean), home = spotAt(o.home) || spots[0];
+  const sp_ = s => typeof s === 'string' ? spotAt(s) : s, spots = o.stops.map(sp_).filter(Boolean), home = sp_(o.home) || spots[0], homeName = typeof o.home === 'string' ? o.home : (o.home && o.home.name);
   const seq = o.loop ? spots : spots.concat(spots.slice(1, -1).reverse());
   for(let i = 0; ; i = (i + 1) % seq.length){
-    if(!onShift(o.shift)){ yield* restUntil(a, o.shift, home, o.home); i = -1; continue; }
+    if(!onShift(o.shift)){ yield* restUntil(a, o.shift, home, homeName); i = -1; continue; }
     const sp = seq[i];
-    a.status = `${o.verb || 'On the way to'} ${sp.name}`; yield* goTo(a, sp); if(a.lost) continue;
+    a.status = typeof o.verb === 'function' ? o.verb(sp.name) : `${o.verb || 'On the way to'} ${sp.name}`; yield* goTo(a, sp); if(a.lost) continue;
     const end = i === 0 || i === seq.length - 1 && !o.loop || spots.length < 3;
     a.status = (o.at || (n => `At ${n}`))(sp.name); a.parked = (end ? o.endWait : o.dwell) >= 100;
     yield {wait: end ? o.endWait : o.dwell}; a.parked = false;
@@ -385,7 +485,7 @@ function placeOn(a, P, d){
 function actor(o){
   const a = Object.assign({rd: null, s: 0, dir: 1, v: 0, len: 6 * M, lane: 0, id: 500000 + ACTORS.length, status: 'Getting ready', parked: false}, o);
   a.it = a.job(a); a.cmd = null;
-  a.g.traverse(m => { if(m.isMesh){ m.userData.onPick = () => showActor(a); clickable.push(m); } });
+  if(!a.noPick) a.g.traverse(m => { if(m.isMesh){ m.userData.onPick = () => showActor(a); clickable.push(m); } });
   ACTORS.push(a); return a;
 }
 function showActor(a){
@@ -432,7 +532,8 @@ function init(){
         a.status = `Recovering a broken-down lorry at ${to.name}`; a.parked = true; yield {wait: 1500 + r() * 1200}; a.parked = false;
         a.status = 'Towing it back to the Rescue Centre'; a.speedK = 0.7; yield* goTo(a, base); a.speedK = 1.0; } }});
   // Max and Monty: stone from Ffarquhar Quarry to the Sodor Construction Company's site at Elsbridge
-  const quarry = (() => { const q = stn('Anopha Quarry'); return q ? spotNear(q.x, q.z, 'Ffarquhar Quarry') : spotAt('Ffarquhar'); })(), site = spotAt('Elsbridge');
+  const quarry = (() => { const q = stn('Anopha Quarry'); return q ? spotNear(q.x, q.z, 'Ffarquhar Quarry') : spotAt('Ffarquhar'); })();
+  const SK = buildSite(), site = SK ? SK.gate : spotAt('Elsbridge');
   [['Max', true, 0], ['Monty', false, 1500]].forEach(([nm, cap, off]) => roadActor(nm, 'Dump truck', () => dumpModel(cap), quarry, {color: 0xd23a1e, speedK: 0.8, meta: 'Sodor Construction Company',
     about: `${nm} is one of the twin dump trucks of the Sodor Construction Company, vermilion with a grey dumper. With ${nm === 'Max' ? 'Monty' : 'Max'} he hauls stone from Ffarquhar Quarry to the building site at Elsbridge, usually in too much of a hurry.`,
     job: function*(a){ const sh = shift('07:30', '17:00', '1111100'); yield {wait: off};
@@ -445,10 +546,151 @@ function init(){
   georgeAt();
   // ---- off the roads
   terence(); trevor(); harold(); jeremy(); captain(); skiff(); bulstrode();
+  if(SK) thePack(SK, quarry);
+  steamworks();
   // the roster
-  if(S.rosterGroup && S.rosterRow){ S.rosterGroup('Road, air and sea'); ACTORS.forEach(a => S.rosterRow(a.name, a.kind, a.color, () => showActor(a))); }
+  if(S.rosterGroup && S.rosterRow){ S.rosterGroup('Road, air and sea'); ACTORS.filter(a => !a.noRoster).forEach(a => S.rosterRow(a.name, a.kind, a.color, () => showActor(a))); }
   ACTORS.filter(a => a.road && !a.ghost).forEach(a => LIFE.EXTRA && LIFE.EXTRA.push(a));
   console.log(`Crew: ${ACTORS.length} named road, air and sea characters, set up in ${Math.round(performance.now() - t0)} ms`);
+}
+// ------------------------------------------------------------------ the Sodor Construction Company's site at Elsbridge
+function buildSite(){
+  if(!SITE) return null;
+  const c0 = new V3(SITE.x, 0, SITE.z), t = new V3(Math.sin(SITE.ang), 0, Math.cos(SITE.ang)), n = new V3(t.z, 0, -t.x), yaw = Math.atan2(t.x, t.z);
+  const at = (u, v) => c0.clone().addScaledVector(t, u * M).addScaledVector(n, v * M), gy = (u, v) => { const p = at(u, v); return H(p.x, p.z); };
+  const sg = new THREE.Group(); scene.add(sg);
+  const put = (fn, u, v, rot = 0, sunk = 0.1) => { const b = new THREE.Group(); fn(b); S.bakeVC(b); b.scale.setScalar(M); const p = at(u, v); b.position.set(p.x, gy(u, v) - sunk * M, p.z); b.rotation.y = yaw + rot; sg.add(b); return b; };
+  // the bare earth of the site
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const x = cv.getContext('2d'); x.fillStyle = '#8a7458'; x.fillRect(0, 0, 128, 128);
+  for(let k = 0; k < 900; k++){ const v = 100 + Math.random() * 60 | 0; x.fillStyle = `rgba(${v + 20},${v},${v - 30},0.5)`; x.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
+  for(let k = 0; k < 14; k++){ x.strokeStyle = 'rgba(60,45,30,0.35)'; x.lineWidth = 3; x.beginPath(); x.moveTo(Math.random() * 128, 0); x.lineTo(Math.random() * 128, 128); x.stroke(); }
+  const tex = new THREE.CanvasTexture(cv); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(9, 6);
+  const NU = 14, NV = 10, LEN = 180, WID = 124, pos = [], uv = [], idx = [];
+  for(let i = 0; i <= NU; i++) for(let j = 0; j <= NV; j++){ const u = -LEN / 2 + i * LEN / NU, v = -WID / 2 + j * WID / NV, p = at(u, v); pos.push(p.x, H(p.x, p.z) + 0.1 * M, p.z); uv.push(i / NU, j / NV); }
+  for(let i = 0; i < NU; i++) for(let j = 0; j < NV; j++){ const a0 = i * (NV + 1) + j, b0 = a0 + NV + 1; idx.push(a0, a0 + 1, b0, b0, a0 + 1, b0 + 1); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+  const gm = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({map: tex, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, side: THREE.DoubleSide})); gm.receiveShadow = true; sg.add(gm);
+  // the fence round it, with a gap for the gate
+  const OR = mat(0xff7a1a, 0.6, 0, 'double'), PO = mat(0x8a8d91, 0.5);
+  const fenceRun = (u0, v0, u1, v1) => { const L = Math.hypot(u1 - u0, v1 - v0), nn = Math.ceil(L / 6);
+    for(let k = 0; k < nn; k++){ const f0 = k / nn, f1 = (k + 1) / nn, um = u0 + (u1 - u0) * (f0 + f1) / 2, vm = v0 + (v1 - v0) * (f0 + f1) / 2, rot = Math.atan2(v1 - v0, u1 - u0);
+      put(b => { box(b, 0.06, 1.8, L / nn, OR, 0, 0.9, 0); cylY(b, 0.05, 0.05, 2.0, PO, 0, 1.0, L / nn / 2, 6); }, um, vm, rot, 0); } };
+  const U = LEN / 2 - 2, V = WID / 2 - 2;
+  fenceRun(-U, -V, U, -V); fenceRun(U, -V, U, V); fenceRun(U, V, -U, V); fenceRun(-U, V, -U, 9); fenceRun(-U, -9, -U, -V);
+  // the site office: two cabins, one on the other, with steps
+  put(b => { box(b, 3.0, 2.8, 9, mat(0x2a5aa8, 0.6), 0, 1.4, 0); box(b, 3.0, 2.8, 9, mat(0x2a5aa8, 0.6), 0, 4.2, 0); for(let k = 0; k < 3; k++) for(const y of [1.6, 4.4]) add(b, new THREE.PlaneGeometry(1.2, 0.9), glassMat(), 1.51, y, -3 + k * 3).rotation.y = PI / 2;
+    for(let k = 0; k < 6; k++) box(b, 1.2, 0.15, 0.4, PO, 2.1, 0.4 + k * 0.45, -4 + k * 0.4); }, -70, 44);
+  // the new building: a slab, a steel frame two storeys high, the ground-floor walls going up
+  put(b => { box(b, 42, 0.5, 34, mat(0xb8b4aa, 0.85), 0, 0.25, 0);
+    const ST = mat(0x5a6a7a, 0.5, 0.3);
+    for(let i = 0; i <= 4; i++) for(let j = 0; j <= 3; j++) box(b, 0.45, 8.2, 0.45, ST, -20 + i * 10, 4.4, -16 + j * 10.67);
+    for(const y of [4.3, 8.4]){ for(let i = 0; i <= 4; i++) box(b, 0.35, 0.5, 32, ST, -20 + i * 10, y, 0); for(let j = 0; j <= 3; j++) box(b, 40, 0.5, 0.35, ST, 0, y, -16 + j * 10.67); }
+    box(b, 40, 2.2, 0.4, mat(0x9a4a3a, 0.85), 0, 1.6, -16); box(b, 0.4, 1.4, 32, mat(0x9a4a3a, 0.85), -20, 1.2, 0);
+    for(let k = 0; k < 8; k++) box(b, 0.06, 4.2, 0.06, PO, 20.8, 2.6, -15 + k * 4.3); for(const y of [1.4, 3.0, 4.6]) box(b, 0.05, 0.05, 32, PO, 20.8, y, 0);
+    for(const y of [1.4, 3.0, 4.6]) box(b, 0.9, 0.06, 32, mat(0x8a6a4a, 0.85), 21.3, y, 0); }, 32, 8);
+  // heaps: spoil, gravel, the pipes and the steel beams waiting to go up
+  put(b => { add(b, new THREE.ConeGeometry(12, 5.5, 14), mat(0x6a5038, 0.95), 0, 2.4, 0); }, -24, -38, 0, 0.3);
+  put(b => { add(b, new THREE.ConeGeometry(8, 3.6, 12), mat(0x9a9890, 0.95), 0, 1.6, 0); }, -50, -12, 0, 0.3);
+  put(b => { for(let k = 0; k < 6; k++) cylX(b, 0.6, 0.6, 6, mat(0x9a9a94, 0.7), 0, 0.6 + (k > 2 ? 1.05 : 0), -1.3 + (k % 3) * 1.25 + (k > 2 ? 0.6 : 0), 14); }, -55, 26);
+  put(b => { for(let k = 0; k < 8; k++) box(b, 0.4, 0.5, 9, mat(0x5a6a7a, 0.5, 0.3), -1.4 + (k % 4) * 0.9, 0.3 + Math.floor(k / 4) * 0.55, 0); }, 14, -34);
+  put(b => { box(b, 16, 0.3, 12, mat(0x4a3a2a, 0.95), 0, -0.1, 0); add(b, new THREE.ConeGeometry(5, 2.6, 10), mat(0x6a5038, 0.95), 0, 1.2, 9); }, 64, -32, 0, 0.2);
+  put(b => { box(b, 26, 0.2, 1.8, mat(0x3a2e22, 0.95), 0, 0.05, 0); }, 0, 40, 0, 0.1);
+  // the sign at the gate
+  const sign = K.canvasTex(512, 160, x2 => { x2.fillStyle = '#f2c419'; x2.fillRect(0, 0, 512, 160); x2.fillStyle = '#1a1a1a'; x2.textAlign = 'center'; x2.textBaseline = 'middle'; x2.font = 'bold 46px Arial'; x2.fillText('SODOR', 256, 48); x2.font = 'bold 40px Arial'; x2.fillText('CONSTRUCTION COMPANY', 256, 108); });
+  put(b => { for(const s of [-1, 1]) cylY(b, 0.08, 0.08, 3.2, PO, 0, 1.6, s * 2.2, 6); }, -U - 1, 13, PI / 2);
+  { const p = at(-U - 1, 13), m = add(sg, new THREE.PlaneGeometry(4.6 * M, 1.45 * M), new THREE.MeshStandardMaterial({map: sign, roughness: 0.5, side: THREE.DoubleSide}), p.x, gy(-U - 1, 13) + 2.6 * M, p.z); m.rotation.y = yaw + PI; }
+  const g0 = at(-U - 30, 0), gate = spotNear(g0.x, g0.z, 'the Sodor Construction Company site at Elsbridge');
+  return {at, gy, yaw, t, n, gate};
+}
+function thePack(SK, quarry){
+  const {at, gy, yaw} = SK, sh = shift('07:30', '17:30', '1111100');
+  const place = (g, u, v, rot = 0) => { const p = at(u, v); g.position.set(p.x, gy(u, v), p.z); g.rotation.y = yaw + rot; };
+  const offDuty = (a, where) => { a.working = false; a.status = `Parked on the site until ${fmtTime(nextOn(sh))}`; return {until: nextOn(sh)}; };
+  // the diggers, each at its own work
+  const dig = (name, kind, model, u, v, rot, color, about, doing) => { const g = model(); finish(g); place(g, u, v, rot);
+    return actor({name, kind, g, color, meta: 'Sodor Construction Company', about, ph: Math.random() * 10, base: 0,
+      job: function*(a){ for(;;){ if(!onShift(sh)){ yield offDuty(a); continue; } a.working = true; a.status = doing; yield {wait: 600}; } },
+      anim: (a, dt) => { const ud = a.g.userData; a.ph += dt * (a.working ? 1 : 0); const w = a.working ? 1 : 0;
+        if(ud.up) ud.up.rotation.y += ((Math.sin(a.ph * 0.55) * 0.9) * w - ud.up.rotation.y) * Math.min(1, dt * 2);
+        if(ud.boom) ud.boom.rotation.x += ((Math.sin(a.ph * 1.1) * 0.25 + 0.05) * w - ud.boom.rotation.x) * Math.min(1, dt * 2); }}); };
+  dig('Alfie', 'Excavator', () => diggerModel(0x2e8b3a, {sc: 0.8, face: {smile: 0.9, skin: '#d9d2c8'}}), -4, 35, PI / 2, 0x2e8b3a,
+    'Alfie is the small green excavator, number 12, of the Sodor Construction Company. He is the smallest of the Pack and the keenest — he is digging the trench for the new drains.', 'Digging the trench for the new drains');
+  dig('Oliver', 'Excavator', () => diggerModel(0xb08a5a, {sc: 1.35, panel: 0xa8c49a, hat: 0xf2c419, face: {smile: 0.5, brow: 0.2, skin: '#d9d2c8'}}), 56, -24, -2.2, 0xb08a5a,
+    "Oliver is the big pale-brown excavator of the Sodor Construction Company, with the rim of a builder's hat over his cab windows. He is digging out the foundations for the next building.", 'Digging out the foundations');
+  const ned = dig('Ned', 'Steam shovel', () => diggerModel(0xa0562a, {steam: true, sc: 1.1, bucket: 0x8a8d91, face: {smile: 0.6, brow: -0.2, skin: '#d0c6b6'}}), -16, -50, -0.4, 0xa0562a,
+    'Ned is the orange steam shovel, number 19, of the Sodor Construction Company. Clumsy but willing, he is digging the footings by the spoil heap — and still learning to look where his bucket is going.', 'Digging the footings with his steam shovel');
+  ned.steam = true;
+  // Kelly lifts the steel beams up onto the frame
+  { const g = kellyModel(); g.scale.setScalar(M); scene.add(g); place(g, 20, -24, 0.4);
+    actor({name: 'Kelly', kind: 'Mobile crane lorry', g, color: 0x1f3fa8, meta: 'Sodor Construction Company', ph: 0,
+      about: 'Kelly is the blue and cream mobile crane lorry, number 17, of the Sodor Construction Company. He is lifting the steel beams up onto the frame of the new building — carefully, since he is afraid of falling over.',
+      job: function*(a){ for(;;){ if(!onShift(sh)){ yield offDuty(a); continue; } a.working = true; a.status = 'Lifting steel beams onto the new building'; yield {wait: 600}; } },
+      anim: (a, dt) => { if(a.working) a.ph += dt; const top = a.g.userData.top; if(top) top.rotation.y += ((a.working ? Math.sin(a.ph * 0.25) * 1.3 + 0.6 : 0) - top.rotation.y) * Math.min(1, dt); }}); }
+  // Jack: gravel from the stockpile to the building, his bucket up when he tips it
+  { const g = jackModel(); finish(g); const there = [at(-44, -12), at(-30, -4), at(-12, 1), at(6, 3)], back = [at(6, 3), at(-8, 13), at(-30, 9), at(-46, -1), at(-44, -12)];
+    place(g, -44, -12, PI / 2);
+    actor({name: 'Jack', kind: 'Front loader', g, color: 0xc8262b, meta: 'Sodor Construction Company', armT: 0.3,
+      about: 'Jack is the red front loader, number 11, of the Sodor Construction Company. Young and eager, he carries the gravel from the stockpile over to the new building.',
+      job: function*(a){ for(;;){ if(!onShift(sh)){ a.armT = 0.3; yield offDuty(a); continue; }
+        a.status = 'Scooping gravel from the stockpile'; a.armT = 0.35; yield {wait: 50}; a.armT = -0.25;
+        a.status = 'Carrying the gravel to the new building'; yield {follow: {pts: there, speed: 2.2 * M, ground: true}};
+        a.status = 'Tipping the gravel by the new building'; a.armT = -0.8; yield {wait: 40}; a.armT = 0.1;
+        a.status = 'Going back for more gravel'; yield {follow: {pts: back, speed: 2.5 * M, ground: true}}; } },
+      anim: (a, dt) => { const arm = a.g.userData.arm; if(arm) arm.rotation.x += (a.armT - arm.rotation.x) * Math.min(1, dt * 1.5); }}); }
+  // Byron levels the ground; Buster rolls the site road
+  const toAndFro = (name, kind, g, p0, p1, speed, color, about, doing) => { finish(g); g.position.copy(p0); g.position.y = H(p0.x, p0.z); g.rotation.y = Math.atan2(p1.x - p0.x, p1.z - p0.z);
+    return actor({name, kind, g, color, meta: 'Sodor Construction Company', about,
+      job: function*(a){ a.yaw = g.rotation.y; for(;;){ if(!onShift(sh)){ yield offDuty(a); continue; } a.working = true; a.status = doing;
+        yield {follow: {pts: [p0.clone(), p1.clone()], speed, ground: true, keepYaw: true}}; yield {wait: 15};
+        yield {follow: {pts: [p1.clone(), p0.clone()], speed: speed * 1.2, ground: true, keepYaw: true}}; yield {wait: 15}; } }}); };
+  toAndFro('Byron', 'Bulldozer', byronModel(), at(-62, -26), at(-6, -26), 1.4 * M, 0xf2c419,
+    'Byron is the yellow bulldozer, number 18, of the Sodor Construction Company. He pushes the earth about to level the ground — and has to watch he does not push too hard.', 'Pushing the earth to level the ground');
+  const buster = toAndFro('Buster', 'Steamroller', steamRoadModel(0x6a1a22, true, {smile: 0.9, skin: '#c4c7ca'}), at(-82, 2), at(-8, 2), 1.0 * M, 0x6a1a22,
+    'Buster is the maroon steamroller of the Sodor Construction Company, who goes about his job with glee, pride and contentment. He is rolling the new road into the site.', 'Rolling the new site road');
+  buster.steam = true;
+  // Miss Jenny, who runs the Pack
+  { const g = personModel(0x2e6a3a, 0xf2c419); finish(g); place(g, -64, 40, -PI / 2);
+    actor({name: 'Miss Jenny', kind: 'Site boss', g, color: 0x2e6a3a, followDist: 0.02, meta: 'Sodor Construction Company',
+      about: 'Miss Jenny Packard owns and runs the Sodor Construction Company — the Pack — taking charge of the big building projects round Sodor with the Foreman. She is overseeing the new building at Elsbridge.',
+      job: function*(a){ for(;;){ a.status = onShift(sh) ? 'Running the building site' : 'Gone home for the night'; a.g.visible = onShift(sh); yield {wait: 300}; } }}); }
+  // the Pack's lorries on the roads: Isobella brings pipes from Knapford Harbour, Patrick concrete from the
+  // Sodor Cement Works at Kirk Ronan, Nelson fetches loads from Ffarquhar Quarry on his low loader
+  const gate = SK.gate;
+  roadActor('Isobella', 'Steam lorry', () => sentinelModel(0xf2c419, 0xc8262b, 'pipes', {smile: 0.8, lashes: true, lips: '#b03040', skin: '#d9d2c8'}), gate, {color: 0xf2c419, speedK: 0.6, steam: true, chimney: new V3(0.6, 4.0, 1.7), meta: 'Sodor Construction Company',
+    about: 'Isobella is the yellow steam lorry, number 22, of the Sodor Construction Company, lined in red and black. She brings pipes for the site from Knapford Harbour.',
+    job: a => serviceJob(a, {stops: [gate, 'Knapford Harbour'], home: gate, shift: shift('07:30', '17:00', '1111100'), dwell: 900, endWait: 900, verb: nm => nm === gate.name ? 'Bringing pipes to the building site' : `Going to fetch pipes from ${nm}`, at: nm => nm === gate.name ? 'Unloading pipes at the building site' : `Loading pipes at ${nm}`})});
+  roadActor('Patrick', 'Cement mixer', patrickModel, gate, {color: 0x5a2a3a, speedK: 0.85, meta: 'Sodor Construction Company',
+    about: 'Patrick is the cement mixer lorry, number 23, of the Sodor Construction Company, purple-brown and cream. He fetches fresh concrete from the Sodor Cement Works at Kirk Ronan, his drum always turning so it never sets.',
+    job: a => serviceJob(a, {stops: [gate, 'Kirk Ronan'], home: gate, shift: shift('07:00', '18:00', '1111100'), dwell: 1200, endWait: 1200, verb: nm => nm === gate.name ? 'Bringing fresh concrete to the building site' : 'Going to fetch concrete from the Sodor Cement Works', at: nm => nm === gate.name ? 'Pouring concrete at the building site' : 'Filling up at the Sodor Cement Works'}),
+    anim: (a, dt) => { const d = a.g.userData.drum; if(d) d.rotation.z += dt * (onShift(shift('07:00', '18:00', '1111100')) ? 1.6 : 0); }});
+  roadActor('Nelson', 'Ballast tractor', nelsonModel, gate, {color: 0x1c1c1e, speedK: 0.75, meta: 'Sodor Construction Company',
+    about: 'Nelson is the black ballast tractor, number 10, of the Sodor Construction Company. He carries the Pack and their heavy loads on his low loader — today, stone and a skip between Ffarquhar Quarry and the site.',
+    job: a => serviceJob(a, {stops: [gate, quarry], home: gate, shift: shift('08:00', '16:30', '1111100'), dwell: 1500, endWait: 1500, verb: nm => nm === gate.name ? 'Hauling a load to the building site' : `Going to ${nm} for a load`, at: nm => nm === gate.name ? 'Unloading at the building site' : `Loading at ${nm}`})});
+}
+// ------------------------------------------------------------------ the Sodor Steamworks: Victor fetches and delivers parts, Kevin helps
+function steamworks(){
+  const rec = window.SODOR_NWR && window.SODOR_NWR.byId.victor;
+  if(rec && rec.shunt && rec.veh){
+    const g = rec.veh.group, [p0, p1] = rec.shunt.map(p => p.clone());
+    actor({name: 'Victor', kind: 'Steamworks engine', g, noPick: true, noRoster: true,
+      job: function*(a){ const sh = shift('07:00', '18:00', '1111110');
+        for(;;){ if(!onShift(sh)){ a.status = 'In the works for the night'; yield {until: nextOn(sh)}; continue; }
+          a.status = 'Fetching parts from the stores'; yield {follow: {pts: [g.position.clone(), p1.clone()], speed: 1.1 * M, keepYaw: true}};
+          a.status = 'Collecting parts'; yield {wait: 300};
+          a.status = 'Delivering parts to the repair shop'; yield {follow: {pts: [p1.clone(), p0.clone()], speed: 1.1 * M, keepYaw: true}};
+          a.status = 'Supervising the repairs'; yield {wait: 480}; } }});
+  }
+  const kv = S.NONRAIL && S.NONRAIL.kevin;
+  if(kv){
+    const o = kv.obj, q = new THREE.Quaternion(); kv.G.getWorldQuaternion(q); scene.attach(o);
+    const d = new V3(0, 0, 1).applyQuaternion(q); d.y = 0; d.normalize();
+    const p0 = o.position.clone(), p1 = p0.clone().addScaledVector(d, 16 * M);
+    actor({name: 'Kevin', kind: 'Mobile crane', g: o, noPick: true, noRoster: true,
+      job: function*(a){ const sh = shift('07:00', '18:00', '1111110');
+        for(;;){ if(!onShift(sh)){ a.status = 'Asleep in the works'; yield {until: nextOn(sh)}; continue; }
+          a.status = 'Fetching parts for Victor'; yield {follow: {pts: [p0.clone(), p1.clone()], speed: 1.5 * M, keepYaw: true}}; a.status = 'Lifting an engine part'; yield {wait: 240};
+          yield {follow: {pts: [p1.clone(), p0.clone()], speed: 1.3 * M, keepYaw: true}}; yield {wait: 360}; } }});
+  }
 }
 function georgeAt(){
   const sk = LINES.skarloey; if(!sk || !sk.real) return;

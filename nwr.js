@@ -1277,16 +1277,17 @@ function bigMickeyModel(){
   const g = new THREE.Group(), GR = mat(0x9a948a, 0.55, 0.2), LAT = lattice(0x9a948a), BLK = mat(BLACK, 0.7);
   box(g, 5.0, 1.0, 5.0, mat(0x777777, 0.8), 0, 0.5, 0);
   latticeBox(g, 3.0, 30, 3.0, LAT, 0, 16, 0);
-  box(g, 4.0, 3.2, 3.6, GR, 0, 32.6, 0);
-  roof(g, 4.1, 3.7, 34.4, GR, 0);
-  faceOn(g, 1.0, {smile: 0.5, brow: 0.3}, 0, 32.4, 1.82);
-  latticeBox(g, 2.0, 2.0, 38, LAT, 0, 35.4, 13);
-  latticeBox(g, 2.0, 2.0, 14, LAT, 0, 35.4, -7);
-  box(g, 3.0, 2.5, 3.0, mat(0x6a6d70, 0.7), 0, 34.2, -12.5);
-  box(g, 1.4, 0.8, 1.6, GR, 0, 34.0, 18);
-  cylY(g, 0.03, 0.03, 22, BLK, 0, 23, 18, 4);
-  box(g, 0.8, 0.8, 0.6, mat(0xc8201e, 0.5), 0, 12, 18);
-  bakeVC(g);
+  const top = new THREE.Group(); top.position.y = 31; g.add(top);
+  box(top, 4.0, 3.2, 3.6, GR, 0, 1.6, 0);
+  roof(top, 4.1, 3.7, 3.4, GR, 0);
+  faceOn(top, 1.0, {smile: 0.5, brow: 0.3}, 0, 1.4, 1.82);
+  latticeBox(top, 2.0, 2.0, 38, LAT, 0, 4.4, 13);
+  latticeBox(top, 2.0, 2.0, 14, LAT, 0, 4.4, -7);
+  box(top, 3.0, 2.5, 3.0, mat(0x6a6d70, 0.7), 0, 3.2, -12.5);
+  box(top, 1.4, 0.8, 1.6, GR, 0, 3.0, 18);
+  cylY(top, 0.03, 0.03, 22, BLK, 0, -8, 18, 4);
+  box(top, 0.8, 0.8, 0.6, mat(0xc8201e, 0.5), 0, -19, 18);
+  g.remove(top); bakeVC(g); bakeVC(top); g.add(top); g.userData.crane = top;        // he slews to unload the ships (life.js)
   return g;
 }
 function portalCrane(o){
@@ -2138,7 +2139,7 @@ function buildDepot(D){
   if(D.kind === 'clay'){ for(let k = 0; k < 3; k++) heap(G, ex, 8 + k * 9, 6, 7, 0xeeece2); building(G, ex, len - 8, 12, 14, 8, 0xd9cfb4, 0x6a6d70); }
   if(D.kind === 'quarry'){ for(let k = 0; k < 3; k++) heap(G, ex, 8 + k * 9, 6, 6, 0x9a958c); building(G, ex, len - 7, 10, 10, 9, 0x8a8d91, 0x4a4f58); building(G, lx(-6), len - 12, 7, 9, 5, 0x8a4a32, 0x3a3f46); }
   if(D.kind === 'dump'){ for(let k = 0; k < 4; k++) heap(G, ex + (k % 2) * 3, 6 + k * 7, 5, 3.5, [0x6a5a3a, 0x5a4a3c, 0x7a6a4a, 0x4a4a3a][k]); }
-  if(D.kind === 'scrap'){ for(let k = 0; k < 4; k++) heap(G, ex, 6 + k * 7, 5, 4, 0x5a4a3c); const reg = regModel(); reg.position.set(lx(3 + roads.length * SITE_STEP), 0, len * 0.5); G.add(reg); kit.road(len * 0.5 - 6, 3 + roads.length * SITE_STEP, len * 0.5 + 6, 3 + roads.length * SITE_STEP); nonRail('reg', G, reg); }
+  if(D.kind === 'scrap'){ for(let k = 0; k < 4; k++) heap(G, ex, 6 + k * 7, 5, 4, 0x5a4a3c); const reg = regModel(); reg.position.set(lx(3 + roads.length * SITE_STEP), 0, len * 0.5); G.add(reg); kit.road(len * 0.5 - 6, 3 + roads.length * SITE_STEP, len * 0.5 + 6, 3 + roads.length * SITE_STEP); nonRail('reg', G, reg); window.SODOR_CRANES.push(reg); }
   if(D.kind === 'cement'){ for(let k = 0; k < 3; k++){ cylY(G, 3, 3, 14, mat(0xb4b7ba, 0.7), ex, 7, 8 + k * 7.5, 20); add(G, new THREE.ConeGeometry(3, 2, 20), mat(0x8a8d91, 0.7), ex, 15, 8 + k * 7.5); } }
   if(D.kind === 'rescue'){ building(G, ex, len * 0.5, 14, 22, 8, 0xeeeeee, 0xc8201e); cylY(G, 1.6, 1.6, 16, mat(0xc8201e, 0.6), ex + lx(5), 8, len * 0.5 + 12, 16); }
   if(D.kind === 'harbour'){ box(G, 14, 1.0, len, mat(0x7a6a52, 0.9), ex, 0.5, len / 2); for(let k = 0; k < 4; k++) for(let j = 0; j < 3; j++) cylZ(G, 0.35, 0.35, 8, mat(0x7a5a38, 0.9), ex - 2 + j * 0.75, 1.4 + (k % 2) * 0.6, 6 + k * 9, 10); }
@@ -2887,7 +2888,7 @@ function buildDocks(D){
   cranky.position.set(-15, 0, 0.5); G.add(cranky); nonRail('cranky', G, cranky); window.SODOR_CRANES.push(cranky);
   const carly = portalCrane({color: 0xf2d21a, rail: 0x2ab0b0, counter: 0x8a8d91, legH: 9, span: 7, tower: 6, jib: 20, jibUp: 0.6, knuckle: true, stripes: true, face: {smile: 0.85, lashes: true, look: 0.3}, name: 'CARLY', nameStyle: {fg: '#1a9a9a', line: null, font: 'bold 92px Arial'}, animate: true});
   carly.position.set(18, 0, 0.5); G.add(carly); nonRail('carly', G, carly); window.SODOR_CRANES.push(carly);
-  const mickey = bigMickeyModel(); mickey.position.set(50, 0, -2); G.add(mickey); nonRail('bigmickey', G, mickey);
+  const mickey = bigMickeyModel(); mickey.position.set(50, 0, -2); G.add(mickey); nonRail('bigmickey', G, mickey); window.SODOR_CRANES.push(mickey);
   const ship = new THREE.Group(); ship.position.set(5, -base / M, 22); G.add(ship);
   const hull = new THREE.Shape(); hull.moveTo(-40, -6); hull.lineTo(30, -6); hull.lineTo(42, 0); hull.lineTo(30, 6); hull.lineTo(-40, 6); hull.closePath();
   const hg = new THREE.ExtrudeGeometry(hull, {depth: 7, bevelEnabled: false}); hg.rotateX(-Math.PI / 2); hg.translate(0, -2, 0);
@@ -2910,7 +2911,8 @@ function buildVictor(kit, b, a){
   v.group.scale.setScalar(K.NG); scene.add(v.group);
   kit.road(a - 8, b, a + 8, b, 'narrow');
   const p = kit.pt(a, b); v.group.position.copy(p); v.group.rotation.y = kit.yaw;
-  const rec = {id: 'victor', name: 'Victor', no: '1173', cat: 'Steam', wheels: '0-4-0ST (narrow gauge)', basis: 'Minaz No. 1173, a Cuban sugar-mill saddle tank',
+  const shunt = [kit.pt(a - 6.5, b), kit.pt(a + 6.5, b)];
+  const rec = {id: 'victor', shunt, name: 'Victor', no: '1173', cat: 'Steam', wheels: '0-4-0ST (narrow gauge)', basis: 'Minaz No. 1173, a Cuban sugar-mill saddle tank',
     livery: 'red with yellow lining (he was bright yellow with green lining in Cuba)', dot: 0xb3201c,
     about: 'the narrow-gauge engine from Cuba who runs the Sodor Steamworks with Kevin.', veh: v, home: DEPOTS.find(d => d.key === 'steamworks')};
   FLEET.push(rec); byId.victor = rec;
@@ -2923,16 +2925,17 @@ function regModel(){
   for(const e of [1, -1]){ box(g, 2.6, 0.35, 0.12, mat(0x7a1a1a, 0.5), 0, 1.0, e * 3.2); buffers(g, e * 3.2, e); }
   for(const z of [2.0, -2.0]) for(const s of [-1, 1]) cylX(g, 0.45, 0.45, 0.14, mat(0x3d3f42, 0.4, 0.5), s * HG, 0.45, z, 18);
   cylY(g, 1.1, 1.1, 0.3, BLK, 0, 1.6, -0.6, 20);
-  box(g, 2.4, 2.4, 3.0, YEL, 0, 3.0, -0.9);
-  roof(g, 2.5, 3.2, 4.35, YEL, -0.9);
-  hazard(g, 2.9, 0.3, 1.21, 2.0, -0.9).rotation.y = Math.PI / 2;
-  hazard(g, 2.9, 0.3, -1.21, 2.0, -0.9).rotation.y = -Math.PI / 2;
-  faceOn(g, 0.55, {smile: 0.3, brow: 0.4}, 0, 2.6, 0.62);
-  letter(g, 'REG', 'black', 0.4, 1.2, 3.4, -0.9);
-  const jib = box(g, 0.35, 0.45, 7, YEL, 0, 5.2, 2.4); jib.rotation.x = -0.55;
-  cylY(g, 0.03, 0.03, 2.2, BLK, 0, 6.2, 5.4, 4);
-  for(let k = 0; k < 4; k++){ const t = box(g, 0.12, 0.9, 0.12, mat(0x3a3c40, 0.5, 0.6), Math.cos(k * 1.57) * 0.35, 4.6, 5.4 + Math.sin(k * 1.57) * 0.35); t.rotation.z = Math.cos(k * 1.57) * 0.3; }
-  bakeVC(g);
+  const top = new THREE.Group(); top.position.set(0, 1.75, -0.6); g.add(top);
+  box(top, 2.4, 2.4, 3.0, YEL, 0, 1.25, -0.3);
+  roof(top, 2.5, 3.2, 2.6, YEL, -0.3);
+  hazard(top, 2.9, 0.3, 1.21, 0.25, -0.3).rotation.y = Math.PI / 2;
+  hazard(top, 2.9, 0.3, -1.21, 0.25, -0.3).rotation.y = -Math.PI / 2;
+  faceOn(top, 0.55, {smile: 0.3, brow: 0.4}, 0, 0.85, 1.22);
+  letter(top, 'REG', 'black', 0.4, 1.2, 1.65, -0.3);
+  const jib = box(top, 0.35, 0.45, 7, YEL, 0, 3.45, 3.0); jib.rotation.x = -0.55;
+  cylY(top, 0.03, 0.03, 2.2, BLK, 0, 4.45, 6.0, 4);
+  for(let k = 0; k < 4; k++){ const t = box(top, 0.12, 0.9, 0.12, mat(0x3a3c40, 0.5, 0.6), Math.cos(k * 1.57) * 0.35, 2.85, 6.0 + Math.sin(k * 1.57) * 0.35); t.rotation.z = Math.cos(k * 1.57) * 0.3; }
+  g.remove(top); bakeVC(g); bakeVC(top); g.add(top); g.userData.crane = top;        // he swings his grab over the scrap heaps (life.js)
   return g;
 }
 const NONRAIL = {};
