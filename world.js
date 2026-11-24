@@ -132,8 +132,7 @@ const towns = [];
 // Towns and villages on the Sodor map that have no open station of their own (map px on the outline map,
 // carried over from the detailed railway map): they get streets, houses and a name on the map like the rest.
 const PLACES = [['Kellsthorpe', 810.5, 632.4, 2], ['Killaban', 523.5, 616.9, 1], ['Cabalnoo', 617.7, 715.9, 1],
-  ['Ballaswein', 443.2, 47.7, 1], ['Kirkleas', 372.0, 334.6, 1], ['Ballamoddey', 439.6, 291.8, 1], ['Balladwal', 982.1, 719.4, 1],
-  ['Strawberry Grove', 570.3, 324.0, 1]];
+  ['Ballaswein', 443.2, 47.7, 1], ['Kirkleas', 372.0, 334.6, 1], ['Ballamoddey', 439.6, 291.8, 1], ['Balladwal', 982.1, 719.4, 1]];
 (function(){
   const R_M = {2: 600, 1: 260};
   PLACES.forEach(([name, px, py, cls]) => {
